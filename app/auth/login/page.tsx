@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, Suspense } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, getSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
@@ -12,32 +12,48 @@ function LoginForm() {
   const [error, setError] = useState('');
   const searchParams = useSearchParams();
   const registered = searchParams.get('registered');
+  const sessionRedirect = searchParams.get('session') === 'redirect';
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const res = await signIn('credentials', {
-      email,
-      password,
-      redirect: false,
-      callbackUrl: '/dashboard',
-    });
-    setLoading(false);
-    if (res?.error) {
-      setError('Invalid email or password.');
-      return;
-    }
-    if (res?.url) {
-      window.location.href = res.url;
-    } else if (!res?.error) {
-      window.location.href = '/dashboard';
+    try {
+      const res = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+        callbackUrl: '/dashboard',
+      });
+      setLoading(false);
+      if (res?.error) {
+        setError('Invalid email or password.');
+        return;
+      }
+      const session = await getSession();
+      if (session?.user) {
+        window.location.href = res?.url || '/dashboard';
+        return;
+      }
+      setError(
+        'Sign-in succeeded but session wasn’t set. In Vercel: set NEXTAUTH_URL to your exact app URL (e.g. https://apex-fitness-ecru.vercel.app) and NEXTAUTH_SECRET, then in Project Settings → Environment Variables turn OFF "Automatically expose System Environment Variables" so your NEXTAUTH_URL is used. Redeploy after saving.'
+      );
+    } catch {
+      setLoading(false);
+      setError('Something went wrong. Check your connection and try again.');
     }
   }
 
   return (
     <main className="min-h-screen flex items-center justify-center px-4 relative z-10">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md space-y-4">
+        {sessionRedirect && (
+          <div className="bg-accent2/20 border border-accent2 rounded-card p-4">
+            <p className="font-sans text-accent2 text-sm">
+              You were sent back because the app couldn&apos;t verify your session. Auth is now checked on the server—redeploy and try again. If it still fails, in Vercel set <strong>NEXTAUTH_URL</strong> (your app URL) and <strong>NEXTAUTH_SECRET</strong>, then redeploy.
+            </p>
+          </div>
+        )}
         <div className="bg-card border border-border rounded-card p-8">
           <h1 className="font-display text-3xl text-accent uppercase tracking-wide text-center">
             Sign in

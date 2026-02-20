@@ -1,10 +1,16 @@
+import { redirect } from 'next/navigation';
+import { auth } from '@/lib/auth';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await auth();
+  if (!session?.user) {
+    redirect('/auth/login?session=redirect');
+  }
   return (
     <div className="min-h-screen bg-bg">
       <Sidebar />
