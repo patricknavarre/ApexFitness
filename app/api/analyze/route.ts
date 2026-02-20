@@ -85,7 +85,7 @@ export async function POST(req: Request) {
       : 'No additional context provided.';
 
     const { text } = await generateText({
-      model: anthropic('claude-3-5-sonnet-20241022'),
+      model: anthropic(process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-20250514'),
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -165,8 +165,18 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e));
+    const errWithCode = e as Error & { code?: string };
     console.error('Analyze error:', err.message);
     if (e instanceof Error && e.cause) console.error('Cause:', e.cause);
+    if (errWithCode.code === 'STORAGE_UNAVAILABLE') {
+      return NextResponse.json(
+        {
+          error: 'Saving to Progress is not available on this deployment. Use a local server or configure S3 for production.',
+          code: 'STORAGE_UNAVAILABLE',
+        },
+        { status: 503 }
+      );
+    }
     const isModelOrAuth =
       /model|invalid|unauthorized|api.key|rate.limit/i.test(err.message);
     const userMessage = isModelOrAuth

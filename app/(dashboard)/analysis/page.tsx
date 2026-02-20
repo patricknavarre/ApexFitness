@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { toast } from 'sonner';
+
+const DRAFT_KEY = 'apex-analysis-draft';
 
 const GOALS = ['lose fat', 'build muscle', 'maintain', 'improve performance'];
 const FITNESS_LEVELS = ['beginner', 'intermediate', 'advanced'];
@@ -56,20 +58,81 @@ type AnalysisResult = {
   thumbUrl?: string;
 };
 
+const defaultContext = {
+  goal: '',
+  fitnessLevel: '',
+  equipment: '',
+  daysPerWeek: 5,
+  injuries: '',
+};
+
+type Draft = {
+  imageBase64: string | null;
+  result: AnalysisResult | null;
+  context: typeof defaultContext;
+};
+
+function loadDraft(): Draft | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as Draft;
+    if (!d || typeof d !== 'object') return null;
+    return {
+      imageBase64: d.imageBase64 && typeof d.imageBase64 === 'string' ? d.imageBase64 : null,
+      result: d.result && typeof d.result === 'object' ? d.result : null,
+      context: {
+        goal: typeof d.context?.goal === 'string' ? d.context.goal : defaultContext.goal,
+        fitnessLevel: typeof d.context?.fitnessLevel === 'string' ? d.context.fitnessLevel : defaultContext.fitnessLevel,
+        equipment: typeof d.context?.equipment === 'string' ? d.context.equipment : defaultContext.equipment,
+        daysPerWeek: typeof d.context?.daysPerWeek === 'number' ? d.context.daysPerWeek : defaultContext.daysPerWeek,
+        injuries: typeof d.context?.injuries === 'string' ? d.context.injuries : defaultContext.injuries,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function AnalysisPage() {
   const [preview, setPreview] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
-  const [context, setContext] = useState({
-    goal: '',
-    fitnessLevel: '',
-    equipment: '',
-    daysPerWeek: 5,
-    injuries: '',
-  });
+  const [context, setContext] = useState(defaultContext);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Restore draft from session when returning to the page
+  useEffect(() => {
+    const draft = loadDraft();
+    if (!draft) return;
+    if (draft.imageBase64) {
+      setPreview(draft.imageBase64);
+      setImageBase64(draft.imageBase64);
+    }
+    if (draft.result) setResult(draft.result);
+    setContext(draft.context);
+  }, []);
+
+  // Persist draft so it survives navigation
+  useEffect(() => {
+    const draft: Draft = { imageBase64, result, context };
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      // sessionStorage full or unavailable
+    }
+  }, [imageBase64, result, context]);
+
+  function handleClear() {
+    setPreview(null);
+    setImageBase64(null);
+    setResult(null);
+    setContext(defaultContext);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -267,13 +330,24 @@ export default function AnalysisPage() {
             </div>
           </div>
 
-          <button
-            onClick={handleAnalyze}
-            disabled={loading || !imageBase64}
-            className="bg-accent text-black font-sans font-bold uppercase px-8 py-4 rounded-card hover:shadow-glow transition-shadow disabled:opacity-50"
-          >
-            {loading ? 'Analyzing…' : 'Analyze photo'}
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleAnalyze}
+              disabled={loading || !imageBase64}
+              className="bg-accent text-black font-sans font-bold uppercase px-8 py-4 rounded-card hover:shadow-glow transition-shadow disabled:opacity-50"
+            >
+              {loading ? 'Analyzing…' : 'Analyze photo'}
+            </button>
+            {(preview || result) && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="text-text-muted hover:text-text font-sans text-sm underline"
+              >
+                Clear & start over
+              </button>
+            )}
+          </div>
         </>
       ) : (
         <div className="space-y-6">

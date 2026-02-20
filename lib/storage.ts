@@ -11,11 +11,21 @@ export type UploadResult = {
   thumbKey: string;
 };
 
+/** On Vercel, the filesystem is read-only; local storage does not persist. */
+const isVercel = typeof process !== 'undefined' && process.env.VERCEL === '1';
+
 export async function uploadPhoto(
   buffer: Buffer,
   userId: string,
   folder: 'analysis' | 'progress'
 ): Promise<UploadResult> {
+  if (isVercel) {
+    const err = new Error(
+      'Photo storage is not available on Vercel with local storage. Configure S3 (AWS_*) for production or run locally.'
+    ) as Error & { code?: string };
+    err.code = 'STORAGE_UNAVAILABLE';
+    throw err;
+  }
   const timestamp = Date.now();
   const dir = path.join(UPLOAD_DIR, 'users', userId, folder);
   await fs.mkdir(dir, { recursive: true });

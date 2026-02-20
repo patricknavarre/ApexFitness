@@ -5,6 +5,16 @@ import User from '@/models/User';
 
 export async function POST(req: Request) {
   try {
+    if (!process.env.MONGODB_URI) {
+      return NextResponse.json(
+        {
+          error: 'Database not configured. Set MONGODB_URI in Vercel environment variables.',
+          code: 'CONFIG',
+        },
+        { status: 503 }
+      );
+    }
+
     const body = await req.json();
     const {
       name,
@@ -56,13 +66,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error('Signup error:', e);
-    const message = e instanceof Error ? e.message : 'Something went wrong';
+    const err = e instanceof Error ? e : new Error(String(e));
+    const isDbError =
+      err.name === 'MongoServerError' ||
+      err.name === 'MongoNetworkError' ||
+      err.message?.includes('MongoDB') ||
+      err.message?.includes('ECONNREFUSED') ||
+      err.message?.includes('MONGODB_URI');
+    const userMessage = isDbError
+      ? 'Database connection failed. Check MONGODB_URI in Vercel and that Atlas allows access from anywhere (0.0.0.0/0).'
+      : process.env.NODE_ENV === 'development'
+        ? err.message
+        : 'Something went wrong. Try again or contact support.';
     return NextResponse.json(
-      {
-        error: process.env.NODE_ENV === 'development' ? message : 'Something went wrong',
-        code: 'SERVER_ERROR',
-      },
-      { status: 500 }
+      { error: userMessage, code: isDbError ? 'DB_ERROR' : 'SERVER_ERROR' },
+      { status: isDbError ? 503 : 500 }
     );
   }
 }
