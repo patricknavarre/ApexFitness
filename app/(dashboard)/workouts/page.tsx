@@ -63,6 +63,9 @@ function PlanCard({ plan }: { plan: WorkoutPlanType }) {
           <p className="font-sans text-sm text-muted mt-0.5">
             {plan.goal} · {plan.daysPerWeek} days/week · {plan.repRange}
           </p>
+          <span className="font-sans text-xs text-muted mt-1 inline-block">
+            {plan.equipment === 'none' ? 'No gym' : plan.equipment === 'home' ? 'Home gym' : 'Full gym'}
+          </span>
         </div>
         <span className="text-muted text-sm">{open ? '▼' : '▶'}</span>
       </button>
@@ -115,9 +118,15 @@ function PlanCard({ plan }: { plan: WorkoutPlanType }) {
   );
 }
 
+const EQUIPMENT_SECTIONS: { key: 'none' | 'home' | 'full'; label: string; subtitle: string }[] = [
+  { key: 'none', label: 'No gym', subtitle: 'Bodyweight, bands, minimal or no equipment' },
+  { key: 'home', label: 'Home gym', subtitle: 'Dumbbells, bands, bench or pull-up bar' },
+  { key: 'full', label: 'Full gym', subtitle: 'Barbells, rack, cables, full equipment' },
+];
+
 export default function WorkoutsPage() {
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-3xl space-y-8">
       <div>
         <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
           Workouts
@@ -127,11 +136,23 @@ export default function WorkoutsPage() {
           and see each day and exercise.
         </p>
       </div>
-      <div className="space-y-4">
-        {WORKOUT_PLANS.map((plan) => (
-          <PlanCard key={plan.id} plan={plan} />
-        ))}
-      </div>
+      {EQUIPMENT_SECTIONS.map((section) => {
+        const plans = WORKOUT_PLANS.filter((p) => p.equipment === section.key);
+        if (plans.length === 0) return null;
+        return (
+          <section key={section.key}>
+            <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-1">
+              {section.label}
+            </h2>
+            <p className="font-sans text-sm text-muted mb-4">{section.subtitle}</p>
+            <div className="space-y-4">
+              {plans.map((plan) => (
+                <PlanCard key={plan.id} plan={plan} />
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
