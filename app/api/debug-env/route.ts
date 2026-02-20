@@ -12,5 +12,6 @@ export async function GET() {
     MONGODB_URI: process.env.MONGODB_URI ? 'set' : 'not set',
     NEXTAUTH_URL: process.env.NEXTAUTH_URL ? 'set' : 'not set',
     NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET ? 'set' : 'not set',
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? 'set' : 'not set',
   });
 }
