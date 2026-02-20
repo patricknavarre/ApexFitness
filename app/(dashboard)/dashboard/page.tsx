@@ -8,16 +8,24 @@ export default function DashboardPage() {
       </h1>
       {/* First-time / empty state */}
       <div className="bg-card border border-border rounded-card p-8 text-center">
-        <p className="font-sans text-muted mb-4">
-          Get started with an AI-powered body analysis to unlock personalized workouts and
-          nutrition.
+        <p className="font-sans text-muted mb-6">
+          Pick a workout plan and start training—no photo required. Or try AI body analysis for
+          personalized insights when you&apos;re ready.
         </p>
-        <Link
-          href="/analysis"
-          className="inline-block bg-accent text-black font-sans font-bold uppercase px-6 py-3 rounded-card hover:shadow-glow transition-shadow"
-        >
-          Start with AI Analysis
-        </Link>
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <Link
+            href="/workouts"
+            className="inline-block bg-accent text-black font-sans font-bold uppercase px-6 py-3 rounded-card hover:shadow-glow transition-shadow"
+          >
+            Browse workout plans
+          </Link>
+          <Link
+            href="/analysis"
+            className="inline-block bg-bg3 border border-border text-text font-sans font-bold uppercase px-6 py-3 rounded-card hover:border-accent transition-colors"
+          >
+            Try AI Analysis (optional)
+          </Link>
+        </div>
       </div>
       {/* Placeholder widget row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

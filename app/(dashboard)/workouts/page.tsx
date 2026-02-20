@@ -123,7 +123,8 @@ export default function WorkoutsPage() {
           Workouts
         </h1>
         <p className="font-sans text-muted mt-2">
-          Choose a plan below. Click to expand and see each day and exercise.
+          No photo or analysis required—pick a plan and start training. Click a plan to expand
+          and see each day and exercise.
         </p>
       </div>
       <div className="space-y-4">

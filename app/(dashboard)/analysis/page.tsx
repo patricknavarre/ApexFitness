@@ -221,9 +221,15 @@ export default function AnalysisPage() {
 
   return (
     <div className="max-w-4xl space-y-8">
-      <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
-        AI Body Analysis
-      </h1>
+      <div>
+        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
+          AI Body Analysis
+        </h1>
+        <p className="font-sans text-muted mt-2">
+          Optional: get personalized body insights and recommendations. You can use workout plans
+          and nutrition anytime without a photo.
+        </p>
+      </div>
 
       {!result ? (
         <>
@@ -423,7 +429,7 @@ export default function AnalysisPage() {
               href="/workouts"
               className="bg-bg3 border border-border text-text font-sans font-bold uppercase px-6 py-3 rounded-card hover:border-accent transition-colors"
             >
-              Generate my workout plan
+              Browse workout plans
             </Link>
             <Link
               href="/nutrition"
