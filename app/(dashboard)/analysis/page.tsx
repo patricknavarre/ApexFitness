@@ -12,22 +12,32 @@ const FITNESS_LEVELS = ['beginner', 'intermediate', 'advanced'];
 const EQUIPMENT = ['none', 'bodyweight', 'dumbbells', 'full gym', 'home gym'];
 
 const JPEG_QUALITY = 0.92;
+/** Keep payload under ~3.5 MB to avoid 413 on Vercel (body limit ~4.5 MB). */
+const MAX_LONG_EDGE = 1200;
 
-/** Convert any image data URL to JPEG via canvas so the API always receives JPEG. */
+/** Convert any image data URL to JPEG via canvas; resize so long edge ≤ MAX_LONG_EDGE to avoid 413. */
 function dataUrlToJpeg(dataUrl: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      const long = Math.max(w, h);
+      if (long > MAX_LONG_EDGE) {
+        const scale = MAX_LONG_EDGE / long;
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
       const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
+      canvas.width = w;
+      canvas.height = h;
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         reject(new Error('Canvas not supported'));
         return;
       }
-      ctx.drawImage(img, 0, 0);
+      ctx.drawImage(img, 0, 0, w, h);
       try {
         const jpeg = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
         resolve(jpeg);
@@ -145,11 +155,6 @@ export default function AnalysisPage() {
     });
     setPreview(dataUrl);
     setResult(null);
-    const isJpeg = dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg');
-    if (isJpeg) {
-      setImageBase64(dataUrl);
-      return;
-    }
     try {
       const jpegDataUrl = await dataUrlToJpeg(dataUrl);
       setImageBase64(jpegDataUrl);
