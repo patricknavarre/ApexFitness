@@ -66,6 +66,10 @@ export default function SignupPage() {
         window.location.href = signInRes.url;
         return;
       }
+      if (!signInRes?.error && !signInRes?.url) {
+        window.location.href = '/dashboard';
+        return;
+      }
       router.push('/auth/login?registered=1');
     } catch {
       setError('Something went wrong.');

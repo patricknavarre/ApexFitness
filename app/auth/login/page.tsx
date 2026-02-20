@@ -28,7 +28,11 @@ function LoginForm() {
       setError('Invalid email or password.');
       return;
     }
-    if (res?.url) window.location.href = res.url;
+    if (res?.url) {
+      window.location.href = res.url;
+    } else if (!res?.error) {
+      window.location.href = '/dashboard';
+    }
   }
 
   return (
