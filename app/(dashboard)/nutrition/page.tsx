@@ -66,12 +66,16 @@ type Targets = {
   fatTarget: number | null;
 };
 
-type ScanResult = {
+type ScanItem = {
   foodName: string;
   estimatedCalories: number;
   proteinG: number;
   carbsG: number;
   fatG: number;
+};
+
+type ScanResult = {
+  items: ScanItem[];
 };
 
 export default function NutritionPage() {
@@ -239,13 +243,17 @@ export default function NutritionPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Analysis failed');
-      setScanResult({
-        foodName: data.foodName ?? 'Unknown',
-        estimatedCalories: data.estimatedCalories ?? 0,
-        proteinG: data.proteinG ?? 0,
-        carbsG: data.carbsG ?? 0,
-        fatG: data.fatG ?? 0,
-      });
+      const rawItems = Array.isArray(data.items) ? data.items : data.items == null && data.foodName != null
+        ? [{ foodName: data.foodName ?? 'Unknown', estimatedCalories: data.estimatedCalories ?? 0, proteinG: data.proteinG ?? 0, carbsG: data.carbsG ?? 0, fatG: data.fatG ?? 0 }]
+        : [];
+      const items: ScanItem[] = rawItems.map((x: ScanItem) => ({
+        foodName: x.foodName ?? 'Unknown',
+        estimatedCalories: Math.max(0, Number(x.estimatedCalories) ?? 0),
+        proteinG: Math.max(0, Number(x.proteinG) ?? 0),
+        carbsG: Math.max(0, Number(x.carbsG) ?? 0),
+        fatG: Math.max(0, Number(x.fatG) ?? 0),
+      }));
+      setScanResult(items.length > 0 ? { items } : null);
       toast.success('Analysis complete');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Analysis failed');
@@ -253,8 +261,7 @@ export default function NutritionPage() {
     setScanLoading(false);
   }
 
-  async function addScanToMeal(meal: Meal) {
-    if (!scanResult) return;
+  async function addScanItemToMeal(meal: Meal, item: ScanItem) {
     setAddingScan(true);
     try {
       const res = await fetch('/api/nutrition', {
@@ -263,11 +270,11 @@ export default function NutritionPage() {
         body: JSON.stringify({
           logDate: date,
           meal,
-          foodName: scanResult.foodName,
-          calories: scanResult.estimatedCalories,
-          proteinG: scanResult.proteinG,
-          carbsG: scanResult.carbsG,
-          fatG: scanResult.fatG,
+          foodName: item.foodName,
+          calories: item.estimatedCalories,
+          proteinG: item.proteinG,
+          carbsG: item.carbsG,
+          fatG: item.fatG,
         }),
       });
       const data = await res.json();
@@ -277,19 +284,68 @@ export default function NutritionPage() {
         {
           id: data.id,
           meal,
-          foodName: scanResult.foodName,
-          calories: scanResult.estimatedCalories,
-          proteinG: scanResult.proteinG,
-          carbsG: scanResult.carbsG,
-          fatG: scanResult.fatG,
+          foodName: item.foodName,
+          calories: item.estimatedCalories,
+          proteinG: item.proteinG,
+          carbsG: item.carbsG,
+          fatG: item.fatG,
         },
       ]);
+      setScanResult((prev) => {
+        if (!prev || prev.items.length <= 1) return null;
+        const next = prev.items.filter((i) => i !== item);
+        return next.length > 0 ? { items: next } : null;
+      });
+      if (!scanResult || scanResult.items.length <= 1) {
+        setScanPreview(null);
+        setScanImage(null);
+      }
+      toast.success(`Added ${item.foodName} to ${meal}`);
+    } catch {
+      toast.error('Could not add to log');
+    }
+    setAddingScan(false);
+  }
+
+  async function addAllScanToMeal(meal: Meal) {
+    if (!scanResult?.items?.length) return;
+    setAddingScan(true);
+    try {
+      for (const item of scanResult.items) {
+        const res = await fetch('/api/nutrition', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            logDate: date,
+            meal,
+            foodName: item.foodName,
+            calories: item.estimatedCalories,
+            proteinG: item.proteinG,
+            carbsG: item.carbsG,
+            fatG: item.fatG,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        setEntries((prev) => [
+          ...prev,
+          {
+            id: data.id,
+            meal,
+            foodName: item.foodName,
+            calories: item.estimatedCalories,
+            proteinG: item.proteinG,
+            carbsG: item.carbsG,
+            fatG: item.fatG,
+          },
+        ]);
+      }
       setScanResult(null);
       setScanPreview(null);
       setScanImage(null);
-      toast.success(`Added to ${meal}`);
+      toast.success(`Added ${scanResult.items.length} items to ${meal}`);
     } catch {
-      toast.error('Could not add to log');
+      toast.error('Could not add some items');
     }
     setAddingScan(false);
   }
@@ -522,21 +578,50 @@ export default function NutritionPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="font-sans text-text">
-                <span className="font-medium">{scanResult.foodName}</span>
-                <span className="text-muted ml-2">
-                  {scanResult.estimatedCalories} cal · P {scanResult.proteinG} / C {scanResult.carbsG} / F {scanResult.fatG} g
+              <ul className="space-y-2 font-sans text-sm">
+                {scanResult.items.map((item, idx) => (
+                  <li
+                    key={idx}
+                    className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-border last:border-0"
+                  >
+                    <span className="font-medium text-text">{item.foodName}</span>
+                    <span className="text-muted">
+                      {item.estimatedCalories} cal · P {item.proteinG} / C {item.carbsG} / F {item.fatG} g
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {MEALS.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => addScanItemToMeal(m, item)}
+                          disabled={addingScan}
+                          className="bg-bg3 border border-border text-text font-sans text-xs px-2 py-1 rounded-card hover:border-accent disabled:opacity-50"
+                        >
+                          Add to {m}
+                        </button>
+                      ))}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
+                <span className="text-muted text-sm">Total:</span>
+                <span className="font-mono text-accent3 text-sm">
+                  {scanResult.items.reduce((s, i) => s + i.estimatedCalories, 0)} cal · P{' '}
+                  {scanResult.items.reduce((s, i) => s + i.proteinG, 0)} / C{' '}
+                  {scanResult.items.reduce((s, i) => s + i.carbsG, 0)} / F{' '}
+                  {scanResult.items.reduce((s, i) => s + i.fatG, 0)} g
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-muted text-sm">Add to:</span>
+                <span className="text-muted text-sm">Add all to:</span>
                 {MEALS.map((m) => (
                   <button
                     key={m}
                     type="button"
-                    onClick={() => addScanToMeal(m)}
+                    onClick={() => addAllScanToMeal(m)}
                     disabled={addingScan}
-                    className="bg-bg3 border border-border text-text font-sans text-sm px-3 py-1.5 rounded-card hover:border-accent disabled:opacity-50"
+                    className="bg-accent text-black font-sans font-bold text-sm uppercase px-3 py-1.5 rounded-card hover:shadow-glow disabled:opacity-50"
                   >
                     {m}
                   </button>
