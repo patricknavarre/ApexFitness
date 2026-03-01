@@ -3,6 +3,14 @@ import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/mongodb';
 import User from '@/models/User';
 
+type UserMeFields = {
+  name?: string | null;
+  calorieTarget?: number | null;
+  proteinTarget?: number | null;
+  carbTarget?: number | null;
+  fatTarget?: number | null;
+};
+
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) {
@@ -10,12 +18,13 @@ export async function GET() {
   }
   try {
     await connectDB();
-    const user = await User.findById(session.user.id)
+    const raw = await User.findById(session.user.id)
       .select('name calorieTarget proteinTarget carbTarget fatTarget')
       .lean();
-    if (!user) {
+    if (!raw || Array.isArray(raw)) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
+    const user = raw as UserMeFields;
     return NextResponse.json({
       name: user.name ?? null,
       calorieTarget: user.calorieTarget ?? null,
