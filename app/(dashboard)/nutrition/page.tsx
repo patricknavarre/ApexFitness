@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { toast } from 'sonner';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const MEALS = ['breakfast', 'lunch', 'dinner', 'snacks'] as const;
 type Meal = (typeof MEALS)[number];
@@ -95,6 +96,11 @@ export default function NutritionPage() {
   const [scanLoading, setScanLoading] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [addingScan, setAddingScan] = useState(false);
+  const [weeklyData, setWeeklyData] = useState<{ date: string; calories: number; proteinG: number }[]>([]);
+  const [loadingWeek, setLoadingWeek] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [suggestResult, setSuggestResult] = useState<ScanItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
 
@@ -124,6 +130,41 @@ export default function NutritionPage() {
   useEffect(() => {
     fetchLog();
   }, [fetchLog]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const dates: string[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      dates.push(d.toISOString().slice(0, 10));
+    }
+    Promise.all(dates.map((d) => fetch(`/api/nutrition?date=${d}`).then((r) => r.json())))
+      .then((results) => {
+        if (cancelled) return;
+        setWeeklyData(
+          dates.map((d, i) => {
+            const entries = results[i]?.entries ?? [];
+            const calories = entries.reduce((s: number, e: LogEntry) => s + e.calories, 0);
+            const proteinG = entries.reduce((s: number, e: LogEntry) => s + e.proteinG, 0);
+            return {
+              date: d.slice(5),
+              calories,
+              proteinG,
+            };
+          })
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setWeeklyData([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingWeek(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [entries]);
 
   useEffect(() => {
     let cancelled = false;
@@ -361,6 +402,95 @@ export default function NutritionPage() {
     setAddingScan(false);
   }
 
+  const remaining = {
+    calories: Math.max(0, (targets?.calorieTarget ?? 0) - totals.calories),
+    proteinG: Math.max(0, (targets?.proteinTarget ?? 0) - totals.proteinG),
+    carbsG: Math.max(0, (targets?.carbTarget ?? 0) - totals.carbsG),
+    fatG: Math.max(0, (targets?.fatTarget ?? 0) - totals.fatG),
+  };
+
+  async function suggestMeal() {
+    setSuggestLoading(true);
+    setSuggestResult(null);
+    try {
+      const res = await fetch('/api/nutrition/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          remainingCalories: remaining.calories,
+          remainingProteinG: remaining.proteinG,
+          remainingCarbsG: remaining.carbsG,
+          remainingFatG: remaining.fatG,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Suggest failed');
+      setSuggestResult({
+        foodName: data.foodName ?? 'Suggested',
+        estimatedCalories: data.estimatedCalories ?? 0,
+        proteinG: data.proteinG ?? 0,
+        carbsG: data.carbsG ?? 0,
+        fatG: data.fatG ?? 0,
+      });
+      toast.success('Got a suggestion');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Suggest failed');
+    }
+    setSuggestLoading(false);
+  }
+
+  async function addSuggestedToMeal(meal: Meal) {
+    if (!suggestResult) return;
+    setAddingScan(true);
+    try {
+      const res = await fetch('/api/nutrition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          logDate: date,
+          meal,
+          foodName: suggestResult.foodName,
+          calories: suggestResult.estimatedCalories,
+          proteinG: suggestResult.proteinG,
+          carbsG: suggestResult.carbsG,
+          fatG: suggestResult.fatG,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setEntries((prev) => [
+        ...prev,
+        {
+          id: data.id,
+          meal,
+          foodName: suggestResult.foodName,
+          calories: suggestResult.estimatedCalories,
+          proteinG: suggestResult.proteinG,
+          carbsG: suggestResult.carbsG,
+          fatG: suggestResult.fatG,
+        },
+      ]);
+      setSuggestResult(null);
+      toast.success(`Added to ${meal}`);
+    } catch {
+      toast.error('Could not add');
+    }
+    setAddingScan(false);
+  }
+
+  async function deleteEntry(id: string) {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/nutrition?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+      setEntries((prev) => prev.filter((e) => e.id !== id));
+      toast.success('Entry removed');
+    } catch {
+      toast.error('Could not remove entry');
+    }
+    setDeletingId(null);
+  }
+
   const entriesByMeal = (meal: Meal) => entries.filter((e) => e.meal === meal);
 
   return (
@@ -432,6 +562,66 @@ export default function NutritionPage() {
         </p>
       )}
 
+      {targets && (targets.calorieTarget != null || targets.proteinTarget != null) && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={suggestMeal}
+            disabled={suggestLoading}
+            className="bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2 rounded-card hover:border-accent disabled:opacity-50"
+          >
+            {suggestLoading ? 'Suggesting…' : 'Suggest a meal'}
+          </button>
+          {suggestResult && (
+            <div className="flex flex-wrap items-center gap-2 font-sans text-sm">
+              <span className="text-text">
+                {suggestResult.foodName} — {suggestResult.estimatedCalories} cal
+              </span>
+              {MEALS.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => addSuggestedToMeal(m)}
+                  disabled={addingScan}
+                  className="bg-accent text-black font-sans text-xs font-bold uppercase px-2 py-1 rounded-card hover:shadow-glow disabled:opacity-50"
+                >
+                  Add to {m}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setSuggestResult(null)}
+                className="text-muted text-xs underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!loadingWeek && weeklyData.length > 0 && (
+        <div className="bg-card border border-border rounded-card p-6">
+          <h2 className="font-display text-lg text-accent3 uppercase tracking-wide mb-4">
+            Last 7 days
+          </h2>
+          <div className="h-48 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={weeklyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="var(--muted)" />
+                <YAxis tick={{ fontSize: 11 }} stroke="var(--muted)" />
+                <Tooltip
+                  contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)' }}
+                  formatter={(value: number) => [value, 'cal']}
+                  labelFormatter={(label) => `Date: ${label}`}
+                />
+                <Bar dataKey="calories" fill="var(--accent3)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {loadingLog ? (
         <p className="font-sans text-muted">Loading log…</p>
       ) : (
@@ -454,6 +644,14 @@ export default function NutritionPage() {
                     <span className="text-muted">
                       {e.calories} cal · P {e.proteinG} / C {e.carbsG} / F {e.fatG} g
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => deleteEntry(e.id)}
+                      disabled={deletingId === e.id}
+                      className="text-muted hover:text-accent2 text-xs underline disabled:opacity-50"
+                    >
+                      {deletingId === e.id ? '…' : 'Remove'}
+                    </button>
                   </div>
                 ))}
                 {addingMeal === meal ? (

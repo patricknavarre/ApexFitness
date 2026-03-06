@@ -46,12 +46,20 @@ export default function HomePage() {
             </p>
           </div>
         </div>
-        <Link
-          href="/auth/signup"
-          className="mt-12 bg-accent text-black font-sans font-bold uppercase px-8 py-4 rounded-card hover:shadow-glow transition-all duration-200"
-        >
-          Start for Free
-        </Link>
+        <div className="mt-12 flex flex-wrap items-center justify-center gap-4">
+          <Link
+            href="/auth/signup"
+            className="bg-accent text-black font-sans font-bold uppercase px-8 py-4 rounded-card hover:shadow-glow transition-all duration-200"
+          >
+            Start for Free
+          </Link>
+          <Link
+            href="/auth/login"
+            className="bg-bg3 border border-border text-text font-sans font-bold uppercase px-8 py-4 rounded-card hover:border-accent transition-colors"
+          >
+            Log in
+          </Link>
+        </div>
       </div>
     </main>
   );

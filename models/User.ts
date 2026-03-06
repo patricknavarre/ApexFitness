@@ -18,6 +18,8 @@ const UserSchema = new Schema({
   carbTarget: Number,
   fatTarget: Number,
   units: { type: String, default: 'imperial' },
+  activePlanId: String,
+  planStartedAt: Date,
   createdAt: { type: Date, default: Date.now },
 });
 

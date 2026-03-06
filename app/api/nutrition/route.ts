@@ -125,3 +125,35 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export async function DELETE(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get('id');
+  if (!id) {
+    return NextResponse.json(
+      { error: 'Missing id', code: 'BAD_REQUEST' },
+      { status: 400 }
+    );
+  }
+  try {
+    await connectDB();
+    const result = await NutritionLog.findOneAndDelete({
+      _id: id,
+      userId: session.user.id,
+    });
+    if (!result) {
+      return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error('Nutrition DELETE error:', e);
+    return NextResponse.json(
+      { error: 'Failed to delete entry' },
+      { status: 500 }
+    );
+  }
+}
