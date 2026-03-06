@@ -98,16 +98,8 @@ export default function NutritionPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
 
-  /** Request camera permission then open capture input; can fix black camera preview on some devices. */
-  async function openCameraForScan() {
-    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        stream.getTracks().forEach((t) => t.stop());
-      } catch {
-        // Permission denied or no camera; still open input so user can pick file
-      }
-    }
+  /** Open camera capture. Must be synchronous so iOS Safari allows the file input to open (user gesture). */
+  function openCameraForScan() {
     fileInputRef.current?.click();
   }
 
