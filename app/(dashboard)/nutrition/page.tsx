@@ -96,6 +96,24 @@ export default function NutritionPage() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [addingScan, setAddingScan] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
+
+  /** Request camera permission then open capture input; can fix black camera preview on some devices. */
+  async function openCameraForScan() {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach((t) => t.stop());
+      } catch {
+        // Permission denied or no camera; still open input so user can pick file
+      }
+    }
+    fileInputRef.current?.click();
+  }
+
+  function openLibraryForScan() {
+    libraryInputRef.current?.click();
+  }
 
   const fetchLog = useCallback(async () => {
     setLoadingLog(true);
@@ -226,6 +244,7 @@ export default function NutritionPage() {
     };
     reader.readAsDataURL(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (libraryInputRef.current) libraryInputRef.current.value = '';
   }
 
   async function handleAnalyze() {
@@ -516,10 +535,17 @@ export default function NutritionPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={openCameraForScan}
                       className="text-accent font-sans text-sm font-medium hover:underline"
                     >
                       Scan with AI
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openLibraryForScan}
+                      className="text-muted font-sans text-sm hover:underline"
+                    >
+                      or choose from library
                     </button>
                   </div>
                 )}
@@ -534,6 +560,13 @@ export default function NutritionPage() {
         type="file"
         accept="image/*"
         capture="environment"
+        onChange={handleScanFile}
+        className="hidden"
+      />
+      <input
+        ref={libraryInputRef}
+        type="file"
+        accept="image/*"
         onChange={handleScanFile}
         className="hidden"
       />
