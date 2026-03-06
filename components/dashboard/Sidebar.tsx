@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 import {
   IconHome,
   IconScan,
@@ -10,6 +11,7 @@ import {
   IconLeaf,
   IconChart,
   IconSettings,
+  IconLogOut,
 } from '@/components/ui/icons';
 
 const NAV = [
@@ -61,6 +63,18 @@ export function Sidebar() {
             <NavItem key={item.href} href={item.href} label={item.label} Icon={item.Icon} />
           ))}
         </nav>
+        <div className="p-2 border-t border-border">
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: '/' })}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-card text-muted hover:text-text hover:bg-bg2 transition-colors text-left font-sans text-sm"
+          >
+            <span className="flex-shrink-0">
+              <IconLogOut />
+            </span>
+            <span className="whitespace-nowrap">Log out</span>
+          </button>
+        </div>
       </aside>
       {/* Mobile bottom tab bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 h-14 bg-card border-t border-border z-20 flex items-center justify-around px-2">
