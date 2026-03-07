@@ -9,7 +9,6 @@ function toLocalDateOnly(isoDate: string): string {
 }
 
 function getStreakAndWeekCount(loggedDates: Set<string>): { streak: number; daysThisWeek: number } {
-  const today = todayLocal();
   let streak = 0;
   const msPerDay = 86400000;
   let d = new Date();

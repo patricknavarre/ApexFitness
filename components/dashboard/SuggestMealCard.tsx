@@ -22,6 +22,15 @@ type Targets = {
   fatTarget: number | null;
 };
 
+type UserMeResponse = {
+  calorieTarget?: number | null;
+  proteinTarget?: number | null;
+  carbTarget?: number | null;
+  fatTarget?: number | null;
+};
+
+type NutritionResponse = { entries?: LogEntry[] };
+
 type LogEntry = {
   id: string;
   meal: Meal;
@@ -65,12 +74,12 @@ export function SuggestMealCard() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetch('/api/user/me').then((r) => (r.ok ? r.json() : {})),
+      fetch('/api/user/me').then((r) => (r.ok ? r.json() : Promise.resolve({}))),
       fetch(`/api/nutrition?date=${encodeURIComponent(today)}`).then((r) =>
-        r.ok ? r.json() : { entries: [] }
+        r.ok ? r.json() : Promise.resolve({ entries: [] })
       ),
     ])
-      .then(([userData, nutritionData]) => {
+      .then(([userData, nutritionData]: [UserMeResponse, NutritionResponse]) => {
         if (cancelled) return;
         setTargets({
           calorieTarget: userData.calorieTarget ?? null,
