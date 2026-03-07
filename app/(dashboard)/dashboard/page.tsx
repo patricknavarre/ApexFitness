@@ -5,6 +5,7 @@ import User from '@/models/User';
 import { TodayWorkoutCard } from '@/components/dashboard/TodayWorkoutCard';
 import { SuggestMealCard } from '@/components/dashboard/SuggestMealCard';
 import { WeeklyStreakCard } from '@/components/dashboard/WeeklyStreakCard';
+import { CaloriesTodayCard } from '@/components/dashboard/CaloriesTodayCard';
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -59,18 +60,7 @@ export default async function DashboardPage() {
         />
         <WeeklyStreakCard />
       </div>
-      <div className="bg-card border border-border rounded-card p-6">
-        <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
-          Calories today
-        </h2>
-        <p className="font-sans text-muted text-sm">Log meals in Nutrition to see your progress.</p>
-        <Link
-          href="/nutrition"
-          className="font-sans text-sm text-accent hover:underline mt-2 inline-block"
-        >
-          Log meals →
-        </Link>
-      </div>
+      <CaloriesTodayCard />
       <SuggestMealCard />
     </div>
   );
