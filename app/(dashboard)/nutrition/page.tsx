@@ -101,6 +101,7 @@ export default function NutritionPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [suggestResult, setSuggestResult] = useState<ScanItem | null>(null);
+  const [suggestMealType, setSuggestMealType] = useState<Meal>('breakfast');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
 
@@ -421,6 +422,7 @@ export default function NutritionPage() {
           remainingProteinG: remaining.proteinG,
           remainingCarbsG: remaining.carbsG,
           remainingFatG: remaining.fatG,
+          mealType: suggestMealType,
         }),
       });
       const data = await res.json();
@@ -564,6 +566,20 @@ export default function NutritionPage() {
 
       {targets && (targets.calorieTarget != null || targets.proteinTarget != null) && (
         <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="nutrition-suggest-meal-type" className="font-sans text-sm text-muted">
+            For:
+          </label>
+          <select
+            id="nutrition-suggest-meal-type"
+            value={suggestMealType}
+            onChange={(e) => setSuggestMealType(e.target.value as Meal)}
+            className="bg-bg3 border border-border text-text font-sans text-sm px-3 py-2 rounded-card focus:outline-none focus:border-accent"
+          >
+            <option value="breakfast">Breakfast</option>
+            <option value="lunch">Lunch</option>
+            <option value="dinner">Dinner</option>
+            <option value="snacks">Snack</option>
+          </select>
           <button
             type="button"
             onClick={suggestMeal}
