@@ -278,6 +278,14 @@ export function SuggestMealCard() {
                 {addingTo === m ? 'Adding…' : `Add to ${m}`}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setSuggestion(null)}
+              disabled={addingTo !== null}
+              className="bg-bg3 border border-border text-muted font-sans text-sm px-3 py-1.5 rounded-card hover:border-accent2 hover:text-accent2 disabled:opacity-50"
+            >
+              Remove
+            </button>
           </div>
         </div>
       )}
