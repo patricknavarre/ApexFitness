@@ -21,6 +21,10 @@ type LogEntry = {
   fatG?: number;
 };
 
+type UserMeResponse = { calorieTarget?: number | null };
+
+type NutritionResponse = { entries?: LogEntry[] };
+
 const MEAL_LABELS: Record<string, string> = {
   breakfast: 'Breakfast',
   lunch: 'Lunch',
@@ -39,11 +43,11 @@ export function CaloriesTodayCard() {
     let cancelled = false;
     Promise.all([
       fetch(`/api/nutrition?date=${encodeURIComponent(today)}`).then((r) =>
-        r.ok ? r.json() : { entries: [] }
+        r.ok ? r.json() : Promise.resolve({ entries: [] })
       ),
-      fetch('/api/user/me').then((r) => (r.ok ? r.json() : {})),
+      fetch('/api/user/me').then((r) => (r.ok ? r.json() : Promise.resolve({}))),
     ])
-      .then(([nutritionData, userData]) => {
+      .then(([nutritionData, userData]: [NutritionResponse, UserMeResponse]) => {
         if (cancelled) return;
         setEntries(nutritionData.entries ?? []);
         setCalorieTarget(
@@ -70,7 +74,7 @@ export function CaloriesTodayCard() {
     acc[meal].cal += e.calories ?? 0;
     acc[meal].items += 1;
     return acc;
-  });
+  }, {});
   const mealOrder = ['breakfast', 'lunch', 'dinner', 'snacks'];
   const sortedMeals = mealOrder.filter((m) => byMeal[m]);
 
