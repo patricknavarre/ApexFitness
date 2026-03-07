@@ -62,7 +62,7 @@ export async function GET(req: Request) {
             userId,
             loggedAt: { $gte: start, $lte: end },
           })
-            .select('planId dayNumber caloriesBurned')
+            .select('planId dayNumber caloriesBurned cardioExercise cardioDurationMinutes')
             .lean(),
         ]);
 
@@ -73,7 +73,10 @@ export async function GET(req: Request) {
         const workouts = workoutLogs.map((l) => ({
           planId: l.planId ?? null,
           dayNumber: l.dayNumber ?? null,
-          caloriesBurned: l.caloriesBurned != null ? Number(l.caloriesBurned) : DEFAULT_CALORIES_BURNED,
+          caloriesBurned:
+            l.caloriesBurned != null ? Number(l.caloriesBurned) : DEFAULT_CALORIES_BURNED,
+          cardioExercise: l.cardioExercise ?? null,
+          cardioDurationMinutes: l.cardioDurationMinutes ?? null,
         }));
         const totalBurn = workouts.reduce((sum, w) => sum + w.caloriesBurned, 0);
         const surplus = intake - totalBurn;

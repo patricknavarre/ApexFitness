@@ -7,6 +7,7 @@ import {
   type WorkoutPlan as WorkoutPlanType,
   type WorkoutDay,
 } from '@/lib/workout-plans';
+import { CARDIO_OPTIONS } from '@/lib/cardio';
 import { toast } from 'sonner';
 
 function DayCard({
@@ -245,6 +246,9 @@ export default function WorkoutsPage() {
   const [workoutLogs, setWorkoutLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingDone, setMarkingDone] = useState(false);
+  const [cardioExercise, setCardioExercise] = useState<string>(CARDIO_OPTIONS[0]?.id ?? 'cycling');
+  const [cardioMinutes, setCardioMinutes] = useState<number | ''>(30);
+  const [cardioLoading, setCardioLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -322,6 +326,40 @@ export default function WorkoutsPage() {
     setMarkingDone(false);
   }
 
+  async function logCardio() {
+    const minutes = cardioMinutes === '' ? 0 : Number(cardioMinutes);
+    if (!(minutes >= 1 && minutes <= 300)) {
+      toast.error('Enter 1–300 minutes');
+      return;
+    }
+    setCardioLoading(true);
+    try {
+      const res = await fetch('/api/workout/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cardioExercise,
+          cardioDurationMinutes: minutes,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to log');
+      const data = await res.json();
+      setWorkoutLogs((prev) => [
+        {
+          planId: data.planId ?? null,
+          dayNumber: data.dayNumber ?? null,
+          loggedAt: data.loggedAt ?? null,
+        },
+        ...prev,
+      ]);
+      setCardioMinutes(30);
+      toast.success('Cardio logged.');
+    } catch {
+      toast.error('Could not log cardio');
+    }
+    setCardioLoading(false);
+  }
+
   return (
     <div className="max-w-3xl space-y-8">
       <div>
@@ -333,6 +371,51 @@ export default function WorkoutsPage() {
           and see each day and exercise.
         </p>
       </div>
+
+      <section className="rounded-card border border-border bg-card p-5">
+        <h2 className="font-display text-lg text-accent uppercase tracking-wide mb-3">
+          Log cardio
+        </h2>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="font-sans text-sm text-muted">
+            Exercise
+            <select
+              value={cardioExercise}
+              onChange={(e) => setCardioExercise(e.target.value)}
+              className="ml-2 bg-bg3 border border-border text-text font-sans text-sm px-3 py-2 rounded-card focus:outline-none focus:border-accent"
+            >
+              {CARDIO_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="font-sans text-sm text-muted">
+            Minutes
+            <input
+              type="number"
+              min={1}
+              max={300}
+              value={cardioMinutes}
+              onChange={(e) => {
+                const v = e.target.value;
+                setCardioMinutes(v === '' ? '' : Math.min(300, Math.max(0, Number(v))));
+              }}
+              className="ml-2 w-20 bg-bg3 border border-border text-text font-sans text-sm px-3 py-2 rounded-card focus:outline-none focus:border-accent"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={logCardio}
+            disabled={cardioLoading}
+            className="bg-accent text-black font-sans font-bold text-sm uppercase px-4 py-2 rounded-card hover:shadow-glow disabled:opacity-50"
+          >
+            {cardioLoading ? 'Logging…' : 'Log cardio'}
+          </button>
+        </div>
+      </section>
+
       {loading ? (
         <p className="font-sans text-muted">Loading…</p>
       ) : (

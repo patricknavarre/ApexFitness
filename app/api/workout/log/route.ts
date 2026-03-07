@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/mongodb';
 import WorkoutLog from '@/models/WorkoutLog';
+import { getCardioOption } from '@/lib/cardio';
 
 const DEFAULT_CALORIES_BURNED = 270;
 
@@ -17,7 +18,7 @@ export async function GET(req: Request) {
     const logs = await WorkoutLog.find({ userId: session.user.id })
       .sort({ loggedAt: -1 })
       .limit(limit)
-      .select('planId dayNumber loggedAt caloriesBurned')
+      .select('planId dayNumber loggedAt caloriesBurned cardioExercise cardioDurationMinutes')
       .lean();
     return NextResponse.json({
       logs: logs.map((l) => ({
@@ -25,7 +26,10 @@ export async function GET(req: Request) {
         planId: l.planId ?? null,
         dayNumber: l.dayNumber ?? null,
         loggedAt: l.loggedAt ? new Date(l.loggedAt).toISOString() : null,
-        caloriesBurned: l.caloriesBurned != null ? l.caloriesBurned : DEFAULT_CALORIES_BURNED,
+        caloriesBurned:
+          l.caloriesBurned != null ? l.caloriesBurned : DEFAULT_CALORIES_BURNED,
+        cardioExercise: l.cardioExercise ?? null,
+        cardioDurationMinutes: l.cardioDurationMinutes ?? null,
       })),
     });
   } catch (e) {
@@ -41,15 +45,58 @@ export async function POST(req: Request) {
   }
   try {
     const body = await req.json();
-    const { planId, dayNumber, durationMinutes, caloriesBurned: bodyBurn } = body as {
+    const {
+      planId,
+      dayNumber,
+      durationMinutes,
+      caloriesBurned: bodyBurn,
+      cardioExercise,
+      cardioDurationMinutes,
+    } = body as {
       planId?: string;
       dayNumber?: number;
       durationMinutes?: number;
       caloriesBurned?: number;
+      cardioExercise?: string;
+      cardioDurationMinutes?: number;
     };
+
+    const isCardio =
+      typeof cardioExercise === 'string' &&
+      cardioExercise.length > 0 &&
+      typeof cardioDurationMinutes === 'number' &&
+      cardioDurationMinutes > 0;
+
+    if (isCardio) {
+      const option = getCardioOption(cardioExercise);
+      if (!option) {
+        return NextResponse.json(
+          { error: 'Invalid cardio exercise' },
+          { status: 400 }
+        );
+      }
+      const caloriesBurned = Math.round(cardioDurationMinutes * option.calPerMin);
+      await connectDB();
+      const doc = await WorkoutLog.create({
+        userId: session.user.id,
+        cardioExercise: option.id,
+        cardioDurationMinutes,
+        caloriesBurned,
+      });
+      return NextResponse.json({
+        id: String(doc._id),
+        planId: null,
+        dayNumber: null,
+        loggedAt: doc.loggedAt ? new Date(doc.loggedAt).toISOString() : null,
+        caloriesBurned: doc.caloriesBurned ?? caloriesBurned,
+        cardioExercise: doc.cardioExercise ?? option.id,
+        cardioDurationMinutes: doc.cardioDurationMinutes ?? cardioDurationMinutes,
+      });
+    }
+
     if (!planId || typeof planId !== 'string' || typeof dayNumber !== 'number' || dayNumber < 1) {
       return NextResponse.json(
-        { error: 'Missing planId or invalid dayNumber' },
+        { error: 'Missing planId or invalid dayNumber, or provide cardioExercise and cardioDurationMinutes' },
         { status: 400 }
       );
     }
@@ -74,6 +121,8 @@ export async function POST(req: Request) {
       dayNumber: doc.dayNumber,
       loggedAt: doc.loggedAt ? new Date(doc.loggedAt).toISOString() : null,
       caloriesBurned: doc.caloriesBurned ?? DEFAULT_CALORIES_BURNED,
+      cardioExercise: null,
+      cardioDurationMinutes: null,
     });
   } catch (e) {
     console.error('Workout log POST error:', e);

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { WORKOUT_PLANS } from '@/lib/workout-plans';
+import { getCardioLabel } from '@/lib/cardio';
 
 type AnalysisSummary = {
   bodyType?: string;
@@ -19,12 +20,20 @@ type ProgressPhotoItem = {
   analysis: AnalysisSummary | null;
 };
 
+type WorkoutItem = {
+  planId: string | null;
+  dayNumber: number | null;
+  caloriesBurned: number;
+  cardioExercise?: string | null;
+  cardioDurationMinutes?: number | null;
+};
+
 type DaySummary = {
   date: string;
   intake: number;
   totalBurn: number;
   surplus: number;
-  workouts: { planId: string | null; dayNumber: number | null; caloriesBurned: number }[];
+  workouts: WorkoutItem[];
 };
 
 function getPlanDayLabel(planId: string | null, dayNumber: number | null): string {
@@ -32,6 +41,13 @@ function getPlanDayLabel(planId: string | null, dayNumber: number | null): strin
   const plan = WORKOUT_PLANS.find((p) => p.id === planId);
   if (!plan) return dayNumber != null ? `Plan day ${dayNumber}` : 'Workout';
   return `${plan.name} Day ${dayNumber}`;
+}
+
+function getWorkoutLabel(w: WorkoutItem): string {
+  if (w.cardioExercise && w.cardioDurationMinutes != null) {
+    return `${getCardioLabel(w.cardioExercise)} ${w.cardioDurationMinutes} min`;
+  }
+  return getPlanDayLabel(w.planId, w.dayNumber);
 }
 
 export default function ProgressPage() {
@@ -147,7 +163,7 @@ export default function ProgressPage() {
                         {day.workouts.length === 0
                           ? '—'
                           : day.workouts
-                              .map((w) => getPlanDayLabel(w.planId, w.dayNumber))
+                              .map((w) => getWorkoutLabel(w))
                               .join(', ')}
                       </td>
                       <td className="p-3 text-text">{day.totalBurn} cal</td>
