@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/mongodb';
 import User from '@/models/User';
 import { TodayWorkoutCard } from '@/components/dashboard/TodayWorkoutCard';
+import { SuggestMealCard } from '@/components/dashboard/SuggestMealCard';
+import { WeeklyStreakCard } from '@/components/dashboard/WeeklyStreakCard';
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -55,12 +57,7 @@ export default async function DashboardPage() {
           activePlanId={activePlanId}
           planStartedAt={planStartedAt}
         />
-        <div className="bg-card border border-border rounded-card p-6">
-          <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
-            Weekly streak
-          </h2>
-          <p className="font-mono text-accent3">0 / 7 days</p>
-        </div>
+        <WeeklyStreakCard />
       </div>
       <div className="bg-card border border-border rounded-card p-6">
         <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
@@ -74,6 +71,7 @@ export default async function DashboardPage() {
           Log meals →
         </Link>
       </div>
+      <SuggestMealCard />
     </div>
   );
 }
