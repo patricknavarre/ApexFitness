@@ -83,22 +83,32 @@ export function TodayWorkoutCard({ activePlanId, planStartedAt }: Props) {
   }
 
   return (
-    <Link
-      href="/workouts"
-      className="bg-card border border-border rounded-card p-6 block hover:border-accent/50 transition-colors"
-    >
+    <div className="bg-card border border-border rounded-card p-6">
       <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
         Today&apos;s Workout
       </h2>
-      <p className="font-sans font-medium text-text">
+      <p className="font-sans font-medium text-text mb-3">
         {plan.name} — Day {day.dayNumber}: {day.title}
       </p>
-      <p className="font-sans text-sm text-muted mt-1">
-        {day.exercises.length} exercises
-      </p>
-      <span className="font-sans text-sm text-accent hover:underline mt-2 inline-block">
-        View workout →
-      </span>
-    </Link>
+      <div className="space-y-2 mb-4">
+        {day.exercises.map((ex, i) => (
+          <div
+            key={i}
+            className="flex justify-between gap-4 font-sans text-sm text-text"
+          >
+            <span>{ex.name}</span>
+            <span className="text-muted shrink-0">
+              {ex.sets} × {ex.reps}
+            </span>
+          </div>
+        ))}
+      </div>
+      <Link
+        href="/workouts"
+        className="font-sans text-sm text-accent hover:underline inline-block"
+      >
+        Mark done / View full plan →
+      </Link>
+    </div>
   );
 }
