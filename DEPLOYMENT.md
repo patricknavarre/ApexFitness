@@ -45,6 +45,21 @@ The app currently supports **local file storage** only (writes to `.apex-uploads
 
 ---
 
+## Troubleshooting
+
+### "Session could not be verified" when opening the app or returning on mobile
+
+The server could not validate your session cookie. Fix it on Vercel:
+
+1. **Vercel** → your project → **Settings** → **Environment Variables**.
+2. Add **NEXTAUTH_URL**: set it to your exact app URL, e.g. `https://ness-ecru.vercel.app` (no trailing slash). If Vercel auto-exposes system env vars, turn **off** "Automatically expose System Environment Variables" so your value is used.
+3. Add **NEXTAUTH_SECRET**: generate with `openssl rand -base64 32` and paste the value.
+4. **Redeploy** (Deployments → … → Redeploy) so the new variables are applied.
+
+After redeploying, sign in again; the session should persist when you navigate away and back.
+
+---
+
 ## Quick reference
 
 **Minimum to get running on Vercel:**

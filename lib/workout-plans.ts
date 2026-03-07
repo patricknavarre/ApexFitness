@@ -25,6 +25,25 @@ export type WorkoutPlan = {
   notes?: string[];
 };
 
+/** Get today's workout day from plan start date (uses local calendar date). */
+export function getTodaysDay(
+  plan: WorkoutPlan,
+  planStartedAt: string
+): { day: WorkoutDay; dayNumber: number } | null {
+  const [y, m, d] = planStartedAt.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const start = new Date(y, m - 1, d);
+  start.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffMs = today.getTime() - start.getTime();
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays < 0 || plan.days.length === 0) return null;
+  const dayIndex = diffDays % plan.days.length;
+  const day = plan.days[dayIndex];
+  return { day, dayNumber: day.dayNumber };
+}
+
 export const WORKOUT_PLANS: WorkoutPlan[] = [
   {
     id: '5-day-muscle',

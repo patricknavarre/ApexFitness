@@ -1,6 +1,30 @@
 import Link from 'next/link';
+import { auth } from '@/lib/auth';
+import { connectDB } from '@/lib/mongodb';
+import User from '@/models/User';
+import { TodayWorkoutCard } from '@/components/dashboard/TodayWorkoutCard';
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const session = await auth();
+  let activePlanId: string | null = null;
+  let planStartedAt: string | null = null;
+  if (session?.user?.id) {
+    try {
+      await connectDB();
+      const user = await User.findById(session.user.id)
+        .select('activePlanId planStartedAt')
+        .lean();
+      if (user && !Array.isArray(user)) {
+        activePlanId = (user.activePlanId as string) ?? null;
+        planStartedAt = user.planStartedAt
+          ? new Date(user.planStartedAt as Date).toISOString().slice(0, 10)
+          : null;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   return (
     <div className="space-y-6 max-w-4xl">
       <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
@@ -27,12 +51,10 @@ export default function DashboardPage() {
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-card border border-border rounded-card p-6">
-          <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
-            Today&apos;s Workout
-          </h2>
-          <p className="font-sans text-muted text-sm">No workout scheduled.</p>
-        </div>
+        <TodayWorkoutCard
+          activePlanId={activePlanId}
+          planStartedAt={planStartedAt}
+        />
         <div className="bg-card border border-border rounded-card p-6">
           <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
             Weekly streak

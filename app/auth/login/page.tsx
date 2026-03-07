@@ -49,8 +49,12 @@ function LoginForm() {
       <div className="w-full max-w-md space-y-4">
         {sessionRedirect && (
           <div className="bg-accent2/20 border border-accent2 rounded-card p-4">
-            <p className="font-sans text-accent2 text-sm">
-              You were sent back because the app couldn&apos;t verify your session. Auth is now checked on the server—redeploy and try again. If it still fails, in Vercel set <strong>NEXTAUTH_URL</strong> (your app URL) and <strong>NEXTAUTH_SECRET</strong>, then redeploy.
+            <p className="font-sans text-accent2 text-sm font-medium mb-1">Session could not be verified</p>
+            <p className="font-sans text-accent2/90 text-sm">
+              This often happens when returning to the app or on mobile if auth env vars are not set on Vercel.
+            </p>
+            <p className="font-sans text-accent2/90 text-sm mt-2">
+              <strong>Fix:</strong> In Vercel → Project → Settings → Environment Variables, add <strong>NEXTAUTH_URL</strong> = your app URL (e.g. <code className="bg-bg3 px-1 rounded">https://ness-ecru.vercel.app</code>) and <strong>NEXTAUTH_SECRET</strong> (run <code className="bg-bg3 px-1 rounded">openssl rand -base64 32</code>). Save, then redeploy.
             </p>
           </div>
         )}

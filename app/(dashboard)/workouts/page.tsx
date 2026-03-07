@@ -3,26 +3,11 @@
 import { useState, useEffect } from 'react';
 import {
   WORKOUT_PLANS,
+  getTodaysDay,
   type WorkoutPlan as WorkoutPlanType,
   type WorkoutDay,
 } from '@/lib/workout-plans';
 import { toast } from 'sonner';
-
-function getTodaysDay(
-  plan: WorkoutPlanType,
-  planStartedAt: string
-): { day: WorkoutDay; dayNumber: number } | null {
-  const start = new Date(planStartedAt);
-  start.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diffMs = today.getTime() - start.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffDays < 0 || plan.days.length === 0) return null;
-  const dayIndex = diffDays % plan.days.length;
-  const day = plan.days[dayIndex];
-  return { day, dayNumber: day.dayNumber };
-}
 
 function DayCard({
   day,
@@ -295,7 +280,12 @@ export default function WorkoutsPage() {
   }, []);
 
   async function setActivePlan(planId: string) {
-    const startedAt = new Date().toISOString().slice(0, 10);
+    // Use local calendar date so Day 1 is the day they started (avoids UTC vs local mismatch)
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const startedAt = `${y}-${m}-${day}`;
     try {
       const res = await fetch('/api/user/me', {
         method: 'PATCH',
