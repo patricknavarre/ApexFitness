@@ -7,6 +7,7 @@ const WorkoutLogSchema = new Schema({
   dayNumber: Number,
   loggedAt: { type: Date, default: Date.now },
   durationMinutes: Number,
+  caloriesBurned: Number,
   notes: String,
   exercisesCompleted: [
     {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
+import { WORKOUT_PLANS } from '@/lib/workout-plans';
 
 type AnalysisSummary = {
   bodyType?: string;
@@ -18,9 +19,26 @@ type ProgressPhotoItem = {
   analysis: AnalysisSummary | null;
 };
 
+type DaySummary = {
+  date: string;
+  intake: number;
+  totalBurn: number;
+  surplus: number;
+  workouts: { planId: string | null; dayNumber: number | null; caloriesBurned: number }[];
+};
+
+function getPlanDayLabel(planId: string | null, dayNumber: number | null): string {
+  if (!planId) return 'Workout';
+  const plan = WORKOUT_PLANS.find((p) => p.id === planId);
+  if (!plan) return dayNumber != null ? `Plan day ${dayNumber}` : 'Workout';
+  return `${plan.name} Day ${dayNumber}`;
+}
+
 export default function ProgressPage() {
   const [photos, setPhotos] = useState<ProgressPhotoItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dailySummary, setDailySummary] = useState<DaySummary[] | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const [compareLeft, setCompareLeft] = useState<string>('');
   const [compareRight, setCompareRight] = useState<string>('');
   const [sliderPos, setSliderPos] = useState(50);
@@ -38,6 +56,24 @@ export default function ProgressPage() {
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/progress/daily-summary?days=7')
+      .then((res) => (res.ok ? res.json() : { days: [] }))
+      .then((data) => {
+        if (!cancelled) setDailySummary(data.days ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setDailySummary([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSummaryLoading(false);
       });
     return () => {
       cancelled = true;
@@ -74,6 +110,86 @@ export default function ProgressPage() {
           Your photo timeline. Save photos from AI Analysis to build your history.
         </p>
       </div>
+
+      {/* Daily calorie balance */}
+      <section>
+        <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-2">
+          Daily calorie balance
+        </h2>
+        <p className="font-sans text-muted text-sm mb-4">
+          Intake minus estimated workout burn for the last 7 days.
+        </p>
+        {summaryLoading ? (
+          <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
+            Loading…
+          </div>
+        ) : dailySummary && dailySummary.length > 0 ? (
+          <div className="rounded-card border border-border bg-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full font-sans text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted">
+                    <th className="p-3 font-medium">Date</th>
+                    <th className="p-3 font-medium">Intake</th>
+                    <th className="p-3 font-medium">Workouts</th>
+                    <th className="p-3 font-medium">Burn</th>
+                    <th className="p-3 font-medium">Surplus / Deficit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dailySummary.map((day) => (
+                    <tr key={day.date} className="border-b border-border last:border-0">
+                      <td className="p-3 text-text">
+                        {format(new Date(day.date + 'T12:00:00'), 'EEE, MMM d')}
+                      </td>
+                      <td className="p-3 text-text">{day.intake} cal</td>
+                      <td className="p-3 text-text">
+                        {day.workouts.length === 0
+                          ? '—'
+                          : day.workouts
+                              .map((w) => getPlanDayLabel(w.planId, w.dayNumber))
+                              .join(', ')}
+                      </td>
+                      <td className="p-3 text-text">{day.totalBurn} cal</td>
+                      <td className="p-3">
+                        <span
+                          className={
+                            day.surplus >= 0
+                              ? 'text-accent3'
+                              : 'text-accent2'
+                          }
+                        >
+                          {day.surplus >= 0 ? '+' : ''}
+                          {day.surplus} cal
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="p-3 border-t border-border">
+              <Link
+                href="/nutrition"
+                className="font-sans text-sm text-accent hover:underline"
+              >
+                Log meals
+              </Link>
+              {' · '}
+              <Link
+                href="/workouts"
+                className="font-sans text-sm text-accent hover:underline"
+              >
+                Workouts
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
+            No data yet. Log meals in Nutrition and complete workouts to see balance.
+          </div>
+        )}
+      </section>
 
       {photos.length === 0 ? (
         <div className="rounded-card border border-border bg-card p-8 text-center">
