@@ -17,6 +17,8 @@ function DayCard({
   isLogged,
   onMarkDone,
   markingDone,
+  latestSetLogs,
+  onSetsLogged,
 }: {
   planId: string;
   day: WorkoutDay;
@@ -24,6 +26,8 @@ function DayCard({
   isLogged?: boolean;
   onMarkDone?: () => void;
   markingDone?: boolean;
+  latestSetLogs: Record<string, WorkoutSetLog | undefined>;
+  onSetsLogged?: () => void;
 }) {
   const [open, setOpen] = useState(!!isToday);
   const [exerciseOpen, setExerciseOpen] = useState<Record<number, boolean>>({});
@@ -104,6 +108,7 @@ function DayCard({
       if (!res.ok) throw new Error(data.error || 'Failed to save sets');
       toast.success('Sets logged');
       setExerciseOpen((prev) => ({ ...prev, [exIdx]: false }));
+      onSetsLogged?.();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save sets');
     }
@@ -154,6 +159,21 @@ function DayCard({
                   {ex.sets} × {ex.reps}
                 </span>
               </div>
+              {(() => {
+                const key = `${planId}:${day.dayNumber}:${ex.name}`;
+                const last = latestSetLogs[key];
+                if (!last || !last.sets || last.sets.length === 0) return null;
+                const totalSets = last.sets.length;
+                const topSet = last.sets.reduce(
+                  (best, s) => (s.weight * s.reps > best.weight * best.reps ? s : best),
+                  last.sets[0]
+                );
+                return (
+                  <p className="font-sans text-xs text-muted">
+                    Last: {totalSets} sets, top {topSet.weight} × {topSet.reps}
+                  </p>
+                );
+              })()}
               <button
                 type="button"
                 onClick={() => {
@@ -242,6 +262,8 @@ function PlanCard({
   onSwitchPlan,
   onMarkDone,
   markingDone,
+  latestSetLogs,
+  onSetsLogged,
 }: {
   plan: WorkoutPlanType;
   activePlanId: string | null;
@@ -251,6 +273,8 @@ function PlanCard({
   onSwitchPlan: (planId: string) => void;
   onMarkDone: (planId: string, dayNumber: number) => void;
   markingDone: boolean;
+  latestSetLogs: Record<string, WorkoutSetLog | undefined>;
+  onSetsLogged?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const isActive = activePlanId === plan.id;
@@ -343,6 +367,8 @@ function PlanCard({
                     : undefined
                 }
                 markingDone={markingDone}
+                latestSetLogs={latestSetLogs}
+                onSetsLogged={onSetsLogged}
               />
             ))}
           </div>
@@ -396,6 +422,19 @@ const EQUIPMENT_SECTIONS: { key: 'none' | 'home' | 'full'; label: string; subtit
 
 type LogEntry = { planId: string | null; dayNumber: number | null; loggedAt: string | null };
 
+type WorkoutSetLog = {
+  id: string;
+  planId: string | null;
+  dayNumber: number | null;
+  exerciseName: string | null;
+  sets: { setIndex: number; weight: number; reps: number }[];
+  loggedAt: string | null;
+};
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function WorkoutsPage() {
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [planStartedAt, setPlanStartedAt] = useState<string | null>(null);
@@ -405,6 +444,9 @@ export default function WorkoutsPage() {
   const [cardioExercise, setCardioExercise] = useState<string>(CARDIO_OPTIONS[0]?.id ?? 'cycling');
   const [cardioMinutes, setCardioMinutes] = useState<number | ''>(30);
   const [cardioLoading, setCardioLoading] = useState(false);
+   const [latestSetLogs, setLatestSetLogs] = useState<
+    Record<string, WorkoutSetLog | undefined>
+  >({});
 
   useEffect(() => {
     let cancelled = false;
@@ -422,6 +464,35 @@ export default function WorkoutsPage() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  async function refreshSetLogs() {
+    try {
+      const res = await fetch(`/api/workout/sets?date=${todayISO()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load sets');
+      const logs: WorkoutSetLog[] = (data.logs ?? []).map((l: WorkoutSetLog) => l);
+      const map: Record<string, WorkoutSetLog> = {};
+      for (const log of logs) {
+        if (!log.exerciseName || !log.planId || log.dayNumber == null) continue;
+        const key = `${log.planId}:${log.dayNumber}:${log.exerciseName}`;
+        const existing = map[key];
+        if (!existing) {
+          map[key] = log;
+        } else {
+          const existingTime = existing.loggedAt ? Date.parse(existing.loggedAt) : 0;
+          const thisTime = log.loggedAt ? Date.parse(log.loggedAt) : 0;
+          if (thisTime > existingTime) map[key] = log;
+        }
+      }
+      setLatestSetLogs(map);
+    } catch {
+      // ignore; sets are optional
+    }
+  }
+
+  useEffect(() => {
+    refreshSetLogs();
   }, []);
 
   useEffect(() => {
@@ -596,6 +667,8 @@ export default function WorkoutsPage() {
                     onSwitchPlan={setActivePlan}
                     onMarkDone={markDayDone}
                     markingDone={markingDone}
+                    latestSetLogs={latestSetLogs}
+                    onSetsLogged={refreshSetLogs}
                   />
                 ))}
               </div>
