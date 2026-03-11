@@ -10,6 +10,14 @@ const WorkoutLogSchema = new Schema({
   caloriesBurned: Number,
   cardioExercise: String,
   cardioDurationMinutes: Number,
+  exerciseName: String,
+  sets: [
+    {
+      setIndex: Number,
+      weight: Number,
+      reps: Number,
+    },
+  ],
   notes: String,
   exercisesCompleted: [
     {

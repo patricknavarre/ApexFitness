@@ -104,6 +104,9 @@ export default function NutritionPage() {
   const [suggestMealType, setSuggestMealType] = useState<Meal>('breakfast');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
+  const [historyDate, setHistoryDate] = useState<string | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<LogEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   /** Open camera capture. Must be synchronous so iOS Safari allows the file input to open (user gesture). */
   function openCameraForScan() {
@@ -149,7 +152,7 @@ export default function NutritionPage() {
             const calories = entries.reduce((s: number, e: LogEntry) => s + e.calories, 0);
             const proteinG = entries.reduce((s: number, e: LogEntry) => s + e.proteinG, 0);
             return {
-              date: d.slice(5),
+              date: d,
               calories,
               proteinG,
             };
@@ -202,6 +205,26 @@ export default function NutritionPage() {
     }),
     { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 }
   );
+
+  async function loadHistoryForDate(d: string) {
+    setHistoryDate(d);
+    // If the date is the currently selected date, reuse existing entries
+    if (d === date) {
+      setHistoryEntries(entries);
+      return;
+    }
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/nutrition?date=${d}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load');
+      setHistoryEntries(data.entries ?? []);
+    } catch {
+      toast.error('Could not load history for that day');
+      setHistoryEntries([]);
+    }
+    setHistoryLoading(false);
+  }
 
   function prevDay() {
     const d = new Date(date);
@@ -624,17 +647,84 @@ export default function NutritionPage() {
           <div className="h-48 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={weeklyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="var(--muted)" />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={(value: string) => value.slice(5)}
+                  tick={{ fontSize: 11 }}
+                  stroke="var(--muted)"
+                />
                 <YAxis tick={{ fontSize: 11 }} stroke="var(--muted)" />
                 <Tooltip
                   contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)' }}
                   formatter={(value: number) => [value, 'cal']}
                   labelFormatter={(label) => `Date: ${label}`}
                 />
-                <Bar dataKey="calories" fill="var(--accent3)" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="calories"
+                  fill="var(--accent3)"
+                  radius={[4, 4, 0, 0]}
+                  onClick={(entry) => {
+                    const d = (entry && (entry as any).date) as string | undefined;
+                    if (d) loadHistoryForDate(d);
+                  }}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </div>
+      )}
+
+      {historyDate && (
+        <div className="bg-card border border-border rounded-card p-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-lg text-accent3 uppercase tracking-wide">
+              Meals on {historyDate}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setHistoryDate(null)}
+              className="font-sans text-xs text-muted hover:text-text underline"
+            >
+              Close
+            </button>
+          </div>
+          {historyLoading ? (
+            <p className="font-sans text-muted text-sm">Loading…</p>
+          ) : historyEntries.length === 0 ? (
+            <p className="font-sans text-muted text-sm">No meals logged on this day.</p>
+          ) : (
+            <div className="space-y-3">
+              {MEALS.map((meal) => {
+                const items = historyEntries.filter((e) => e.meal === meal);
+                if (items.length === 0) return null;
+                const totalCalories = items.reduce((s, e) => s + e.calories, 0);
+                return (
+                  <div key={meal}>
+                    <h3 className="font-display text-sm text-accent uppercase tracking-wide mb-1">
+                      {meal}
+                    </h3>
+                    <ul className="space-y-1 font-sans text-sm text-text">
+                      {items.map((e) => (
+                        <li key={e.id} className="flex justify-between gap-2">
+                          <span>{e.foodName}</span>
+                          <span className="text-muted">
+                            {e.calories} cal · P {e.proteinG} / C {e.carbsG} / F {e.fatG} g
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="font-sans text-xs text-muted mt-1">
+                      Total for {meal}: {totalCalories} cal
+                    </p>
+                  </div>
+                );
+              })}
+              <p className="font-sans text-xs text-muted border-t border-border pt-2">
+                Day total:{' '}
+                {historyEntries.reduce((s, e) => s + e.calories, 0)} cal
+              </p>
+            </div>
+          )}
         </div>
       )}
 
