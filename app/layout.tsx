@@ -24,6 +24,15 @@ const spaceMono = Space_Mono({
 export const metadata: Metadata = {
   title: 'APEX — AI Fitness Tracker',
   description: 'Your body. Your data. Your potential.',
+  icons: {
+    icon: '/apple-touch-icon.png',
+    apple: '/apple-touch-icon.png',
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'APEX Fitness',
+  },
 };
 
 export default function RootLayout({
