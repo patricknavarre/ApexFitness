@@ -8,10 +8,14 @@ import {
   type WorkoutDay,
 } from '@/lib/workout-plans';
 import { CARDIO_OPTIONS } from '@/lib/cardio';
+import { getInteractiveWorkout } from '@/lib/interactive-workouts';
+import { RECOVERY_EQUIPMENT } from '@/lib/recoveryWorkoutData';
+import { InteractiveWorkout } from '@/components/workouts/InteractiveWorkout';
 import { toast } from 'sonner';
 
 function DayCard({
   planId,
+  plan,
   day,
   isToday,
   isLogged,
@@ -19,8 +23,10 @@ function DayCard({
   markingDone,
   latestSetLogs,
   onSetsLogged,
+  onStartWorkout,
 }: {
   planId: string;
+  plan: WorkoutPlanType;
   day: WorkoutDay;
   isToday?: boolean;
   isLogged?: boolean;
@@ -28,6 +34,7 @@ function DayCard({
   markingDone?: boolean;
   latestSetLogs: Record<string, WorkoutSetLog | undefined>;
   onSetsLogged?: () => void;
+  onStartWorkout?: () => void;
 }) {
   const [open, setOpen] = useState(!!isToday);
   const [exerciseOpen, setExerciseOpen] = useState<Record<number, boolean>>({});
@@ -139,7 +146,21 @@ function DayCard({
       </button>
       {open && (
         <div className="border-t border-border px-4 py-3 space-y-2">
-          {isToday && onMarkDone && !isLogged && (
+          {plan.interactive && onStartWorkout && (
+            <div className="pb-2">
+              <button
+                type="button"
+                onClick={onStartWorkout}
+                className="w-full bg-accent3 text-black font-sans font-bold text-sm uppercase px-3 py-2.5 rounded-card hover:shadow-glow-accent3"
+              >
+                {isToday ? 'Start today\'s workout' : 'Start workout mode'}
+              </button>
+              <p className="font-sans text-xs text-muted mt-1.5">
+                Tap sets as you go · auto rest timer · progress tracking
+              </p>
+            </div>
+          )}
+          {isToday && onMarkDone && !isLogged && !plan.interactive && (
             <div className="pb-2">
               <button
                 type="button"
@@ -153,6 +174,8 @@ function DayCard({
           )}
           {day.exercises.map((ex, i) => (
             <div key={i} className="space-y-1">
+              {!plan.interactive && (
+                <>
               <div className="flex justify-between gap-4 font-sans text-sm text-text">
                 <span>{ex.name}</span>
                 <span className="text-muted shrink-0">
@@ -245,6 +268,8 @@ function DayCard({
                   </div>
                 </div>
               )}
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -264,6 +289,7 @@ function PlanCard({
   markingDone,
   latestSetLogs,
   onSetsLogged,
+  onStartWorkout,
 }: {
   plan: WorkoutPlanType;
   activePlanId: string | null;
@@ -275,6 +301,7 @@ function PlanCard({
   markingDone: boolean;
   latestSetLogs: Record<string, WorkoutSetLog | undefined>;
   onSetsLogged?: () => void;
+  onStartWorkout: (planId: string, dayNumber: number, dayTitle: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const isActive = activePlanId === plan.id;
@@ -305,8 +332,17 @@ function PlanCard({
             {plan.goal} · {plan.daysPerWeek} days/week · {plan.repRange}
           </p>
           <span className="font-sans text-xs text-muted mt-1 inline-block">
-            {plan.equipment === 'none' ? 'No gym' : plan.equipment === 'home' ? 'Home gym' : 'Full gym'}
+            {plan.equipment === 'none'
+              ? 'No gym'
+              : plan.equipment === 'home'
+                ? 'Home gym'
+                : plan.equipment === 'specialty'
+                  ? 'Specialty · Workout mode'
+                  : 'Full gym'}
           </span>
+          {plan.interactive && (
+            <span className="ml-2 font-sans text-xs text-accent3">Interactive</span>
+          )}
           {todays && (
             <p className="font-sans text-sm text-accent3 mt-2">
               Today: Day {todays.dayNumber} — {todays.day.title}
@@ -331,7 +367,7 @@ function PlanCard({
               </button>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
               <button
                 type="button"
                 onClick={(e) => {
@@ -342,6 +378,18 @@ function PlanCard({
               >
                 Switch to this plan
               </button>
+              {plan.interactive && todays && !todays.day.isRest && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStartWorkout(plan.id, todays.dayNumber, todays.day.title);
+                  }}
+                  className="bg-accent3 text-black font-sans font-bold text-sm uppercase px-4 py-2 rounded-card hover:shadow-glow-accent3"
+                >
+                  Start today&apos;s workout
+                </button>
+              )}
             </div>
           )}
           <div className="grid gap-2">
@@ -349,6 +397,7 @@ function PlanCard({
               <DayCard
                 key={day.dayNumber}
                 planId={plan.id}
+                plan={plan}
                 day={day}
                 isToday={todays?.dayNumber === day.dayNumber}
                 isLogged={
@@ -369,6 +418,11 @@ function PlanCard({
                 markingDone={markingDone}
                 latestSetLogs={latestSetLogs}
                 onSetsLogged={onSetsLogged}
+                onStartWorkout={
+                  !day.isRest
+                    ? () => onStartWorkout(plan.id, day.dayNumber, day.title)
+                    : undefined
+                }
               />
             ))}
           </div>
@@ -414,11 +468,26 @@ function PlanCard({
   );
 }
 
-const EQUIPMENT_SECTIONS: { key: 'none' | 'home' | 'full'; label: string; subtitle: string }[] = [
+const EQUIPMENT_SECTIONS: {
+  key: 'none' | 'home' | 'full' | 'specialty';
+  label: string;
+  subtitle: string;
+}[] = [
+  {
+    key: 'specialty',
+    label: 'Specialty',
+    subtitle: 'Recovery & interactive workout mode with set tracking and rest timer',
+  },
   { key: 'none', label: 'No gym', subtitle: 'Bodyweight, bands, minimal or no equipment' },
   { key: 'home', label: 'Home gym', subtitle: 'Dumbbells, bands, bench or pull-up bar' },
   { key: 'full', label: 'Full gym', subtitle: 'Barbells, rack, cables, full equipment' },
 ];
+
+type WorkoutModeState = {
+  planId: string;
+  dayNumber: number;
+  dayTitle: string;
+} | null;
 
 type LogEntry = { planId: string | null; dayNumber: number | null; loggedAt: string | null };
 
@@ -447,6 +516,7 @@ export default function WorkoutsPage() {
    const [latestSetLogs, setLatestSetLogs] = useState<
     Record<string, WorkoutSetLog | undefined>
   >({});
+  const [workoutMode, setWorkoutMode] = useState<WorkoutModeState>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -553,6 +623,29 @@ export default function WorkoutsPage() {
     setMarkingDone(false);
   }
 
+  function startWorkoutMode(planId: string, dayNumber: number, dayTitle: string) {
+    const workout = getInteractiveWorkout(
+      planId,
+      dayNumber,
+      WORKOUT_PLANS.find((p) => p.id === planId)?.days.find((d) => d.dayNumber === dayNumber)
+    );
+    if (!workout) {
+      toast.error('No workout for this day');
+      return;
+    }
+    setWorkoutMode({ planId, dayNumber, dayTitle });
+  }
+
+  const activeWorkout =
+    workoutMode &&
+    getInteractiveWorkout(
+      workoutMode.planId,
+      workoutMode.dayNumber,
+      WORKOUT_PLANS.find((p) => p.id === workoutMode.planId)?.days.find(
+        (d) => d.dayNumber === workoutMode.dayNumber
+      )
+    );
+
   async function logCardio() {
     const minutes = cardioMinutes === '' ? 0 : Number(cardioMinutes);
     if (!(minutes >= 1 && minutes <= 300)) {
@@ -589,6 +682,24 @@ export default function WorkoutsPage() {
 
   return (
     <div className="max-w-3xl space-y-8">
+      {workoutMode && activeWorkout && (
+        <InteractiveWorkout
+          planId={workoutMode.planId}
+          dayNumber={workoutMode.dayNumber}
+          dayTitle={workoutMode.dayTitle}
+          workout={activeWorkout}
+          equipment={
+            workoutMode.planId === 'recovery'
+              ? RECOVERY_EQUIPMENT
+              : ['Adjustable bench', 'Dumbbells', 'Resistance bands', 'Band cable column']
+          }
+          onClose={() => setWorkoutMode(null)}
+          onMarkDone={() => {
+            markDayDone(workoutMode.planId, workoutMode.dayNumber);
+            setWorkoutMode(null);
+          }}
+        />
+      )}
       <div>
         <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
           Workouts
@@ -669,6 +780,7 @@ export default function WorkoutsPage() {
                     markingDone={markingDone}
                     latestSetLogs={latestSetLogs}
                     onSetsLogged={refreshSetLogs}
+                    onStartWorkout={startWorkoutMode}
                   />
                 ))}
               </div>

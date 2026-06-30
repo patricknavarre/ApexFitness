@@ -90,24 +90,30 @@ export function TodayWorkoutCard({ activePlanId, planStartedAt }: Props) {
       <p className="font-sans font-medium text-text mb-3">
         {plan.name} — Day {day.dayNumber}: {day.title}
       </p>
-      <div className="space-y-2 mb-4">
-        {day.exercises.map((ex, i) => (
-          <div
-            key={i}
-            className="flex justify-between gap-4 font-sans text-sm text-text"
-          >
-            <span>{ex.name}</span>
-            <span className="text-muted shrink-0">
-              {ex.sets} × {ex.reps}
-            </span>
-          </div>
-        ))}
-      </div>
+      {plan.interactive ? (
+        <p className="font-sans text-sm text-muted mb-4">
+          Interactive workout with set tracking and rest timer.
+        </p>
+      ) : (
+        <div className="space-y-2 mb-4">
+          {day.exercises.map((ex, i) => (
+            <div
+              key={i}
+              className="flex justify-between gap-4 font-sans text-sm text-text"
+            >
+              <span>{ex.name}</span>
+              <span className="text-muted shrink-0">
+                {ex.sets} × {ex.reps}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       <Link
         href="/workouts"
         className="font-sans text-sm text-accent hover:underline inline-block"
       >
-        Mark done / View full plan →
+        {plan.interactive ? 'Start workout →' : 'Mark done / View full plan →'}
       </Link>
     </div>
   );

@@ -18,8 +18,9 @@ export type WorkoutPlan = {
   daysPerWeek: number;
   repRange: string;
   rest: string;
-  equipment: 'none' | 'home' | 'full';
+  equipment: 'none' | 'home' | 'full' | 'specialty';
   days: WorkoutDay[];
+  interactive?: boolean;
   progressionRules?: string[];
   nutritionReminders?: string[];
   notes?: string[];
@@ -667,5 +668,63 @@ export const WORKOUT_PLANS: WorkoutPlan[] = [
       { dayNumber: 7, title: 'Rest', isRest: true, exercises: [] },
     ],
     progressionRules: ['Linear or periodized progression', 'Deload when needed'],
+  },
+  {
+    id: 'recovery',
+    name: 'Recovery Workout',
+    goal: 'Seated & lying only — rebuild strength safely',
+    daysPerWeek: 4,
+    repRange: '10–15 reps',
+    rest: '60–90 seconds (use built-in rest timer)',
+    equipment: 'specialty',
+    interactive: true,
+    days: [
+      { dayNumber: 1, title: 'Push', isRest: false, exercises: [{ name: 'See workout mode', sets: '—', reps: '—' }] },
+      { dayNumber: 2, title: 'Pull', isRest: false, exercises: [{ name: 'See workout mode', sets: '—', reps: '—' }] },
+      { dayNumber: 3, title: 'Rest', isRest: true, exercises: [] },
+      { dayNumber: 4, title: 'Core + Legs', isRest: false, exercises: [{ name: 'See workout mode', sets: '—', reps: '—' }] },
+      { dayNumber: 5, title: 'Push', isRest: false, exercises: [{ name: 'See workout mode', sets: '—', reps: '—' }] },
+      { dayNumber: 6, title: 'Pull', isRest: false, exercises: [{ name: 'See workout mode', sets: '—', reps: '—' }] },
+      { dayNumber: 7, title: 'Rest', isRest: true, exercises: [] },
+    ],
+    progressionRules: [
+      'All exercises seated or lying — no standing',
+      'Right leg: reactivation only, no load',
+      'Left leg: full work on Core + Legs day',
+      'Tap each set as you complete it; rest timer launches automatically',
+    ],
+    notes: [
+      'Designed for injury recovery — adjust load based on pain',
+      'Use the Workout Mode button for set tracking and rest timer',
+    ],
+  },
+  {
+    id: 'lt-dan',
+    name: 'LT Dan Plan',
+    goal: "I ain't got no legs — upper body only",
+    daysPerWeek: 4,
+    repRange: '10–15 reps',
+    rest: '60–90 seconds (use built-in rest timer)',
+    equipment: 'specialty',
+    interactive: true,
+    days: [
+      { dayNumber: 1, title: 'Push — Shrimp Boat Press', isRest: false, exercises: [{ name: 'See workout mode', sets: '—', reps: '—' }] },
+      { dayNumber: 2, title: 'Pull — Net Mending Rows', isRest: false, exercises: [{ name: 'See workout mode', sets: '—', reps: '—' }] },
+      { dayNumber: 3, title: 'Rest', isRest: true, exercises: [] },
+      { dayNumber: 4, title: 'Arms & Core — Magic Legs Not Included', isRest: false, exercises: [{ name: 'See workout mode', sets: '—', reps: '—' }] },
+      { dayNumber: 5, title: 'Push Volume', isRest: false, exercises: [{ name: 'See workout mode', sets: '—', reps: '—' }] },
+      { dayNumber: 6, title: 'Pull Volume', isRest: false, exercises: [{ name: 'See workout mode', sets: '—', reps: '—' }] },
+      { dayNumber: 7, title: 'Rest', isRest: true, exercises: [] },
+    ],
+    progressionRules: [
+      'Zero leg exercises — by design',
+      'All seated or lying — Lt. Dan approved',
+      'Tap each set as you complete it; rest timer launches automatically',
+    ],
+    notes: [
+      '"Lieutenant Dan, you got new legs!" — "Magic legs."',
+      'Upper body push/pull split with an arms & core day',
+      'Named after the greatest upper-body-only training philosophy in cinematic history',
+    ],
   },
 ];
