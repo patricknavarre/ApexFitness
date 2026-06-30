@@ -4,9 +4,63 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { IconScan } from '@/components/ui/icons';
 
 const MEALS = ['breakfast', 'lunch', 'dinner', 'snacks'] as const;
 type Meal = (typeof MEALS)[number];
+
+const MEAL_LABELS: Record<Meal, string> = {
+  breakfast: 'Breakfast',
+  lunch: 'Lunch',
+  dinner: 'Dinner',
+  snacks: 'Snacks',
+};
+
+function defaultMealForTime(): Meal {
+  const h = new Date().getHours();
+  if (h < 11) return 'breakfast';
+  if (h < 15) return 'lunch';
+  if (h < 20) return 'dinner';
+  return 'snacks';
+}
+
+function formatDisplayDate(iso: string): string {
+  const d = new Date(iso + 'T12:00:00');
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function MacroBar({
+  label,
+  current,
+  target,
+  color = 'var(--accent3)',
+}: {
+  label: string;
+  current: number;
+  target: number | null;
+  color?: string;
+}) {
+  const pct = target && target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-sans text-xs text-muted">{label}</span>
+        <span className="font-mono text-sm text-text">
+          {current}
+          {target != null && <span className="text-muted"> / {target}</span>}
+        </span>
+      </div>
+      {target != null && target > 0 && (
+        <div className="h-1.5 rounded-full bg-bg3 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-300"
+            style={{ width: `${pct}%`, backgroundColor: color }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 const JPEG_QUALITY = 0.92;
 const MAX_LONG_EDGE = 1200;
@@ -107,6 +161,8 @@ export default function NutritionPage() {
   const [historyDate, setHistoryDate] = useState<string | null>(null);
   const [historyEntries, setHistoryEntries] = useState<LogEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [scanTargetMeal, setScanTargetMeal] = useState<Meal>(defaultMealForTime);
+  const [showWeekChart, setShowWeekChart] = useState(false);
 
   /** Open camera capture. Must be synchronous so iOS Safari allows the file input to open (user gesture). */
   function openCameraForScan() {
@@ -517,173 +573,454 @@ export default function NutritionPage() {
   }
 
   const entriesByMeal = (meal: Meal) => entries.filter((e) => e.meal === meal);
+  const isToday = date === todayISO();
 
   return (
-    <div className="max-w-4xl space-y-8">
-      <div>
-        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
-          Nutrition
-        </h1>
-        <p className="font-sans text-muted mt-2">
-          Log your meals and track calories and macros. Add items manually or scan a photo with AI.
-        </p>
+    <div className="max-w-4xl space-y-6">
+      {/* Header + date */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
+            Nutrition
+          </h1>
+          <p className="font-sans text-muted mt-1 text-sm">
+            Snap a photo — AI estimates calories and macros instantly.
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={prevDay}
+            aria-label="Previous day"
+            className="bg-card border border-border rounded-card px-3 py-2 font-sans text-text hover:border-accent transition-colors"
+          >
+            ←
+          </button>
+          <div className="bg-card border border-border rounded-card px-3 py-2 text-center min-w-[9rem]">
+            <p className="font-sans text-sm font-medium text-text leading-tight">
+              {formatDisplayDate(date)}
+            </p>
+            {!isToday && (
+              <button
+                type="button"
+                onClick={() => setDate(todayISO())}
+                className="font-sans text-[10px] text-accent3 hover:underline mt-0.5"
+              >
+                Jump to today
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={nextDay}
+            aria-label="Next day"
+            className="bg-card border border-border rounded-card px-3 py-2 font-sans text-text hover:border-accent transition-colors"
+          >
+            →
+          </button>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="sr-only"
+            id="nutrition-date-picker"
+          />
+          <label
+            htmlFor="nutrition-date-picker"
+            className="bg-bg3 border border-border rounded-card px-3 py-2 font-sans text-xs text-muted hover:border-accent cursor-pointer transition-colors"
+          >
+            Pick
+          </label>
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <button
-          type="button"
-          onClick={prevDay}
-          className="bg-card border border-border rounded-card px-4 py-2 font-sans text-text hover:border-accent transition-colors"
-        >
-          ← Prev
-        </button>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="bg-card border border-border rounded-card px-4 py-2 font-sans text-text focus:ring-2 focus:ring-accent"
-        />
-        <button
-          type="button"
-          onClick={nextDay}
-          className="bg-card border border-border rounded-card px-4 py-2 font-sans text-text hover:border-accent transition-colors"
-        >
-          Next →
-        </button>
-      </div>
-
+      {/* Macro summary */}
       {loadingTargets ? (
-        <p className="font-sans text-muted">Loading targets…</p>
+        <p className="font-sans text-muted text-sm">Loading targets…</p>
       ) : targets && (targets.calorieTarget != null || targets.proteinTarget != null) ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-sans">
-          <div className="bg-card border border-border rounded-card p-4">
-            <span className="text-muted text-sm block">Calories</span>
-            <span className="text-accent3 font-mono">
-              {totals.calories} / {targets.calorieTarget ?? '—'}
-            </span>
-          </div>
-          <div className="bg-card border border-border rounded-card p-4">
-            <span className="text-muted text-sm block">Protein (g)</span>
-            <span className="text-accent3 font-mono">
-              {totals.proteinG} / {targets.proteinTarget ?? '—'}
-            </span>
-          </div>
-          <div className="bg-card border border-border rounded-card p-4">
-            <span className="text-muted text-sm block">Carbs (g)</span>
-            <span className="text-accent3 font-mono">
-              {totals.carbsG} / {targets.carbTarget ?? '—'}
-            </span>
-          </div>
-          <div className="bg-card border border-border rounded-card p-4">
-            <span className="text-muted text-sm block">Fat (g)</span>
-            <span className="text-accent3 font-mono">
-              {totals.fatG} / {targets.fatTarget ?? '—'}
-            </span>
-          </div>
+        <div className="bg-card border border-border rounded-card p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MacroBar label="Calories" current={totals.calories} target={targets.calorieTarget} />
+          <MacroBar label="Protein (g)" current={totals.proteinG} target={targets.proteinTarget} color="var(--accent)" />
+          <MacroBar label="Carbs (g)" current={totals.carbsG} target={targets.carbTarget} />
+          <MacroBar label="Fat (g)" current={totals.fatG} target={targets.fatTarget} color="var(--accent2)" />
         </div>
       ) : (
         <p className="font-sans text-muted text-sm">
-          Set your calorie and macro targets in Settings to see progress here.
+          Set calorie and macro targets in Settings to track progress.
         </p>
       )}
 
-      {targets && (targets.calorieTarget != null || targets.proteinTarget != null) && (
-        <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="nutrition-suggest-meal-type" className="font-sans text-sm text-muted">
-            For:
-          </label>
-          <select
-            id="nutrition-suggest-meal-type"
-            value={suggestMealType}
-            onChange={(e) => setSuggestMealType(e.target.value as Meal)}
-            className="bg-bg3 border border-border text-text font-sans text-sm px-3 py-2 rounded-card focus:outline-none focus:border-accent"
-          >
-            <option value="breakfast">Breakfast</option>
-            <option value="lunch">Lunch</option>
-            <option value="dinner">Dinner</option>
-            <option value="snacks">Snack</option>
-          </select>
-          <button
-            type="button"
-            onClick={suggestMeal}
-            disabled={suggestLoading}
-            className="bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2 rounded-card hover:border-accent disabled:opacity-50"
-          >
-            {suggestLoading ? 'Suggesting…' : 'Suggest a meal'}
-          </button>
-          {suggestResult && (
-            <div className="flex flex-wrap items-center gap-2 font-sans text-sm">
-              <span className="text-text">
-                {suggestResult.foodName} — {suggestResult.estimatedCalories} cal
-              </span>
-              {MEALS.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => addSuggestedToMeal(m)}
-                  disabled={addingScan}
-                  className="bg-accent text-black font-sans text-xs font-bold uppercase px-2 py-1 rounded-card hover:shadow-glow disabled:opacity-50"
-                >
-                  Add to {m}
-                </button>
-              ))}
+      {/* AI Scan hero */}
+      <section className="relative overflow-hidden rounded-card border-2 border-accent3/40 bg-gradient-to-br from-accent3/10 via-card to-card p-5 sm:p-6 shadow-glow-accent3">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-accent3/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-accent3"><IconScan /></span>
+            <h2 className="font-display text-xl text-accent3 uppercase tracking-wide">
+              AI Food Scanner
+            </h2>
+          </div>
+          <p className="font-sans text-sm text-muted mb-4">
+            Take a photo of your meal and let AI estimate nutrition for you.
+          </p>
+
+          {!scanPreview && !scanResult && (
+            <div className="flex flex-col sm:flex-row gap-3">
               <button
                 type="button"
-                onClick={() => setSuggestResult(null)}
-                className="text-muted text-xs underline"
+                onClick={openCameraForScan}
+                className="flex-1 flex items-center justify-center gap-2 bg-accent3 text-black font-sans font-bold text-sm uppercase px-6 py-4 rounded-card hover:shadow-glow-accent3 transition-shadow"
               >
-                Dismiss
+                <IconScan />
+                Take photo
+              </button>
+              <button
+                type="button"
+                onClick={openLibraryForScan}
+                className="flex-1 bg-bg3 border border-border text-text font-sans font-medium text-sm px-6 py-4 rounded-card hover:border-accent3 transition-colors"
+              >
+                Choose from library
               </button>
             </div>
           )}
-        </div>
-      )}
 
-      {!loadingWeek && weeklyData.length > 0 && (
-        <div className="bg-card border border-border rounded-card p-6">
-          <h2 className="font-display text-lg text-accent3 uppercase tracking-wide mb-4">
-            Last 7 days
-          </h2>
-          <div className="h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={(value: string) => value.slice(5)}
-                  tick={{ fontSize: 11 }}
-                  stroke="var(--muted)"
-                />
-                <YAxis tick={{ fontSize: 11 }} stroke="var(--muted)" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)' }}
-                  formatter={(value: number) => [value, 'cal']}
-                  labelFormatter={(label) => `Date: ${label}`}
-                />
-                <Bar
-                  dataKey="calories"
-                  fill="var(--accent3)"
-                  radius={[4, 4, 0, 0]}
-                  onClick={(entry) => {
-                    const d = (entry && (entry as any).date) as string | undefined;
-                    if (d) loadHistoryForDate(d);
-                  }}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {(scanPreview || scanResult) && (
+            <div className="space-y-4">
+              {scanPreview && (
+                <div className="flex flex-col sm:flex-row gap-4 items-start">
+                  <div className="relative w-full sm:w-40 aspect-square rounded-card overflow-hidden bg-bg2 shrink-0 border border-border">
+                    <Image
+                      src={scanPreview}
+                      alt="Food preview"
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </div>
+                  {!scanResult && (
+                    <div className="flex flex-col gap-2 flex-1">
+                      <p className="font-sans text-sm text-text">Ready to analyze?</p>
+                      <button
+                        type="button"
+                        onClick={handleAnalyze}
+                        disabled={scanLoading || !scanImage}
+                        className="bg-accent3 text-black font-sans font-bold uppercase text-sm px-6 py-3 rounded-card hover:shadow-glow-accent3 disabled:opacity-50 w-fit"
+                      >
+                        {scanLoading ? 'Analyzing…' : 'Analyze with AI'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScanPreview(null);
+                          setScanImage(null);
+                          setScanResult(null);
+                        }}
+                        className="font-sans text-xs text-muted hover:text-text underline w-fit"
+                      >
+                        Retake photo
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {scanResult && (
+                <div className="space-y-3">
+                  <ul className="space-y-2">
+                    {scanResult.items.map((item, idx) => (
+                      <li
+                        key={idx}
+                        className="flex flex-wrap items-center justify-between gap-2 bg-bg2/60 border border-border rounded-card px-3 py-2.5 font-sans text-sm"
+                      >
+                        <span className="font-medium text-text">{item.foodName}</span>
+                        <span className="text-muted text-xs">
+                          {item.estimatedCalories} cal · P{item.proteinG} C{item.carbsG} F{item.fatG}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <label htmlFor="scan-target-meal" className="font-sans text-sm text-muted">
+                      Add to:
+                    </label>
+                    <select
+                      id="scan-target-meal"
+                      value={scanTargetMeal}
+                      onChange={(e) => setScanTargetMeal(e.target.value as Meal)}
+                      className="bg-bg3 border border-border text-text font-sans text-sm px-3 py-2 rounded-card focus:outline-none focus:border-accent3"
+                    >
+                      {MEALS.map((m) => (
+                        <option key={m} value={m}>{MEAL_LABELS[m]}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => addAllScanToMeal(scanTargetMeal)}
+                      disabled={addingScan}
+                      className="bg-accent text-black font-sans font-bold text-sm uppercase px-4 py-2 rounded-card hover:shadow-glow disabled:opacity-50"
+                    >
+                      {addingScan ? 'Adding…' : `Add ${scanResult.items.length} item${scanResult.items.length > 1 ? 's' : ''}`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScanResult(null);
+                        setScanPreview(null);
+                        setScanImage(null);
+                      }}
+                      className="font-sans text-xs text-muted hover:text-text underline"
+                    >
+                      Discard
+                    </button>
+                  </div>
+                  <details className="font-sans text-xs text-muted">
+                    <summary className="cursor-pointer hover:text-text">Add items individually</summary>
+                    <ul className="mt-2 space-y-2">
+                      {scanResult.items.map((item, idx) => (
+                        <li key={idx} className="flex flex-wrap items-center gap-2">
+                          <span className="text-text">{item.foodName}</span>
+                          {MEALS.map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => addScanItemToMeal(m, item)}
+                              disabled={addingScan}
+                              className="bg-bg3 border border-border text-text text-xs px-2 py-0.5 rounded-card hover:border-accent disabled:opacity-50"
+                            >
+                              {MEAL_LABELS[m]}
+                            </button>
+                          ))}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </section>
+
+      {/* Today's log */}
+      <section>
+        <h2 className="font-display text-lg text-accent uppercase tracking-wide mb-3">
+          {isToday ? "Today's log" : `Log for ${formatDisplayDate(date)}`}
+        </h2>
+        {loadingLog ? (
+          <p className="font-sans text-muted text-sm">Loading…</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {MEALS.map((meal) => {
+              const items = entriesByMeal(meal);
+              const mealCal = items.reduce((s, e) => s + e.calories, 0);
+              return (
+                <div
+                  key={meal}
+                  className="bg-card border border-border rounded-card overflow-hidden flex flex-col"
+                >
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-bg2/30">
+                    <h3 className="font-display text-sm text-accent3 uppercase tracking-wide">
+                      {MEAL_LABELS[meal]}
+                    </h3>
+                    {items.length > 0 && (
+                      <span className="font-mono text-xs text-muted">{mealCal} cal</span>
+                    )}
+                  </div>
+                  <div className="px-4 py-3 flex-1 space-y-2">
+                    {items.length === 0 && addingMeal !== meal && (
+                      <p className="font-sans text-xs text-muted italic">Nothing logged yet</p>
+                    )}
+                    {items.map((e) => (
+                      <div key={e.id} className="group flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-sans text-sm text-text truncate">{e.foodName}</p>
+                          <p className="font-sans text-xs text-muted">
+                            {e.calories} cal · P{e.proteinG} C{e.carbsG} F{e.fatG}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => deleteEntry(e.id)}
+                          disabled={deletingId === e.id}
+                          className="shrink-0 text-muted hover:text-accent2 text-xs opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                          aria-label={`Remove ${e.foodName}`}
+                        >
+                          {deletingId === e.id ? '…' : '×'}
+                        </button>
+                      </div>
+                    ))}
+                    {addingMeal === meal ? (
+                      <div className="border border-border rounded-card p-3 space-y-2 bg-bg2/50 mt-2">
+                        <input
+                          type="text"
+                          placeholder="Food name"
+                          value={manualFood}
+                          onChange={(e) => setManualFood(e.target.value)}
+                          className="w-full bg-bg3 border border-border rounded-card px-3 py-2 text-text font-sans text-sm focus:ring-2 focus:ring-accent"
+                        />
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {(['Cal', 'P', 'C', 'F'] as const).map((label, i) => {
+                            const vals = [manualCal, manualP, manualC, manualF];
+                            const setters = [setManualCal, setManualP, setManualC, setManualF];
+                            return (
+                              <input
+                                key={label}
+                                type="number"
+                                placeholder={label}
+                                value={vals[i]}
+                                onChange={(e) => setters[i](e.target.value)}
+                                min={0}
+                                className="bg-bg3 border border-border rounded-card px-2 py-1.5 text-text font-sans text-xs focus:ring-2 focus:ring-accent"
+                              />
+                            );
+                          })}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => addManual(meal)}
+                            className="bg-accent text-black font-sans font-bold text-xs uppercase px-3 py-1.5 rounded-card hover:shadow-glow"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAddingMeal(null)}
+                            className="font-sans text-xs text-muted hover:text-text"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setAddingMeal(meal)}
+                        className="font-sans text-xs text-muted hover:text-accent3 transition-colors mt-1"
+                      >
+                        + Add manually
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Secondary: suggest + weekly */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {targets && (targets.calorieTarget != null || targets.proteinTarget != null) && (
+          <div className="bg-card border border-border rounded-card p-4">
+            <h3 className="font-display text-sm text-accent uppercase tracking-wide mb-3">
+              Suggest a meal
+            </h3>
+            <p className="font-sans text-xs text-muted mb-3">
+              AI picks something based on your remaining macros.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <select
+                value={suggestMealType}
+                onChange={(e) => setSuggestMealType(e.target.value as Meal)}
+                className="bg-bg3 border border-border text-text font-sans text-sm px-3 py-2 rounded-card focus:outline-none focus:border-accent"
+              >
+                {MEALS.map((m) => (
+                  <option key={m} value={m}>{MEAL_LABELS[m]}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={suggestMeal}
+                disabled={suggestLoading}
+                className="bg-bg3 border border-border text-text font-sans font-bold text-xs uppercase px-3 py-2 rounded-card hover:border-accent disabled:opacity-50"
+              >
+                {suggestLoading ? 'Thinking…' : 'Suggest'}
+              </button>
+            </div>
+            {suggestResult && (
+              <div className="bg-bg2/50 border border-border rounded-card p-3 space-y-2">
+                <p className="font-sans text-sm text-text font-medium">{suggestResult.foodName}</p>
+                <p className="font-sans text-xs text-muted">
+                  {suggestResult.estimatedCalories} cal · P{suggestResult.proteinG} C{suggestResult.carbsG} F{suggestResult.fatG}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => addSuggestedToMeal(suggestMealType)}
+                    disabled={addingScan}
+                    className="bg-accent text-black font-sans text-xs font-bold uppercase px-3 py-1 rounded-card hover:shadow-glow disabled:opacity-50"
+                  >
+                    Add to {MEAL_LABELS[suggestMealType]}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSuggestResult(null)}
+                    className="font-sans text-xs text-muted hover:text-text"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="bg-card border border-border rounded-card p-4">
+          <button
+            type="button"
+            onClick={() => setShowWeekChart((v) => !v)}
+            className="w-full flex items-center justify-between font-display text-sm text-accent uppercase tracking-wide"
+          >
+            Last 7 days
+            <span className="text-muted text-xs font-sans normal-case">{showWeekChart ? 'Hide' : 'Show'}</span>
+          </button>
+          {showWeekChart && !loadingWeek && weeklyData.length > 0 && (
+            <div className="h-40 w-full mt-3">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={weeklyData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(value: string) => value.slice(5)}
+                    tick={{ fontSize: 10 }}
+                    stroke="var(--muted)"
+                  />
+                  <YAxis tick={{ fontSize: 10 }} stroke="var(--muted)" width={32} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', fontSize: 12 }}
+                    formatter={(value: number) => [value, 'cal']}
+                    labelFormatter={(label) => String(label)}
+                  />
+                  <Bar
+                    dataKey="calories"
+                    fill="var(--accent3)"
+                    radius={[3, 3, 0, 0]}
+                    className="cursor-pointer"
+                    onClick={(entry) => {
+                      const d = (entry && (entry as { date?: string }).date) as string | undefined;
+                      if (d) loadHistoryForDate(d);
+                    }}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          {showWeekChart && loadingWeek && (
+            <p className="font-sans text-xs text-muted mt-3">Loading chart…</p>
+          )}
+        </div>
+      </div>
 
       {historyDate && (
-        <div className="bg-card border border-border rounded-card p-6 space-y-3">
+        <div className="bg-card border border-border rounded-card p-5 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-lg text-accent3 uppercase tracking-wide">
-              Meals on {historyDate}
+              Meals on {formatDisplayDate(historyDate)}
             </h2>
             <button
               type="button"
               onClick={() => setHistoryDate(null)}
-              className="font-sans text-xs text-muted hover:text-text underline"
+              className="font-sans text-xs text-muted hover:text-text"
             >
               Close
             </button>
@@ -701,153 +1038,29 @@ export default function NutritionPage() {
                 return (
                   <div key={meal}>
                     <h3 className="font-display text-sm text-accent uppercase tracking-wide mb-1">
-                      {meal}
+                      {MEAL_LABELS[meal]}
                     </h3>
                     <ul className="space-y-1 font-sans text-sm text-text">
                       {items.map((e) => (
                         <li key={e.id} className="flex justify-between gap-2">
                           <span>{e.foodName}</span>
-                          <span className="text-muted">
-                            {e.calories} cal · P {e.proteinG} / C {e.carbsG} / F {e.fatG} g
+                          <span className="text-muted text-xs shrink-0">
+                            {e.calories} cal
                           </span>
                         </li>
                       ))}
                     </ul>
                     <p className="font-sans text-xs text-muted mt-1">
-                      Total for {meal}: {totalCalories} cal
+                      {totalCalories} cal total
                     </p>
                   </div>
                 );
               })}
               <p className="font-sans text-xs text-muted border-t border-border pt-2">
-                Day total:{' '}
-                {historyEntries.reduce((s, e) => s + e.calories, 0)} cal
+                Day total: {historyEntries.reduce((s, e) => s + e.calories, 0)} cal
               </p>
             </div>
           )}
-        </div>
-      )}
-
-      {loadingLog ? (
-        <p className="font-sans text-muted">Loading log…</p>
-      ) : (
-        <div className="space-y-6">
-          {MEALS.map((meal) => (
-            <div
-              key={meal}
-              className="bg-card border border-border rounded-card overflow-hidden"
-            >
-              <h2 className="font-display text-lg text-accent3 uppercase tracking-wide px-5 py-3 border-b border-border">
-                {meal}
-              </h2>
-              <div className="px-5 py-4 space-y-3">
-                {entriesByMeal(meal).map((e) => (
-                  <div
-                    key={e.id}
-                    className="flex flex-wrap items-center justify-between gap-2 font-sans text-sm text-text"
-                  >
-                    <span className="font-medium">{e.foodName}</span>
-                    <span className="text-muted">
-                      {e.calories} cal · P {e.proteinG} / C {e.carbsG} / F {e.fatG} g
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => deleteEntry(e.id)}
-                      disabled={deletingId === e.id}
-                      className="text-muted hover:text-accent2 text-xs underline disabled:opacity-50"
-                    >
-                      {deletingId === e.id ? '…' : 'Remove'}
-                    </button>
-                  </div>
-                ))}
-                {addingMeal === meal ? (
-                  <div className="border border-border rounded-card p-4 space-y-3 bg-bg2">
-                    <input
-                      type="text"
-                      placeholder="Food name"
-                      value={manualFood}
-                      onChange={(e) => setManualFood(e.target.value)}
-                      className="w-full bg-bg3 border border-border rounded-card px-3 py-2 text-text font-sans text-sm focus:ring-2 focus:ring-accent"
-                    />
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      <input
-                        type="number"
-                        placeholder="Cal"
-                        value={manualCal}
-                        onChange={(e) => setManualCal(e.target.value)}
-                        min={0}
-                        className="bg-bg3 border border-border rounded-card px-3 py-2 text-text font-sans text-sm focus:ring-2 focus:ring-accent"
-                      />
-                      <input
-                        type="number"
-                        placeholder="P (g)"
-                        value={manualP}
-                        onChange={(e) => setManualP(e.target.value)}
-                        min={0}
-                        className="bg-bg3 border border-border rounded-card px-3 py-2 text-text font-sans text-sm focus:ring-2 focus:ring-accent"
-                      />
-                      <input
-                        type="number"
-                        placeholder="C (g)"
-                        value={manualC}
-                        onChange={(e) => setManualC(e.target.value)}
-                        min={0}
-                        className="bg-bg3 border border-border rounded-card px-3 py-2 text-text font-sans text-sm focus:ring-2 focus:ring-accent"
-                      />
-                      <input
-                        type="number"
-                        placeholder="F (g)"
-                        value={manualF}
-                        onChange={(e) => setManualF(e.target.value)}
-                        min={0}
-                        className="bg-bg3 border border-border rounded-card px-3 py-2 text-text font-sans text-sm focus:ring-2 focus:ring-accent"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => addManual(meal)}
-                        className="bg-accent text-black font-sans font-bold text-sm uppercase px-4 py-2 rounded-card hover:shadow-glow"
-                      >
-                        Add
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAddingMeal(null)}
-                        className="bg-bg3 border border-border text-text font-sans text-sm px-4 py-2 rounded-card hover:border-accent"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setAddingMeal(meal)}
-                      className="text-accent3 font-sans text-sm font-medium hover:underline"
-                    >
-                      + Add manually
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openCameraForScan}
-                      className="text-accent font-sans text-sm font-medium hover:underline"
-                    >
-                      Scan with AI
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openLibraryForScan}
-                      className="text-muted font-sans text-sm hover:underline"
-                    >
-                      or choose from library
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
         </div>
       )}
 
@@ -866,111 +1079,6 @@ export default function NutritionPage() {
         onChange={handleScanFile}
         className="hidden"
       />
-
-      {(scanPreview || scanResult) && (
-        <div className="bg-card border border-border rounded-card p-6 space-y-4">
-          <h3 className="font-display text-lg text-accent uppercase tracking-wide">
-            Scan with AI
-          </h3>
-          {scanPreview && (
-            <div className="relative w-full max-w-sm aspect-square rounded-card overflow-hidden bg-bg2">
-              <Image
-                src={scanPreview}
-                alt="Food preview"
-                fill
-                className="object-contain"
-                unoptimized
-              />
-            </div>
-          )}
-          {!scanResult ? (
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={handleAnalyze}
-                disabled={scanLoading || !scanImage}
-                className="bg-accent text-black font-sans font-bold uppercase px-6 py-3 rounded-card hover:shadow-glow disabled:opacity-50"
-              >
-                {scanLoading ? 'Analyzing…' : 'Analyze photo'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setScanPreview(null);
-                  setScanImage(null);
-                  setScanResult(null);
-                }}
-                className="text-muted font-sans text-sm underline hover:text-text"
-              >
-                Clear
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <ul className="space-y-2 font-sans text-sm">
-                {scanResult.items.map((item, idx) => (
-                  <li
-                    key={idx}
-                    className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-border last:border-0"
-                  >
-                    <span className="font-medium text-text">{item.foodName}</span>
-                    <span className="text-muted">
-                      {item.estimatedCalories} cal · P {item.proteinG} / C {item.carbsG} / F {item.fatG} g
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {MEALS.map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => addScanItemToMeal(m, item)}
-                          disabled={addingScan}
-                          className="bg-bg3 border border-border text-text font-sans text-xs px-2 py-1 rounded-card hover:border-accent disabled:opacity-50"
-                        >
-                          Add to {m}
-                        </button>
-                      ))}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
-                <span className="text-muted text-sm">Total:</span>
-                <span className="font-mono text-accent3 text-sm">
-                  {scanResult.items.reduce((s, i) => s + i.estimatedCalories, 0)} cal · P{' '}
-                  {scanResult.items.reduce((s, i) => s + i.proteinG, 0)} / C{' '}
-                  {scanResult.items.reduce((s, i) => s + i.carbsG, 0)} / F{' '}
-                  {scanResult.items.reduce((s, i) => s + i.fatG, 0)} g
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-muted text-sm">Add all to:</span>
-                {MEALS.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => addAllScanToMeal(m)}
-                    disabled={addingScan}
-                    className="bg-accent text-black font-sans font-bold text-sm uppercase px-3 py-1.5 rounded-card hover:shadow-glow disabled:opacity-50"
-                  >
-                    {m}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setScanResult(null);
-                    setScanPreview(null);
-                    setScanImage(null);
-                  }}
-                  className="text-muted font-sans text-sm underline hover:text-text"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
