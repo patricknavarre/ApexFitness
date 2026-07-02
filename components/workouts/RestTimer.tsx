@@ -25,17 +25,34 @@ export function RestTimer({
 }: Props) {
   const [timeLeft, setTimeLeft] = useState(duration);
   const [running, setRunning] = useState(false);
+  const [finished, setFinished] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (visible) {
       setTimeLeft(duration);
       setRunning(true);
+      setFinished(false);
     } else {
       setRunning(false);
+      setFinished(false);
       if (intervalRef.current) clearInterval(intervalRef.current);
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
     }
   }, [visible, duration]);
+
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (running && timeLeft > 0) {
@@ -44,9 +61,15 @@ export function RestTimer({
           if (t <= 1) {
             if (intervalRef.current) clearInterval(intervalRef.current);
             setRunning(false);
+            setFinished(true);
             if (typeof navigator !== 'undefined' && navigator.vibrate) {
               navigator.vibrate([200, 100, 200]);
             }
+            if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+            closeTimeoutRef.current = setTimeout(() => {
+              setFinished(false);
+              onCloseRef.current();
+            }, 1000);
             return 0;
           }
           return t - 1;
@@ -57,6 +80,12 @@ export function RestTimer({
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [running, timeLeft]);
+
+  function handleSkip() {
+    if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    setFinished(false);
+    onClose();
+  }
 
   if (!visible) return null;
 
@@ -74,7 +103,7 @@ export function RestTimer({
             cy="70"
             r="54"
             fill="none"
-            stroke={accentColor}
+            stroke={finished ? '#4ade80' : accentColor}
             strokeWidth="8"
             strokeLinecap="round"
             strokeDasharray={circumference}
@@ -83,7 +112,11 @@ export function RestTimer({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="font-mono text-4xl font-extrabold tracking-tight text-text">
+          <div
+            className={`font-mono text-4xl font-extrabold tracking-tight transition-colors duration-200 ${
+              finished ? 'text-green-400' : 'text-text'
+            }`}
+          >
             {formatTime(timeLeft)}
           </div>
           <div className="font-mono text-[10px] uppercase tracking-widest text-muted">rest</div>
@@ -107,6 +140,8 @@ export function RestTimer({
             onDurationChange(val);
             setTimeLeft(val);
             setRunning(false);
+            setFinished(false);
+            if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
           }}
           className="w-full"
           style={{ accentColor }}
@@ -124,6 +159,8 @@ export function RestTimer({
         <button
           type="button"
           onClick={() => {
+            if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+            setFinished(false);
             setTimeLeft(duration);
             setRunning(true);
           }}
@@ -134,7 +171,7 @@ export function RestTimer({
         </button>
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleSkip}
           className="rounded-card border border-border bg-transparent px-5 py-2.5 font-sans text-sm font-bold text-muted hover:border-accent"
         >
           Skip

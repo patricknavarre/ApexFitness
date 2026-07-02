@@ -8,6 +8,9 @@ export const maxDuration = 60;
 
 const SYSTEM_PROMPT = `You are a nutrition expert. Analyze this food photo and list each distinct food item separately with estimated nutrition.
 
+When the user provides a confirmed protein supplement amount, treat it as ground truth.
+Do not estimate or override user-confirmed supplement protein values.
+
 Return ONLY valid JSON with no markdown or code fences. Use this exact structure:
 {
   "items": [
@@ -80,7 +83,11 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { image } = body as { image: string };
+    const { image, contextNote, confirmedProteinG } = body as {
+      image: string;
+      contextNote?: string;
+      confirmedProteinG?: number;
+    };
 
     if (!image || typeof image !== 'string') {
       return NextResponse.json(
@@ -91,6 +98,16 @@ export async function POST(req: Request) {
 
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
 
+    const textParts = ['Analyze this food photo and return the JSON object only.'];
+    if (typeof contextNote === 'string' && contextNote.trim()) {
+      textParts.push(contextNote.trim());
+    }
+    if (typeof confirmedProteinG === 'number' && confirmedProteinG >= 1) {
+      textParts.push(
+        `[SYSTEM NOTE: The user confirmed their protein supplement contains ${confirmedProteinG}g of protein. Use this exact value — do not estimate or override it.]`
+      );
+    }
+
     const { text } = await generateText({
       model: anthropic(process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-20250514'),
       system: SYSTEM_PROMPT,
@@ -98,7 +115,7 @@ export async function POST(req: Request) {
         {
           role: 'user',
           content: [
-            { type: 'text', text: 'Analyze this food photo and return the JSON object only.' },
+            { type: 'text', text: textParts.join('\n\n') },
             {
               type: 'image',
               image: base64Data,

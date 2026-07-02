@@ -5,6 +5,13 @@ import Image from 'next/image';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { IconScan } from '@/components/ui/icons';
+import { ProteinShakeModal } from '@/components/nutrition/ProteinShakeModal';
+import {
+  detectsProteinShake,
+  findShakeItemIndices,
+  applyConfirmedProteinToItems,
+  saveLastShakeProteinG,
+} from '@/lib/protein-shake';
 
 const MEALS = ['breakfast', 'lunch', 'dinner', 'snacks'] as const;
 type Meal = (typeof MEALS)[number];
@@ -133,6 +140,8 @@ type ScanResult = {
   items: ScanItem[];
 };
 
+type ShakeModalMode = 'pre-analyze' | 'post-analyze' | 'manual';
+
 export default function NutritionPage() {
   const [date, setDate] = useState(todayISO);
   const [entries, setEntries] = useState<LogEntry[]>([]);
@@ -163,6 +172,12 @@ export default function NutritionPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [scanTargetMeal, setScanTargetMeal] = useState<Meal>(defaultMealForTime);
   const [showWeekChart, setShowWeekChart] = useState(false);
+  const [scanDescription, setScanDescription] = useState('');
+  const [shakeModalVisible, setShakeModalVisible] = useState(false);
+  const [shakeProteinG, setShakeProteinG] = useState('');
+  const [shakeModalMode, setShakeModalMode] = useState<ShakeModalMode>('pre-analyze');
+  const [pendingManualMeal, setPendingManualMeal] = useState<Meal | null>(null);
+  const pendingPostAnalyzeItemsRef = useRef<ScanItem[] | null>(null);
 
   /** Open camera capture. Must be synchronous so iOS Safari allows the file input to open (user gesture). */
   function openCameraForScan() {
@@ -293,12 +308,15 @@ export default function NutritionPage() {
     setDate(d.toISOString().slice(0, 10));
   }
 
-  async function addManual(meal: Meal) {
-    const foodName = manualFood.trim() || 'Unknown';
-    const calories = Math.max(0, Number(manualCal) || 0);
-    const proteinG = Math.max(0, Number(manualP) || 0);
-    const carbsG = Math.max(0, Number(manualC) || 0);
-    const fatG = Math.max(0, Number(manualF) || 0);
+  async function saveManualEntry(
+    meal: Meal,
+    overrides?: { foodName?: string; calories?: number; proteinG?: number; carbsG?: number; fatG?: number }
+  ) {
+    const foodName = (overrides?.foodName ?? manualFood.trim()) || 'Unknown';
+    const calories = overrides?.calories ?? Math.max(0, Number(manualCal) || 0);
+    const proteinG = overrides?.proteinG ?? Math.max(0, Number(manualP) || 0);
+    const carbsG = overrides?.carbsG ?? Math.max(0, Number(manualC) || 0);
+    const fatG = overrides?.fatG ?? Math.max(0, Number(manualF) || 0);
     try {
       const res = await fetch('/api/nutrition', {
         method: 'POST',
@@ -339,6 +357,22 @@ export default function NutritionPage() {
     }
   }
 
+  function handleManualSubmit(meal: Meal) {
+    const foodName = manualFood.trim();
+    if (detectsProteinShake(foodName) && (Number(manualP) || 0) === 0) {
+      setPendingManualMeal(meal);
+      setShakeModalMode('manual');
+      setShakeProteinG('');
+      setShakeModalVisible(true);
+      return;
+    }
+    saveManualEntry(meal);
+  }
+
+  async function addManual(meal: Meal) {
+    handleManualSubmit(meal);
+  }
+
   function handleScanFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
@@ -360,7 +394,7 @@ export default function NutritionPage() {
     if (libraryInputRef.current) libraryInputRef.current.value = '';
   }
 
-  async function handleAnalyze() {
+  async function runFoodAnalysis(confirmedProteinG?: number) {
     if (!scanImage) {
       toast.error('Select a photo first');
       return;
@@ -371,26 +405,88 @@ export default function NutritionPage() {
       const res = await fetch('/api/nutrition/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: scanImage }),
+        body: JSON.stringify({
+          image: scanImage,
+          contextNote: scanDescription.trim() || undefined,
+          confirmedProteinG,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Analysis failed');
       const rawItems = Array.isArray(data.items) ? data.items : data.items == null && data.foodName != null
         ? [{ foodName: data.foodName ?? 'Unknown', estimatedCalories: data.estimatedCalories ?? 0, proteinG: data.proteinG ?? 0, carbsG: data.carbsG ?? 0, fatG: data.fatG ?? 0 }]
         : [];
-      const items: ScanItem[] = rawItems.map((x: ScanItem) => ({
+      let items: ScanItem[] = rawItems.map((x: ScanItem) => ({
         foodName: x.foodName ?? 'Unknown',
         estimatedCalories: Math.max(0, Number(x.estimatedCalories) ?? 0),
         proteinG: Math.max(0, Number(x.proteinG) ?? 0),
         carbsG: Math.max(0, Number(x.carbsG) ?? 0),
         fatG: Math.max(0, Number(x.fatG) ?? 0),
       }));
-      setScanResult(items.length > 0 ? { items } : null);
-      toast.success('Analysis complete');
+
+      if (confirmedProteinG) {
+        items = applyConfirmedProteinToItems(items, confirmedProteinG);
+        setScanResult(items.length > 0 ? { items } : null);
+        toast.success('Analysis complete');
+      } else if (findShakeItemIndices(items).length > 0) {
+        pendingPostAnalyzeItemsRef.current = items;
+        setShakeModalMode('post-analyze');
+        setShakeProteinG('');
+        setShakeModalVisible(true);
+      } else {
+        setScanResult(items.length > 0 ? { items } : null);
+        toast.success('Analysis complete');
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Analysis failed');
     }
     setScanLoading(false);
+  }
+
+  function handleAnalyze() {
+    if (!scanImage) {
+      toast.error('Select a photo first');
+      return;
+    }
+    if (detectsProteinShake(scanDescription)) {
+      setShakeModalMode('pre-analyze');
+      setShakeProteinG('');
+      setShakeModalVisible(true);
+      return;
+    }
+    runFoodAnalysis();
+  }
+
+  function handleShakeConfirm() {
+    const grams = parseInt(shakeProteinG, 10);
+    if (!grams || grams < 1 || grams > 300) return;
+
+    saveLastShakeProteinG(grams);
+    setShakeModalVisible(false);
+    setShakeProteinG('');
+
+    if (shakeModalMode === 'pre-analyze') {
+      runFoodAnalysis(grams);
+    } else if (shakeModalMode === 'post-analyze') {
+      const pending = pendingPostAnalyzeItemsRef.current;
+      if (pending) {
+        const updated = applyConfirmedProteinToItems(pending, grams);
+        setScanResult({ items: updated });
+        pendingPostAnalyzeItemsRef.current = null;
+        toast.success('Analysis complete');
+      }
+    } else if (shakeModalMode === 'manual' && pendingManualMeal) {
+      setManualP(String(grams));
+      saveManualEntry(pendingManualMeal, { proteinG: grams });
+      setPendingManualMeal(null);
+    }
+  }
+
+  function handleShakeCancel() {
+    setShakeModalVisible(false);
+    setShakeProteinG('');
+    pendingPostAnalyzeItemsRef.current = null;
+    setPendingManualMeal(null);
   }
 
   async function addScanItemToMeal(meal: Meal, item: ScanItem) {
@@ -664,6 +760,22 @@ export default function NutritionPage() {
             Take a photo of your meal and let AI estimate nutrition for you.
           </p>
 
+          {!scanResult && (
+            <div className="mb-4">
+              <label htmlFor="scan-description" className="font-sans text-xs text-muted block mb-1.5">
+                Describe extras (optional) — e.g. protein shake, whey scoop
+              </label>
+              <input
+                id="scan-description"
+                type="text"
+                value={scanDescription}
+                onChange={(e) => setScanDescription(e.target.value)}
+                placeholder="What's in the photo?"
+                className="w-full bg-bg3 border border-border rounded-card px-3 py-2.5 font-sans text-sm text-text focus:outline-none focus:border-accent3"
+              />
+            </div>
+          )}
+
           {!scanPreview && !scanResult && (
             <div className="flex flex-col sm:flex-row gap-3">
               <button
@@ -714,6 +826,7 @@ export default function NutritionPage() {
                           setScanPreview(null);
                           setScanImage(null);
                           setScanResult(null);
+                          setScanDescription('');
                         }}
                         className="font-sans text-xs text-muted hover:text-text underline w-fit"
                       >
@@ -1064,8 +1177,15 @@ export default function NutritionPage() {
         </div>
       )}
 
+      <ProteinShakeModal
+        visible={shakeModalVisible}
+        value={shakeProteinG}
+        onChange={setShakeProteinG}
+        onConfirm={handleShakeConfirm}
+        onCancel={handleShakeCancel}
+      />
+
       <input
-        ref={fileInputRef}
         type="file"
         accept="image/*"
         capture="environment"

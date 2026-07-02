@@ -81,6 +81,8 @@ export function InteractiveWorkout({
     }
   }, [done, storageKey]);
 
+  const closeTimer = useCallback(() => setTimerVisible(false), []);
+
   const toggleSet = useCallback(
     (exName: string, si: number) => {
       const key = `${dayNumber}-${exName}-${si}`;
@@ -244,7 +246,7 @@ export function InteractiveWorkout({
         visible={timerVisible}
         duration={restDuration}
         accentColor={colors.accent}
-        onClose={() => setTimerVisible(false)}
+        onClose={closeTimer}
         onDurationChange={setRestDuration}
       />
     </div>
