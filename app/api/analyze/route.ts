@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateText } from 'ai';
+import { getAnthropicModelId } from '@/lib/anthropic-model';
 import { connectDB } from '@/lib/mongodb';
 import { uploadPhoto } from '@/lib/storage';
 import Analysis from '@/models/Analysis';
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
       : 'No additional context provided.';
 
     const { text } = await generateText({
-      model: anthropic(process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-20250514'),
+      model: anthropic(getAnthropicModelId()),
       system: SYSTEM_PROMPT,
       messages: [
         {

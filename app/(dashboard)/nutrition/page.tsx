@@ -412,7 +412,7 @@ export default function NutritionPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Analysis failed');
+      if (!res.ok) throw new Error(data.detail ? `${data.error} (${data.detail})` : data.error || 'Analysis failed');
       const rawItems = Array.isArray(data.items) ? data.items : data.items == null && data.foodName != null
         ? [{ foodName: data.foodName ?? 'Unknown', estimatedCalories: data.estimatedCalories ?? 0, proteinG: data.proteinG ?? 0, carbsG: data.carbsG ?? 0, fatG: data.fatG ?? 0 }]
         : [];

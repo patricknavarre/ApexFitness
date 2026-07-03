@@ -17,7 +17,7 @@ Add these in **Vercel → Project → Settings → Environment Variables**. Use 
 | Variable | Description |
 |----------|-------------|
 | `ANTHROPIC_API_KEY` | Your Anthropic API key (required for Analyze) |
-| `ANTHROPIC_MODEL` | (Optional) Override model ID; default is `claude-sonnet-4-20250514` |
+| `ANTHROPIC_MODEL` | (Optional) Override model ID; default is `claude-sonnet-4-5` |
 
 ### Optional (Google sign-in)
 

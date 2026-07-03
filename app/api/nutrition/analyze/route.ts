@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateText } from 'ai';
+import { getAnthropicModelId } from '@/lib/anthropic-model';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -109,7 +110,7 @@ export async function POST(req: Request) {
     }
 
     const { text } = await generateText({
-      model: anthropic(process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-20250514'),
+      model: anthropic(getAnthropicModelId()),
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -139,6 +140,7 @@ export async function POST(req: Request) {
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e));
     console.error('Nutrition analyze error:', err.message);
+    if (e instanceof Error && e.cause) console.error('Cause:', e.cause);
     const isModelOrAuth =
       /model|invalid|unauthorized|api.key|rate.limit/i.test(err.message);
     const userMessage = isModelOrAuth
@@ -150,6 +152,8 @@ export async function POST(req: Request) {
     };
     if (process.env.NODE_ENV === 'development') {
       resBody.detail = err.message;
+    } else if (isModelOrAuth) {
+      resBody.detail = `Model: ${getAnthropicModelId()}`;
     }
     return NextResponse.json(resBody, { status: 500 });
   }
