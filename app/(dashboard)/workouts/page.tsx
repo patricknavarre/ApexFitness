@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import {
   WORKOUT_PLANS,
-  getTodaysDay,
+  getActivePlanDay,
   type WorkoutPlan as WorkoutPlanType,
   type WorkoutDay,
 } from '@/lib/workout-plans';
@@ -24,6 +24,7 @@ function DayCard({
   latestSetLogs,
   onSetsLogged,
   onStartWorkout,
+  onSetAsActiveDay,
 }: {
   planId: string;
   plan: WorkoutPlanType;
@@ -35,6 +36,7 @@ function DayCard({
   latestSetLogs: Record<string, WorkoutSetLog | undefined>;
   onSetsLogged?: () => void;
   onStartWorkout?: () => void;
+  onSetAsActiveDay?: () => void;
 }) {
   const [open, setOpen] = useState(!!isToday);
   const [exerciseOpen, setExerciseOpen] = useState<Record<number, boolean>>({});
@@ -123,8 +125,22 @@ function DayCard({
 
   if (day.isRest) {
     return (
-      <div className="rounded-card border border-border bg-bg2/50 px-4 py-3">
-        <span className="font-sans font-medium text-muted">Day {day.dayNumber} — Rest</span>
+      <div className="rounded-card border border-border bg-bg2/50 px-4 py-3 flex items-center justify-between gap-2">
+        <span className="font-sans font-medium text-muted">
+          Day {day.dayNumber} — Rest
+          {isToday && (
+            <span className="ml-2 font-mono text-xs text-accent3 uppercase">Your day</span>
+          )}
+        </span>
+        {!isToday && onSetAsActiveDay && (
+          <button
+            type="button"
+            onClick={onSetAsActiveDay}
+            className="font-sans text-xs text-accent3 hover:underline shrink-0"
+          >
+            Do this day
+          </button>
+        )}
       </div>
     );
   }
@@ -138,7 +154,7 @@ function DayCard({
         <span className="font-sans font-medium text-text">
           Day {day.dayNumber} — {day.title}
           {isToday && (
-            <span className="ml-2 font-mono text-xs text-accent3 uppercase">Today</span>
+            <span className="ml-2 font-mono text-xs text-accent3 uppercase">Your day</span>
           )}
           {isLogged && <span className="ml-2 text-accent text-xs">Done</span>}
         </span>
@@ -146,6 +162,15 @@ function DayCard({
       </button>
       {open && (
         <div className="border-t border-border px-4 py-3 space-y-2">
+          {!isToday && onSetAsActiveDay && (
+            <button
+              type="button"
+              onClick={onSetAsActiveDay}
+              className="font-sans text-xs text-accent3 hover:underline"
+            >
+              Set as my day →
+            </button>
+          )}
           {plan.interactive && onStartWorkout && (
             <div className="pb-2">
               <button
@@ -282,6 +307,7 @@ function PlanCard({
   plan,
   activePlanId,
   planStartedAt,
+  activePlanDayNumber,
   recentLogs,
   onGetStarted,
   onSwitchPlan,
@@ -290,10 +316,13 @@ function PlanCard({
   latestSetLogs,
   onSetsLogged,
   onStartWorkout,
+  onSetActiveDay,
+  onClearActiveDay,
 }: {
   plan: WorkoutPlanType;
   activePlanId: string | null;
   planStartedAt: string | null;
+  activePlanDayNumber: number | null;
   recentLogs: LogEntry[];
   onGetStarted: (planId: string) => void;
   onSwitchPlan: (planId: string) => void;
@@ -302,17 +331,22 @@ function PlanCard({
   latestSetLogs: Record<string, WorkoutSetLog | undefined>;
   onSetsLogged?: () => void;
   onStartWorkout: (planId: string, dayNumber: number, dayTitle: string) => void;
+  onSetActiveDay: (dayNumber: number) => void;
+  onClearActiveDay: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const isActive = activePlanId === plan.id;
-  const todays = planStartedAt && isActive ? getTodaysDay(plan, planStartedAt) : null;
+  const activeDay =
+    planStartedAt && isActive
+      ? getActivePlanDay(plan, planStartedAt, activePlanDayNumber)
+      : null;
   const todayStr = new Date().toISOString().slice(0, 10);
   const isTodayLogged =
-    todays &&
+    activeDay &&
     recentLogs.some(
       (l) =>
         l.planId === plan.id &&
-        l.dayNumber === todays.dayNumber &&
+        l.dayNumber === activeDay.dayNumber &&
         l.loggedAt &&
         l.loggedAt.startsWith(todayStr)
     );
@@ -343,9 +377,12 @@ function PlanCard({
           {plan.interactive && (
             <span className="ml-2 font-sans text-xs text-accent3">Interactive</span>
           )}
-          {todays && (
+          {activeDay && (
             <p className="font-sans text-sm text-accent3 mt-2">
-              Today: Day {todays.dayNumber} — {todays.day.title}
+              Your day: Day {activeDay.dayNumber} — {activeDay.day.title}
+              {!activeDay.isManual && (
+                <span className="text-muted text-xs ml-1">(auto)</span>
+              )}
             </p>
           )}
         </div>
@@ -367,29 +404,62 @@ function PlanCard({
               </button>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2 items-center">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSwitchPlan(plan.id);
-                }}
-                className="bg-bg3 border border-border text-text font-sans text-sm px-4 py-2 rounded-card hover:border-accent"
-              >
-                Switch to this plan
-              </button>
-              {plan.interactive && todays && !todays.day.isRest && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2 items-center">
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onStartWorkout(plan.id, todays.dayNumber, todays.day.title);
+                    onSwitchPlan(plan.id);
                   }}
-                  className="bg-accent3 text-black font-sans font-bold text-sm uppercase px-4 py-2 rounded-card hover:shadow-glow-accent3"
+                  className="bg-bg3 border border-border text-text font-sans text-sm px-4 py-2 rounded-card hover:border-accent"
                 >
-                  Start today&apos;s workout
+                  Switch to this plan
                 </button>
-              )}
+                {plan.interactive && activeDay && !activeDay.day.isRest && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStartWorkout(plan.id, activeDay.dayNumber, activeDay.day.title);
+                    }}
+                    className="bg-accent3 text-black font-sans font-bold text-sm uppercase px-4 py-2 rounded-card hover:shadow-glow-accent3"
+                  >
+                    Start workout
+                  </button>
+                )}
+              </div>
+              <div className="bg-bg2/40 border border-border rounded-card p-3">
+                <label
+                  htmlFor={`plan-day-${plan.id}`}
+                  className="font-sans text-xs text-muted block mb-1.5"
+                >
+                  Jump to a day — pick where you are in the plan
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    id={`plan-day-${plan.id}`}
+                    value={activeDay?.dayNumber ?? plan.days[0]?.dayNumber ?? 1}
+                    onChange={(e) => onSetActiveDay(Number(e.target.value))}
+                    className="flex-1 min-w-[12rem] bg-bg3 border border-border text-text font-sans text-sm px-3 py-2 rounded-card focus:outline-none focus:border-accent3"
+                  >
+                    {plan.days.map((d) => (
+                      <option key={d.dayNumber} value={d.dayNumber}>
+                        Day {d.dayNumber} — {d.title}
+                      </option>
+                    ))}
+                  </select>
+                  {activePlanDayNumber != null && (
+                    <button
+                      type="button"
+                      onClick={onClearActiveDay}
+                      className="font-sans text-xs text-muted hover:text-text underline"
+                    >
+                      Use auto schedule
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
           <div className="grid gap-2">
@@ -399,9 +469,9 @@ function PlanCard({
                 planId={plan.id}
                 plan={plan}
                 day={day}
-                isToday={todays?.dayNumber === day.dayNumber}
+                isToday={activeDay?.dayNumber === day.dayNumber}
                 isLogged={
-                  todays?.dayNumber === day.dayNumber &&
+                  activeDay?.dayNumber === day.dayNumber &&
                   !!recentLogs.find(
                     (l) =>
                       l.planId === plan.id &&
@@ -411,7 +481,7 @@ function PlanCard({
                   )
                 }
                 onMarkDone={
-                  todays?.dayNumber === day.dayNumber && isActive
+                  activeDay?.dayNumber === day.dayNumber && isActive
                     ? () => onMarkDone(plan.id, day.dayNumber)
                     : undefined
                 }
@@ -423,6 +493,7 @@ function PlanCard({
                     ? () => onStartWorkout(plan.id, day.dayNumber, day.title)
                     : undefined
                 }
+                onSetAsActiveDay={() => onSetActiveDay(day.dayNumber)}
               />
             ))}
           </div>
@@ -507,6 +578,7 @@ function todayISO(): string {
 export default function WorkoutsPage() {
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [planStartedAt, setPlanStartedAt] = useState<string | null>(null);
+  const [activePlanDayNumber, setActivePlanDayNumber] = useState<number | null>(null);
   const [workoutLogs, setWorkoutLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingDone, setMarkingDone] = useState(false);
@@ -526,6 +598,9 @@ export default function WorkoutsPage() {
         if (!cancelled) {
           setActivePlanId(data.activePlanId ?? null);
           setPlanStartedAt(data.planStartedAt ?? null);
+          setActivePlanDayNumber(
+            typeof data.activePlanDayNumber === 'number' ? data.activePlanDayNumber : null
+          );
         }
       })
       .finally(() => {
@@ -591,14 +666,49 @@ export default function WorkoutsPage() {
       const res = await fetch('/api/user/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activePlanId: planId, planStartedAt: startedAt }),
+        body: JSON.stringify({
+          activePlanId: planId,
+          planStartedAt: startedAt,
+          activePlanDayNumber: 1,
+        }),
       });
       if (!res.ok) throw new Error('Failed to save');
       setActivePlanId(planId);
       setPlanStartedAt(startedAt);
-      toast.success('Plan set. Today is Day 1.');
+      setActivePlanDayNumber(1);
+      toast.success('Plan set. Starting at Day 1.');
     } catch {
       toast.error('Could not set plan');
+    }
+  }
+
+  async function setActivePlanDay(dayNumber: number) {
+    try {
+      const res = await fetch('/api/user/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activePlanDayNumber: dayNumber }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      setActivePlanDayNumber(dayNumber);
+      toast.success(`Set to Day ${dayNumber}.`);
+    } catch {
+      toast.error('Could not update day');
+    }
+  }
+
+  async function clearActivePlanDay() {
+    try {
+      const res = await fetch('/api/user/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activePlanDayNumber: null }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      setActivePlanDayNumber(null);
+      toast.success('Using auto schedule from start date.');
+    } catch {
+      toast.error('Could not update day');
     }
   }
 
@@ -773,6 +883,7 @@ export default function WorkoutsPage() {
                     plan={plan}
                     activePlanId={activePlanId}
                     planStartedAt={planStartedAt}
+                    activePlanDayNumber={activePlanDayNumber}
                     recentLogs={workoutLogs}
                     onGetStarted={setActivePlan}
                     onSwitchPlan={setActivePlan}
@@ -781,6 +892,8 @@ export default function WorkoutsPage() {
                     latestSetLogs={latestSetLogs}
                     onSetsLogged={refreshSetLogs}
                     onStartWorkout={startWorkoutMode}
+                    onSetActiveDay={setActivePlanDay}
+                    onClearActiveDay={clearActivePlanDay}
                   />
                 ))}
               </div>

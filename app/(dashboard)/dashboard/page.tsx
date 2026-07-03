@@ -19,17 +19,20 @@ export default async function DashboardPage() {
   const session = await auth();
   let activePlanId: string | null = null;
   let planStartedAt: string | null = null;
+  let activePlanDayNumber: number | null = null;
   if (session?.user?.id) {
     try {
       await connectDB();
       const user = await User.findById(session.user.id)
-        .select('activePlanId planStartedAt')
+        .select('activePlanId planStartedAt activePlanDayNumber')
         .lean();
       if (user && !Array.isArray(user)) {
         activePlanId = (user.activePlanId as string) ?? null;
         planStartedAt = user.planStartedAt
           ? new Date(user.planStartedAt as Date).toISOString().slice(0, 10)
           : null;
+        activePlanDayNumber =
+          typeof user.activePlanDayNumber === 'number' ? user.activePlanDayNumber : null;
       }
     } catch {
       // ignore
@@ -45,9 +48,17 @@ export default async function DashboardPage() {
         <p className="font-sans text-sm text-muted shrink-0">{formatDisplayDate()}</p>
       </div>
 
-      <DashboardStatsRow activePlanId={activePlanId} planStartedAt={planStartedAt} />
+      <DashboardStatsRow
+        activePlanId={activePlanId}
+        planStartedAt={planStartedAt}
+        activePlanDayNumber={activePlanDayNumber}
+      />
 
-      <TodayWorkoutCard activePlanId={activePlanId} planStartedAt={planStartedAt} />
+      <TodayWorkoutCard
+        activePlanId={activePlanId}
+        planStartedAt={planStartedAt}
+        activePlanDayNumber={activePlanDayNumber}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <CaloriesTodayCard />

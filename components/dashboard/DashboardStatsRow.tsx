@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { WORKOUT_PLANS, getTodaysDay } from '@/lib/workout-plans';
+import { WORKOUT_PLANS, getActivePlanDay } from '@/lib/workout-plans';
 
 function todayLocal(): string {
   const d = new Date();
@@ -36,22 +36,33 @@ function getStreakAndWeekCount(loggedDates: Set<string>): { streak: number; days
   return { streak, daysThisWeek };
 }
 
-function getWorkoutLabel(activePlanId: string | null, planStartedAt: string | null): string {
+function getWorkoutLabel(
+  activePlanId: string | null,
+  planStartedAt: string | null,
+  activePlanDayNumber: number | null
+): string {
   if (!activePlanId || !planStartedAt) return 'No plan';
   const plan = WORKOUT_PLANS.find((p) => p.id === activePlanId);
   if (!plan) return 'No plan';
-  const todays = getTodaysDay(plan, planStartedAt);
-  if (!todays) return 'No plan';
-  if (todays.day.isRest) return 'Rest day';
-  return todays.day.title.length > 14 ? `${todays.day.title.slice(0, 12)}…` : todays.day.title;
+  const activeDay = getActivePlanDay(plan, planStartedAt, activePlanDayNumber);
+  if (!activeDay) return 'No plan';
+  if (activeDay.day.isRest) return 'Rest day';
+  return activeDay.day.title.length > 14
+    ? `${activeDay.day.title.slice(0, 12)}…`
+    : activeDay.day.title;
 }
 
 type Props = {
   activePlanId: string | null;
   planStartedAt: string | null;
+  activePlanDayNumber: number | null;
 };
 
-export function DashboardStatsRow({ activePlanId, planStartedAt }: Props) {
+export function DashboardStatsRow({
+  activePlanId,
+  planStartedAt,
+  activePlanDayNumber,
+}: Props) {
   const [loading, setLoading] = useState(true);
   const [totalCal, setTotalCal] = useState(0);
   const [calorieTarget, setCalorieTarget] = useState<number | null>(null);
@@ -59,7 +70,7 @@ export function DashboardStatsRow({ activePlanId, planStartedAt }: Props) {
   const [daysThisWeek, setDaysThisWeek] = useState(0);
 
   const today = todayLocal();
-  const workoutLabel = getWorkoutLabel(activePlanId, planStartedAt);
+  const workoutLabel = getWorkoutLabel(activePlanId, planStartedAt, activePlanDayNumber);
   const calPct =
     calorieTarget && calorieTarget > 0
       ? Math.min(100, Math.round((totalCal / calorieTarget) * 100))

@@ -45,6 +45,22 @@ export function getTodaysDay(
   return { day, dayNumber: day.dayNumber };
 }
 
+/** Resolve the user's current plan day — manual pick overrides auto schedule. */
+export function getActivePlanDay(
+  plan: WorkoutPlan,
+  planStartedAt: string | null,
+  activePlanDayNumber: number | null
+): { day: WorkoutDay; dayNumber: number; isManual: boolean } | null {
+  if (activePlanDayNumber != null) {
+    const day = plan.days.find((d) => d.dayNumber === activePlanDayNumber);
+    if (day) return { day, dayNumber: day.dayNumber, isManual: true };
+  }
+  if (!planStartedAt) return null;
+  const auto = getTodaysDay(plan, planStartedAt);
+  if (!auto) return null;
+  return { ...auto, isManual: false };
+}
+
 export const WORKOUT_PLANS: WorkoutPlan[] = [
   {
     id: '5-day-muscle',

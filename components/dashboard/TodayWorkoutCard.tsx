@@ -1,14 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { WORKOUT_PLANS, getTodaysDay } from '@/lib/workout-plans';
+import { WORKOUT_PLANS, getActivePlanDay } from '@/lib/workout-plans';
 
 type Props = {
   activePlanId: string | null;
   planStartedAt: string | null;
+  activePlanDayNumber: number | null;
 };
 
-export function TodayWorkoutCard({ activePlanId, planStartedAt }: Props) {
+export function TodayWorkoutCard({
+  activePlanId,
+  planStartedAt,
+  activePlanDayNumber,
+}: Props) {
   if (!activePlanId || !planStartedAt) {
     return (
       <div className="bg-card border border-border rounded-card p-5 sm:p-6">
@@ -44,8 +49,8 @@ export function TodayWorkoutCard({ activePlanId, planStartedAt }: Props) {
     );
   }
 
-  const todays = getTodaysDay(plan, planStartedAt);
-  if (!todays) {
+  const activeDay = getActivePlanDay(plan, planStartedAt, activePlanDayNumber);
+  if (!activeDay) {
     return (
       <div className="bg-card border border-border rounded-card p-5 sm:p-6">
         <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
@@ -62,7 +67,7 @@ export function TodayWorkoutCard({ activePlanId, planStartedAt }: Props) {
     );
   }
 
-  const { day } = todays;
+  const { day } = activeDay;
 
   if (day.isRest) {
     return (

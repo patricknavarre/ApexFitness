@@ -20,6 +20,8 @@ const UserSchema = new Schema({
   units: { type: String, default: 'imperial' },
   activePlanId: String,
   planStartedAt: Date,
+  /** When set, overrides calendar-based day progression. */
+  activePlanDayNumber: Number,
   createdAt: { type: Date, default: Date.now },
 });
 

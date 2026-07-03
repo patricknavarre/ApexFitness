@@ -16,10 +16,11 @@ type UserMeFields = {
   units?: string | null;
   activePlanId?: string | null;
   planStartedAt?: string | null;
+  activePlanDayNumber?: number | null;
 };
 
 const ME_FIELDS =
-  'name calorieTarget proteinTarget carbTarget fatTarget goal fitnessLevel equipment daysPerWeek units activePlanId planStartedAt';
+  'name calorieTarget proteinTarget carbTarget fatTarget goal fitnessLevel equipment daysPerWeek units activePlanId planStartedAt activePlanDayNumber';
 
 export async function GET() {
   const session = await auth();
@@ -48,6 +49,8 @@ export async function GET() {
       planStartedAt: user.planStartedAt
         ? new Date(user.planStartedAt).toISOString().slice(0, 10)
         : null,
+      activePlanDayNumber:
+        typeof user.activePlanDayNumber === 'number' ? user.activePlanDayNumber : null,
     });
   } catch (e) {
     console.error('User me error:', e);
@@ -82,6 +85,11 @@ export async function PATCH(req: Request) {
       const d = new Date(body.planStartedAt);
       if (!Number.isNaN(d.getTime())) updates.planStartedAt = d;
     }
+    if (body.activePlanDayNumber === null) {
+      updates.activePlanDayNumber = null;
+    } else if (typeof body.activePlanDayNumber === 'number' && body.activePlanDayNumber >= 1) {
+      updates.activePlanDayNumber = Math.floor(body.activePlanDayNumber);
+    }
     await connectDB();
     const user = await User.findByIdAndUpdate(
       session.user.id,
@@ -109,6 +117,8 @@ export async function PATCH(req: Request) {
       planStartedAt: u.planStartedAt
         ? new Date(u.planStartedAt).toISOString().slice(0, 10)
         : null,
+      activePlanDayNumber:
+        typeof u.activePlanDayNumber === 'number' ? u.activePlanDayNumber : null,
     });
   } catch (e) {
     console.error('User me PATCH error:', e);

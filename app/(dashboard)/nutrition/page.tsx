@@ -1186,6 +1186,7 @@ export default function NutritionPage() {
       />
 
       <input
+        ref={fileInputRef}
         type="file"
         accept="image/*"
         capture="environment"
