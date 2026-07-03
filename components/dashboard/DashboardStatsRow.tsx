@@ -1,0 +1,170 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { WORKOUT_PLANS, getTodaysDay } from '@/lib/workout-plans';
+
+function todayLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function toLocalDateOnly(isoDate: string): string {
+  const d = new Date(isoDate);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function getStreakAndWeekCount(loggedDates: Set<string>): { streak: number; daysThisWeek: number } {
+  let streak = 0;
+  const msPerDay = 86400000;
+  let d = new Date();
+  d.setHours(12, 0, 0, 0);
+  for (;;) {
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (!loggedDates.has(key)) break;
+    streak++;
+    d = new Date(d.getTime() - msPerDay);
+  }
+  let daysThisWeek = 0;
+  for (let i = 0; i < 7; i++) {
+    const day = new Date();
+    day.setHours(0, 0, 0, 0);
+    day.setDate(day.getDate() - i);
+    const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    if (loggedDates.has(key)) daysThisWeek++;
+  }
+  return { streak, daysThisWeek };
+}
+
+function getWorkoutLabel(activePlanId: string | null, planStartedAt: string | null): string {
+  if (!activePlanId || !planStartedAt) return 'No plan';
+  const plan = WORKOUT_PLANS.find((p) => p.id === activePlanId);
+  if (!plan) return 'No plan';
+  const todays = getTodaysDay(plan, planStartedAt);
+  if (!todays) return 'No plan';
+  if (todays.day.isRest) return 'Rest day';
+  return todays.day.title.length > 14 ? `${todays.day.title.slice(0, 12)}…` : todays.day.title;
+}
+
+type Props = {
+  activePlanId: string | null;
+  planStartedAt: string | null;
+};
+
+export function DashboardStatsRow({ activePlanId, planStartedAt }: Props) {
+  const [loading, setLoading] = useState(true);
+  const [totalCal, setTotalCal] = useState(0);
+  const [calorieTarget, setCalorieTarget] = useState<number | null>(null);
+  const [streak, setStreak] = useState(0);
+  const [daysThisWeek, setDaysThisWeek] = useState(0);
+
+  const today = todayLocal();
+  const workoutLabel = getWorkoutLabel(activePlanId, planStartedAt);
+  const calPct =
+    calorieTarget && calorieTarget > 0
+      ? Math.min(100, Math.round((totalCal / calorieTarget) * 100))
+      : 0;
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      fetch(`/api/nutrition?date=${encodeURIComponent(today)}`).then((r) =>
+        r.ok ? r.json() : Promise.resolve({ entries: [] })
+      ),
+      fetch('/api/user/me').then((r) => (r.ok ? r.json() : Promise.resolve({}))),
+      fetch('/api/workout/log?limit=100').then((r) =>
+        r.ok ? r.json() : Promise.resolve({ logs: [] })
+      ),
+    ])
+      .then(([nutritionData, userData, workoutData]) => {
+        if (cancelled) return;
+        const entries = nutritionData.entries ?? [];
+        setTotalCal(entries.reduce((s: number, e: { calories?: number }) => s + (e.calories ?? 0), 0));
+        setCalorieTarget(
+          typeof userData.calorieTarget === 'number' ? userData.calorieTarget : null
+        );
+        const dates = new Set<string>();
+        for (const log of workoutData.logs ?? []) {
+          if (log.loggedAt) dates.add(toLocalDateOnly(log.loggedAt));
+        }
+        const { streak: s, daysThisWeek: w } = getStreakAndWeekCount(dates);
+        setStreak(s);
+        setDaysThisWeek(w);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTotalCal(0);
+          setStreak(0);
+          setDaysThisWeek(0);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [today]);
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="bg-card border border-border rounded-card p-3 sm:p-4 animate-pulse">
+            <div className="h-3 w-12 bg-bg3 rounded mb-2" />
+            <div className="h-5 w-16 bg-bg3 rounded" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      <Link
+        href="/nutrition"
+        className="bg-card border border-border rounded-card p-3 sm:p-4 hover:border-accent/40 transition-colors"
+      >
+        <p className="font-mono text-[10px] uppercase tracking-wider text-muted mb-1">Calories</p>
+        <p className="font-mono text-base sm:text-lg text-accent3 leading-tight">
+          {totalCal}
+          {calorieTarget != null && (
+            <span className="text-muted text-xs font-sans"> / {calorieTarget}</span>
+          )}
+        </p>
+        {calorieTarget != null && calorieTarget > 0 && (
+          <div className="mt-2 h-1 rounded-full bg-bg3 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-accent3 transition-all"
+              style={{ width: `${calPct}%` }}
+            />
+          </div>
+        )}
+      </Link>
+
+      <Link
+        href="/workouts"
+        className="bg-card border border-border rounded-card p-3 sm:p-4 hover:border-accent/40 transition-colors"
+      >
+        <p className="font-mono text-[10px] uppercase tracking-wider text-muted mb-1">Streak</p>
+        <p className="font-mono text-base sm:text-lg text-accent3 leading-tight">
+          {streak}
+          <span className="text-muted text-xs font-sans"> day{streak !== 1 ? 's' : ''}</span>
+        </p>
+        <p className="font-sans text-[10px] sm:text-xs text-muted mt-1">
+          {daysThisWeek} this week
+        </p>
+      </Link>
+
+      <Link
+        href="/workouts"
+        className="bg-card border border-border rounded-card p-3 sm:p-4 hover:border-accent/40 transition-colors"
+      >
+        <p className="font-mono text-[10px] uppercase tracking-wider text-muted mb-1">Today</p>
+        <p className="font-sans text-sm sm:text-base font-medium text-text leading-tight line-clamp-2">
+          {workoutLabel}
+        </p>
+      </Link>
+    </div>
+  );
+}

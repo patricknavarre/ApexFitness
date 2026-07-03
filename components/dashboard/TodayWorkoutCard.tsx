@@ -11,16 +11,16 @@ type Props = {
 export function TodayWorkoutCard({ activePlanId, planStartedAt }: Props) {
   if (!activePlanId || !planStartedAt) {
     return (
-      <div className="bg-card border border-border rounded-card p-6">
+      <div className="bg-card border border-border rounded-card p-5 sm:p-6">
         <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
           Today&apos;s Workout
         </h2>
-        <p className="font-sans text-muted text-sm mb-3">No workout plan selected.</p>
+        <p className="font-sans text-muted text-sm mb-4">No workout plan selected.</p>
         <Link
           href="/workouts"
-          className="font-sans text-sm text-accent hover:underline inline-block"
+          className="inline-block bg-accent text-black font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:shadow-glow"
         >
-          Browse workout plans →
+          Pick a plan
         </Link>
       </div>
     );
@@ -29,16 +29,16 @@ export function TodayWorkoutCard({ activePlanId, planStartedAt }: Props) {
   const plan = WORKOUT_PLANS.find((p) => p.id === activePlanId);
   if (!plan) {
     return (
-      <div className="bg-card border border-border rounded-card p-6">
+      <div className="bg-card border border-border rounded-card p-5 sm:p-6">
         <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
           Today&apos;s Workout
         </h2>
-        <p className="font-sans text-muted text-sm mb-3">Plan not found.</p>
+        <p className="font-sans text-muted text-sm mb-4">Plan not found.</p>
         <Link
           href="/workouts"
-          className="font-sans text-sm text-accent hover:underline inline-block"
+          className="inline-block bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
         >
-          Browse workout plans →
+          Browse plans
         </Link>
       </div>
     );
@@ -47,43 +47,47 @@ export function TodayWorkoutCard({ activePlanId, planStartedAt }: Props) {
   const todays = getTodaysDay(plan, planStartedAt);
   if (!todays) {
     return (
-      <div className="bg-card border border-border rounded-card p-6">
+      <div className="bg-card border border-border rounded-card p-5 sm:p-6">
         <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
           Today&apos;s Workout
         </h2>
-        <p className="font-sans text-muted text-sm mb-3">Invalid start date.</p>
+        <p className="font-sans text-muted text-sm mb-4">Invalid start date.</p>
         <Link
           href="/workouts"
-          className="font-sans text-sm text-accent hover:underline inline-block"
+          className="inline-block bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
         >
-          Go to Workouts →
+          Go to Workouts
         </Link>
       </div>
     );
   }
 
   const { day } = todays;
+
   if (day.isRest) {
     return (
-      <div className="bg-card border border-border rounded-card p-6">
+      <div className="bg-card border border-border rounded-card p-5 sm:p-6">
         <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
           Today&apos;s Workout
         </h2>
-        <p className="font-sans text-muted text-sm mb-3">
-          Day {day.dayNumber} — Rest day. No workout scheduled.
+        <p className="font-sans font-medium text-text mb-1">
+          {plan.name} — Day {day.dayNumber}
         </p>
+        <p className="font-sans text-sm text-muted mb-4">Rest day. Recovery time.</p>
         <Link
           href="/workouts"
-          className="font-sans text-sm text-accent hover:underline inline-block"
+          className="inline-block bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
         >
-          View plan →
+          View plan
         </Link>
       </div>
     );
   }
 
+  const ctaLabel = plan.interactive ? 'Start workout' : 'Mark done / View plan';
+
   return (
-    <div className="bg-card border border-border rounded-card p-6">
+    <div className="bg-card border border-border rounded-card p-5 sm:p-6">
       <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
         Today&apos;s Workout
       </h2>
@@ -92,16 +96,16 @@ export function TodayWorkoutCard({ activePlanId, planStartedAt }: Props) {
       </p>
       {plan.interactive ? (
         <p className="font-sans text-sm text-muted mb-4">
-          Interactive workout with set tracking and rest timer.
+          Interactive mode with set tracking and rest timer.
         </p>
       ) : (
-        <div className="space-y-2 mb-4">
+        <div className="space-y-1.5 mb-4 max-h-40 overflow-y-auto">
           {day.exercises.map((ex, i) => (
             <div
               key={i}
               className="flex justify-between gap-4 font-sans text-sm text-text"
             >
-              <span>{ex.name}</span>
+              <span className="truncate">{ex.name}</span>
               <span className="text-muted shrink-0">
                 {ex.sets} × {ex.reps}
               </span>
@@ -111,9 +115,13 @@ export function TodayWorkoutCard({ activePlanId, planStartedAt }: Props) {
       )}
       <Link
         href="/workouts"
-        className="font-sans text-sm text-accent hover:underline inline-block"
+        className={`inline-block font-sans font-bold text-sm uppercase px-5 py-2.5 rounded-card ${
+          plan.interactive
+            ? 'bg-accent3 text-black hover:shadow-glow-accent3'
+            : 'bg-accent text-black hover:shadow-glow'
+        }`}
       >
-        {plan.interactive ? 'Start workout →' : 'Mark done / View full plan →'}
+        {ctaLabel}
       </Link>
     </div>
   );

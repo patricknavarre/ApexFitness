@@ -2,10 +2,18 @@ import Link from 'next/link';
 import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/mongodb';
 import User from '@/models/User';
+import { DashboardStatsRow } from '@/components/dashboard/DashboardStatsRow';
 import { TodayWorkoutCard } from '@/components/dashboard/TodayWorkoutCard';
 import { SuggestMealCard } from '@/components/dashboard/SuggestMealCard';
-import { WeeklyStreakCard } from '@/components/dashboard/WeeklyStreakCard';
 import { CaloriesTodayCard } from '@/components/dashboard/CaloriesTodayCard';
+
+function formatDisplayDate(): string {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -29,39 +37,46 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
-        Dashboard
-      </h1>
-      <div className="bg-card border border-border rounded-card p-8 text-center">
-        <p className="font-sans text-muted mb-6">
-          Pick a workout plan and start training—no photo required. Or try AI body analysis for
-          personalized insights when you&apos;re ready.
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-4">
+    <div className="space-y-4 sm:space-y-5 max-w-4xl">
+      <div className="flex items-baseline justify-between gap-4">
+        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
+          Dashboard
+        </h1>
+        <p className="font-sans text-sm text-muted shrink-0">{formatDisplayDate()}</p>
+      </div>
+
+      <DashboardStatsRow activePlanId={activePlanId} planStartedAt={planStartedAt} />
+
+      <TodayWorkoutCard activePlanId={activePlanId} planStartedAt={planStartedAt} />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CaloriesTodayCard />
+        <SuggestMealCard />
+      </div>
+
+      {!activePlanId && (
+        <div className="bg-bg2/50 border border-border rounded-card px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="font-sans text-sm text-muted">
+            Pick a workout plan to get started.
+          </p>
           <Link
             href="/workouts"
-            className="inline-block bg-accent text-black font-sans font-bold uppercase px-6 py-3 rounded-card hover:shadow-glow transition-shadow"
+            className="font-sans text-sm text-accent3 hover:underline shrink-0"
           >
-            Browse workout plans
-          </Link>
-          <Link
-            href="/analysis"
-            className="inline-block bg-bg3 border border-border text-text font-sans font-bold uppercase px-6 py-3 rounded-card hover:border-accent transition-colors"
-          >
-            Try AI Analysis (optional)
+            Pick a plan →
           </Link>
         </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <TodayWorkoutCard
-          activePlanId={activePlanId}
-          planStartedAt={planStartedAt}
-        />
-        <WeeklyStreakCard />
-      </div>
-      <CaloriesTodayCard />
-      <SuggestMealCard />
+      )}
+
+      <p className="font-sans text-xs text-muted text-center pt-1">
+        <Link href="/workouts" className="hover:text-accent transition-colors">
+          Browse workout plans
+        </Link>
+        <span className="mx-2">·</span>
+        <Link href="/analysis" className="hover:text-accent transition-colors">
+          AI Analysis
+        </Link>
+      </p>
     </div>
   );
 }

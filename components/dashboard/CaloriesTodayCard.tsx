@@ -21,8 +21,6 @@ type LogEntry = {
   fatG?: number;
 };
 
-type UserMeResponse = { calorieTarget?: number | null };
-
 type NutritionResponse = { entries?: LogEntry[] };
 
 const MEAL_LABELS: Record<string, string> = {
@@ -34,25 +32,16 @@ const MEAL_LABELS: Record<string, string> = {
 
 export function CaloriesTodayCard() {
   const [entries, setEntries] = useState<LogEntry[]>([]);
-  const [calorieTarget, setCalorieTarget] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   const today = todayLocal();
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      fetch(`/api/nutrition?date=${encodeURIComponent(today)}`).then((r) =>
-        r.ok ? r.json() : Promise.resolve({ entries: [] })
-      ),
-      fetch('/api/user/me').then((r) => (r.ok ? r.json() : Promise.resolve({}))),
-    ])
-      .then(([nutritionData, userData]: [NutritionResponse, UserMeResponse]) => {
-        if (cancelled) return;
-        setEntries(nutritionData.entries ?? []);
-        setCalorieTarget(
-          typeof userData.calorieTarget === 'number' ? userData.calorieTarget : null
-        );
+    fetch(`/api/nutrition?date=${encodeURIComponent(today)}`)
+      .then((r) => (r.ok ? r.json() : Promise.resolve({ entries: [] })))
+      .then((data: NutritionResponse) => {
+        if (!cancelled) setEntries(data.entries ?? []);
       })
       .catch(() => {
         if (!cancelled) setEntries([]);
@@ -65,7 +54,6 @@ export function CaloriesTodayCard() {
     };
   }, [today]);
 
-  const totalCal = entries.reduce((sum, e) => sum + (e.calories ?? 0), 0);
   const totalProtein = entries.reduce((sum, e) => sum + (e.proteinG ?? 0), 0);
 
   const byMeal = entries.reduce<Record<string, { cal: number; items: number }>>((acc, e) => {
@@ -80,9 +68,9 @@ export function CaloriesTodayCard() {
 
   if (loading) {
     return (
-      <div className="bg-card border border-border rounded-card p-6">
+      <div className="bg-card border border-border rounded-card p-5 sm:p-6">
         <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
-          Calories today
+          Meals today
         </h2>
         <p className="font-sans text-muted text-sm">Loading…</p>
       </div>
@@ -92,35 +80,29 @@ export function CaloriesTodayCard() {
   return (
     <Link
       href="/nutrition"
-      className="bg-card border border-border rounded-card p-6 block hover:border-accent/50 transition-colors"
+      className="bg-card border border-border rounded-card p-5 sm:p-6 block hover:border-accent/50 transition-colors h-full"
     >
       <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
-        Calories today
+        Meals today
       </h2>
       {entries.length === 0 ? (
-        <p className="font-sans text-muted text-sm mb-2">No meals logged today.</p>
+        <p className="font-sans text-muted text-sm mb-2">No meals logged yet.</p>
       ) : (
         <>
-          <p className="font-mono text-accent3 text-lg">
-            {totalCal}
-            {calorieTarget != null && (
-              <span className="font-sans text-muted text-sm font-normal">
-                {' '}
-                / {calorieTarget} cal
-              </span>
-            )}
-          </p>
           {totalProtein > 0 && (
-            <p className="font-sans text-sm text-muted mt-0.5">{totalProtein}g protein</p>
+            <p className="font-sans text-sm text-muted mb-3">{totalProtein}g protein logged</p>
           )}
-          <div className="mt-3 space-y-1">
+          <div className="space-y-1.5">
             {sortedMeals.map((meal) => {
               const { cal, items } = byMeal[meal];
               const label = MEAL_LABELS[meal] ?? meal;
               return (
-                <p key={meal} className="font-sans text-sm text-text">
-                  {label}: {cal} cal{items > 1 ? ` (${items} items)` : ''}
-                </p>
+                <div key={meal} className="flex justify-between gap-2 font-sans text-sm">
+                  <span className="text-text">{label}</span>
+                  <span className="text-muted shrink-0">
+                    {cal} cal{items > 1 ? ` · ${items} items` : ''}
+                  </span>
+                </div>
               );
             })}
           </div>
