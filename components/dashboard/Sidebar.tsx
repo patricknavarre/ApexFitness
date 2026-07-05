@@ -12,10 +12,12 @@ import {
   IconChart,
   IconSettings,
   IconLogOut,
+  IconBook,
 } from '@/components/ui/icons';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', Icon: IconHome },
+  { href: '/daily-stoic', label: 'Daily Stoic', Icon: IconBook, mobileLabel: 'Stoic' },
   { href: '/analysis', label: 'AI Analysis', Icon: IconScan },
   { href: '/workouts', label: 'Workouts', Icon: IconDumbbell },
   { href: '/nutrition', label: 'Nutrition', Icon: IconLeaf },
@@ -23,7 +25,15 @@ const NAV = [
   { href: '/settings', label: 'Settings', Icon: IconSettings },
 ];
 
-function NavItem({ href, label, Icon }: { href: string; label: string; Icon: () => JSX.Element }) {
+function NavItem({
+  href,
+  label,
+  Icon,
+}: {
+  href: string;
+  label: string;
+  Icon: () => JSX.Element;
+}) {
   const pathname = usePathname();
   const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
   return (
@@ -87,7 +97,11 @@ export function Sidebar() {
               className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors ${active ? 'text-accent' : 'text-muted hover:text-accent'}`}
             >
               <item.Icon />
-              <span className="font-sans text-[10px] mt-0.5">{item.label.split(' ').pop()}</span>
+              <span className="font-sans text-[10px] mt-0.5">
+                {'mobileLabel' in item && item.mobileLabel
+                  ? item.mobileLabel
+                  : item.label.split(' ').pop()}
+              </span>
             </Link>
           );
         })}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { DailyStoicResponse } from '@/lib/daily-stoic';
-import { DailyStoicModal } from '@/components/dashboard/DailyStoicModal';
+import { DailyStoicModal } from '@/components/daily-stoic/DailyStoicModal';
 
 const STORAGE_KEY = 'apex-daily-stoic-seen';
 
