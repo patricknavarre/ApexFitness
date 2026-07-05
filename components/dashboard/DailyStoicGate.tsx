@@ -10,6 +10,17 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function isMeditationResponse(data: unknown): data is DailyStoicResponse {
+  if (!data || typeof data !== 'object') return false;
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.title === 'string' &&
+    typeof d.quote === 'string' &&
+    typeof d.reflection === 'string' &&
+    typeof d.dateLabel === 'string'
+  );
+}
+
 export function DailyStoicGate() {
   const [meditation, setMeditation] = useState<DailyStoicResponse | null>(null);
 
@@ -29,7 +40,7 @@ export function DailyStoicGate() {
         return res.json() as Promise<DailyStoicResponse>;
       })
       .then((data) => {
-        if (!cancelled && data) setMeditation(data);
+        if (!cancelled && data && isMeditationResponse(data)) setMeditation(data);
       })
       .catch(() => {
         // silently skip if fetch fails

@@ -23,6 +23,17 @@ function buildAdjacent(index: DailyStoicIndexEntry[], key: string) {
   };
 }
 
+function isMeditationResponse(data: unknown): data is DailyStoicResponse {
+  if (!data || typeof data !== 'object') return false;
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.title === 'string' &&
+    typeof d.quote === 'string' &&
+    typeof d.reflection === 'string' &&
+    typeof d.dateLabel === 'string'
+  );
+}
+
 function ReadingSkeleton() {
   return (
     <div className="space-y-4 animate-pulse">
@@ -84,7 +95,11 @@ export function DailyStoicBrowser() {
           setMeditation(null);
           return;
         }
-        const data = (await res.json()) as DailyStoicResponse;
+        const data: unknown = await res.json();
+        if (!isMeditationResponse(data)) {
+          setMeditation(null);
+          return;
+        }
         setMeditation(data);
         setSelectedMonth(month);
         setSelectedDay(day);
@@ -111,7 +126,7 @@ export function DailyStoicBrowser() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/daily-stoic/index')
+    fetch('/api/daily-stoic/entries')
       .then((res) => (res.ok ? res.json() : { entries: [] }))
       .then((data) => {
         if (!cancelled) setIndex(data.entries ?? []);
