@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { LogoutButton } from '@/components/dashboard/LogoutButton';
+import { DailyStoicGate } from '@/components/dashboard/DailyStoicGate';
 
 export default async function DashboardLayout({
   children,
@@ -22,6 +23,7 @@ export default async function DashboardLayout({
         </header>
         <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6">{children}</main>
       </div>
+      <DailyStoicGate />
     </div>
   );
 }
