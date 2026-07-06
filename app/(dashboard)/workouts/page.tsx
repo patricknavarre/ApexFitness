@@ -11,6 +11,7 @@ import { CARDIO_OPTIONS } from '@/lib/cardio';
 import { getInteractiveWorkout } from '@/lib/interactive-workouts';
 import { RECOVERY_EQUIPMENT } from '@/lib/recoveryWorkoutData';
 import { InteractiveWorkout } from '@/components/workouts/InteractiveWorkout';
+import { ExerciseGuide } from '@/components/workouts/ExerciseGuide';
 import { toast } from 'sonner';
 
 function DayCard({
@@ -222,6 +223,7 @@ function DayCard({
                   </p>
                 );
               })()}
+              <ExerciseGuide exerciseName={ex.name} />
               <button
                 type="button"
                 onClick={() => {

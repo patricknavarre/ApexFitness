@@ -5,6 +5,7 @@ import type { InteractiveWorkoutDay } from '@/lib/recoveryWorkoutData';
 import { EQUIP_COLORS } from '@/lib/recoveryWorkoutData';
 import { getPhaseColors } from '@/lib/interactive-workouts';
 import { RestTimer } from './RestTimer';
+import { ExerciseGuide } from './ExerciseGuide';
 
 type Props = {
   planId: string;
@@ -205,6 +206,9 @@ export function InteractiveWorkout({
                     {ex.note && (
                       <p className="font-sans text-xs text-muted/80 mb-2 italic">{ex.note}</p>
                     )}
+                    <div className="mb-2">
+                      <ExerciseGuide exerciseName={ex.name} />
+                    </div>
                     <div className="flex flex-wrap gap-1.5">
                       {Array.from({ length: ex.sets }).map((_, si) => (
                         <button
