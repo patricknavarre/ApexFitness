@@ -59,11 +59,8 @@ export function formatDateLabel(date: Date = new Date()): string {
 function formatDateLabelFromKey(key: string): string {
   const parsed = parseKey(key);
   if (!parsed) return key;
-  const date = new Date(
-    2024,
-    MONTH_ORDER.indexOf(parsed.month as (typeof MONTH_ORDER)[number]),
-    parsed.day,
-  );
+  const monthIndex = MONTH_ORDER.indexOf(parsed.month as (typeof MONTH_ORDER)[number]);
+  const date = new Date(new Date().getFullYear(), monthIndex, parsed.day);
   return formatDateLabel(date);
 }
 
