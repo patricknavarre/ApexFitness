@@ -106,8 +106,15 @@ function dataUrlToJpeg(dataUrl: string): Promise<string> {
   });
 }
 
+function localDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localDateKey(new Date());
 }
 
 type LogEntry = {
@@ -212,7 +219,7 @@ export default function NutritionPage() {
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      dates.push(d.toISOString().slice(0, 10));
+      dates.push(localDateKey(d));
     }
     Promise.all(dates.map((d) => fetch(`/api/nutrition?date=${d}`).then((r) => r.json())))
       .then((results) => {

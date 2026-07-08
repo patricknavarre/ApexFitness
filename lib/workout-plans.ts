@@ -45,6 +45,19 @@ export function getTodaysDay(
   return { day, dayNumber: day.dayNumber };
 }
 
+/** Next workout day after a completed day, skipping rest days and wrapping. */
+export function getNextPlanDayNumber(plan: WorkoutPlan, completedDayNumber: number): number {
+  const days = plan.days;
+  if (days.length === 0) return completedDayNumber;
+  const idx = days.findIndex((d) => d.dayNumber === completedDayNumber);
+  if (idx === -1) return completedDayNumber;
+  for (let step = 1; step <= days.length; step++) {
+    const next = days[(idx + step) % days.length];
+    if (!next.isRest) return next.dayNumber;
+  }
+  return completedDayNumber;
+}
+
 /** Resolve the user's current plan day — manual pick overrides auto schedule. */
 export function getActivePlanDay(
   plan: WorkoutPlan,

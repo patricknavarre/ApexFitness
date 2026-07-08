@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { WORKOUT_PLANS, getActivePlanDay } from '@/lib/workout-plans';
+import { computeWorkoutStreak, countDaysThisWeek } from '@/lib/streak';
 
 function todayLocal(): string {
   const d = new Date();
@@ -12,28 +13,6 @@ function todayLocal(): string {
 function toLocalDateOnly(isoDate: string): string {
   const d = new Date(isoDate);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function getStreakAndWeekCount(loggedDates: Set<string>): { streak: number; daysThisWeek: number } {
-  let streak = 0;
-  const msPerDay = 86400000;
-  let d = new Date();
-  d.setHours(12, 0, 0, 0);
-  for (;;) {
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    if (!loggedDates.has(key)) break;
-    streak++;
-    d = new Date(d.getTime() - msPerDay);
-  }
-  let daysThisWeek = 0;
-  for (let i = 0; i < 7; i++) {
-    const day = new Date();
-    day.setHours(0, 0, 0, 0);
-    day.setDate(day.getDate() - i);
-    const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
-    if (loggedDates.has(key)) daysThisWeek++;
-  }
-  return { streak, daysThisWeek };
 }
 
 function getWorkoutLabel(
@@ -98,9 +77,9 @@ export function DashboardStatsRow({
         for (const log of workoutData.logs ?? []) {
           if (log.loggedAt) dates.add(toLocalDateOnly(log.loggedAt));
         }
-        const { streak: s, daysThisWeek: w } = getStreakAndWeekCount(dates);
-        setStreak(s);
-        setDaysThisWeek(w);
+        const plan = WORKOUT_PLANS.find((p) => p.id === activePlanId) ?? null;
+        setStreak(computeWorkoutStreak(dates, plan, planStartedAt));
+        setDaysThisWeek(countDaysThisWeek(dates));
       })
       .catch(() => {
         if (!cancelled) {
@@ -115,7 +94,7 @@ export function DashboardStatsRow({
     return () => {
       cancelled = true;
     };
-  }, [today]);
+  }, [today, activePlanId, planStartedAt]);
 
   if (loading) {
     return (

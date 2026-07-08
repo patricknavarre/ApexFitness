@@ -2,32 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { WORKOUT_PLANS } from '@/lib/workout-plans';
+import { computeWorkoutStreak, countDaysThisWeek } from '@/lib/streak';
 
 function toLocalDateOnly(isoDate: string): string {
   const d = new Date(isoDate);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function getStreakAndWeekCount(loggedDates: Set<string>): { streak: number; daysThisWeek: number } {
-  let streak = 0;
-  const msPerDay = 86400000;
-  let d = new Date();
-  d.setHours(12, 0, 0, 0);
-  for (;;) {
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    if (!loggedDates.has(key)) break;
-    streak++;
-    d = new Date(d.getTime() - msPerDay);
-  }
-  let daysThisWeek = 0;
-  for (let i = 0; i < 7; i++) {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - i);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    if (loggedDates.has(key)) daysThisWeek++;
-  }
-  return { streak, daysThisWeek };
 }
 
 export function WeeklyStreakCard() {
@@ -37,17 +17,23 @@ export function WeeklyStreakCard() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/workout/log?limit=100')
-      .then((res) => (res.ok ? res.json() : { logs: [] }))
-      .then((data) => {
+    Promise.all([
+      fetch('/api/workout/log?limit=100').then((res) => (res.ok ? res.json() : { logs: [] })),
+      fetch('/api/user/me').then((res) => (res.ok ? res.json() : {})),
+    ])
+      .then(([logData, userData]) => {
         if (cancelled) return;
+        const logs = (logData as { logs?: { loggedAt?: string }[] }).logs ?? [];
+        const user = userData as { activePlanId?: string | null; planStartedAt?: string | null };
         const dates = new Set<string>();
-        for (const log of data.logs ?? []) {
+        for (const log of logs) {
           if (log.loggedAt) dates.add(toLocalDateOnly(log.loggedAt));
         }
-        const { streak: s, daysThisWeek: w } = getStreakAndWeekCount(dates);
-        setStreak(s);
-        setDaysThisWeek(w);
+        const plan = WORKOUT_PLANS.find((p) => p.id === user.activePlanId) ?? null;
+        const planStartedAt =
+          typeof user.planStartedAt === 'string' ? user.planStartedAt.slice(0, 10) : null;
+        setStreak(computeWorkoutStreak(dates, plan, planStartedAt));
+        setDaysThisWeek(countDaysThisWeek(dates));
       })
       .catch(() => {
         if (!cancelled) setStreak(0);

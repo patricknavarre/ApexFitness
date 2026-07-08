@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import {
   WORKOUT_PLANS,
   getActivePlanDay,
+  getNextPlanDayNumber,
   type WorkoutPlan as WorkoutPlanType,
   type WorkoutDay,
 } from '@/lib/workout-plans';
@@ -342,7 +343,7 @@ function PlanCard({
     planStartedAt && isActive
       ? getActivePlanDay(plan, planStartedAt, activePlanDayNumber)
       : null;
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
   const isTodayLogged =
     activeDay &&
     recentLogs.some(
@@ -350,7 +351,7 @@ function PlanCard({
         l.planId === plan.id &&
         l.dayNumber === activeDay.dayNumber &&
         l.loggedAt &&
-        l.loggedAt.startsWith(todayStr)
+        toLocalDateOnly(l.loggedAt) === today
     );
 
   return (
@@ -479,7 +480,7 @@ function PlanCard({
                       l.planId === plan.id &&
                       l.dayNumber === day.dayNumber &&
                       l.loggedAt &&
-                      l.loggedAt.startsWith(todayStr)
+                      toLocalDateOnly(l.loggedAt) === today
                   )
                 }
                 onMarkDone={
@@ -573,8 +574,18 @@ type WorkoutSetLog = {
   loggedAt: string | null;
 };
 
+// Kept in UTC to match the sets API, which buckets loggedAt timestamps by UTC day.
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function todayLocal(): string {
+  return toLocalDateOnly(new Date().toISOString());
+}
+
+function toLocalDateOnly(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export default function WorkoutsPage() {
@@ -728,7 +739,29 @@ export default function WorkoutsPage() {
         { planId: data.planId, dayNumber: data.dayNumber, loggedAt: data.loggedAt },
         ...prev,
       ]);
-      toast.success('Workout logged.');
+
+      const plan = WORKOUT_PLANS.find((p) => p.id === planId);
+      const nextDay = plan ? getNextPlanDayNumber(plan, dayNumber) : null;
+      if (plan && nextDay != null && nextDay !== dayNumber) {
+        try {
+          const patch = await fetch('/api/user/me', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ activePlanDayNumber: nextDay }),
+          });
+          if (patch.ok) {
+            setActivePlanDayNumber(nextDay);
+            const nextTitle = plan.days.find((d) => d.dayNumber === nextDay)?.title;
+            toast.success(`Workout logged. Next up: Day ${nextDay}${nextTitle ? ` — ${nextTitle}` : ''}.`);
+          } else {
+            toast.success('Workout logged.');
+          }
+        } catch {
+          toast.success('Workout logged.');
+        }
+      } else {
+        toast.success('Workout logged.');
+      }
     } catch {
       toast.error('Could not log workout');
     }
