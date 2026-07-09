@@ -9,6 +9,10 @@ const EQUIPMENT = ['none', 'bodyweight', 'dumbbells', 'full gym', 'home gym'];
 
 type Profile = {
   name: string | null;
+  age: number | null;
+  sex: string | null;
+  heightIn: number | null;
+  weightLbs: number | null;
   calorieTarget: number | null;
   proteinTarget: number | null;
   carbTarget: number | null;
@@ -25,6 +29,10 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<Profile>({
     name: null,
+    age: null,
+    sex: null,
+    heightIn: null,
+    weightLbs: null,
     calorieTarget: null,
     proteinTarget: null,
     carbTarget: null,
@@ -44,6 +52,10 @@ export default function SettingsPage() {
         if (!cancelled) {
           setProfile({
             name: data.name ?? null,
+            age: typeof data.age === 'number' ? data.age : null,
+            sex: data.sex ?? null,
+            heightIn: typeof data.heightCm === 'number' ? Math.round(data.heightCm / 2.54) : null,
+            weightLbs: typeof data.weightKg === 'number' ? Math.round(data.weightKg * 2.205) : null,
             calorieTarget: data.calorieTarget ?? null,
             proteinTarget: data.proteinTarget ?? null,
             carbTarget: data.carbTarget ?? null,
@@ -76,6 +88,10 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: profile.name || undefined,
+          age: profile.age ?? undefined,
+          sex: profile.sex || undefined,
+          heightCm: profile.heightIn ? profile.heightIn * 2.54 : undefined,
+          weightKg: profile.weightLbs ? profile.weightLbs / 2.205 : undefined,
           calorieTarget: profile.calorieTarget ?? undefined,
           proteinTarget: profile.proteinTarget ?? undefined,
           carbTarget: profile.carbTarget ?? undefined,
@@ -91,6 +107,10 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to save');
       setProfile({
         name: data.name ?? null,
+        age: typeof data.age === 'number' ? data.age : null,
+        sex: data.sex ?? null,
+        heightIn: typeof data.heightCm === 'number' ? Math.round(data.heightCm / 2.54) : null,
+        weightLbs: typeof data.weightKg === 'number' ? Math.round(data.weightKg * 2.205) : null,
         calorieTarget: data.calorieTarget ?? null,
         proteinTarget: data.proteinTarget ?? null,
         carbTarget: data.carbTarget ?? null,
@@ -135,6 +155,67 @@ export default function SettingsPage() {
             placeholder="Your name"
             className="w-full bg-bg3 border border-border rounded-card px-4 py-3 text-text font-sans focus:ring-2 focus:ring-accent"
           />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block font-sans text-sm text-muted">Age</label>
+              <input
+                type="number"
+                min={1}
+                max={120}
+                value={profile.age ?? ''}
+                onChange={(e) =>
+                  setProfile((p) => ({
+                    ...p,
+                    age: e.target.value === '' ? null : Number(e.target.value),
+                  }))
+                }
+                className="w-full bg-bg3 border border-border rounded-card px-4 py-3 text-text font-sans focus:ring-2 focus:ring-accent"
+              />
+            </div>
+            <div>
+              <label className="block font-sans text-sm text-muted">Sex</label>
+              <select
+                value={profile.sex ?? ''}
+                onChange={(e) => setProfile((p) => ({ ...p, sex: e.target.value || null }))}
+                className="w-full bg-bg3 border border-border rounded-card px-4 py-3 text-text font-sans focus:ring-2 focus:ring-accent"
+              >
+                <option value="">—</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-sans text-sm text-muted">Height (in)</label>
+              <input
+                type="number"
+                min={0}
+                value={profile.heightIn ?? ''}
+                onChange={(e) =>
+                  setProfile((p) => ({
+                    ...p,
+                    heightIn: e.target.value === '' ? null : Number(e.target.value),
+                  }))
+                }
+                className="w-full bg-bg3 border border-border rounded-card px-4 py-3 text-text font-sans focus:ring-2 focus:ring-accent"
+              />
+            </div>
+            <div>
+              <label className="block font-sans text-sm text-muted">Weight (lbs)</label>
+              <input
+                type="number"
+                min={0}
+                value={profile.weightLbs ?? ''}
+                onChange={(e) =>
+                  setProfile((p) => ({
+                    ...p,
+                    weightLbs: e.target.value === '' ? null : Number(e.target.value),
+                  }))
+                }
+                className="w-full bg-bg3 border border-border rounded-card px-4 py-3 text-text font-sans focus:ring-2 focus:ring-accent"
+              />
+            </div>
+          </div>
         </div>
 
         <div className="bg-card border border-border rounded-card p-6 space-y-4">

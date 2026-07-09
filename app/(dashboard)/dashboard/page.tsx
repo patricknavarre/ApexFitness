@@ -6,6 +6,9 @@ import { DashboardStatsRow } from '@/components/dashboard/DashboardStatsRow';
 import { TodayWorkoutCard } from '@/components/dashboard/TodayWorkoutCard';
 import { SuggestMealCard } from '@/components/dashboard/SuggestMealCard';
 import { CaloriesTodayCard } from '@/components/dashboard/CaloriesTodayCard';
+import { MacrosTodayCard } from '@/components/dashboard/MacrosTodayCard';
+import { ProgressSnapshotCard } from '@/components/dashboard/ProgressSnapshotCard';
+import { AiInsightCard } from '@/components/dashboard/AiInsightCard';
 
 function formatDisplayDate(): string {
   return new Date().toLocaleDateString(undefined, {
@@ -60,9 +63,16 @@ export default async function DashboardPage() {
         activePlanDayNumber={activePlanDayNumber}
       />
 
+      <AiInsightCard />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <CaloriesTodayCard />
+        <MacrosTodayCard />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <SuggestMealCard />
+        <ProgressSnapshotCard />
       </div>
 
       {!activePlanId && (

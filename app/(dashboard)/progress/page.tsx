@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { toast } from 'sonner';
 import { WORKOUT_PLANS } from '@/lib/workout-plans';
 import { getCardioLabel } from '@/lib/cardio';
 
@@ -17,6 +19,7 @@ type ProgressPhotoItem = {
   photoUrl: string;
   thumbnailUrl: string;
   takenAt: string;
+  weightKg: number | null;
   analysis: AnalysisSummary | null;
 };
 
@@ -48,6 +51,14 @@ function getWorkoutLabel(w: WorkoutItem): string {
     return `${getCardioLabel(w.cardioExercise)} ${w.cardioDurationMinutes} min`;
   }
   return getPlanDayLabel(w.planId, w.dayNumber);
+}
+
+function parseBodyFatMidpoint(range?: string): number | null {
+  if (!range) return null;
+  const nums = range.match(/[\d.]+/g)?.map(Number) ?? [];
+  if (nums.length === 0) return null;
+  if (nums.length === 1) return nums[0];
+  return (nums[0] + nums[1]) / 2;
 }
 
 export default function ProgressPage() {
@@ -104,6 +115,34 @@ export default function ProgressPage() {
   const leftPhoto = photos.find((p) => p.id === compareLeft);
   const rightPhoto = photos.find((p) => p.id === compareRight);
   const canCompare = leftPhoto && rightPhoto && leftPhoto.id !== rightPhoto.id;
+
+  const sortedPhotos = [...photos].sort(
+    (a, b) => new Date(a.takenAt).getTime() - new Date(b.takenAt).getTime()
+  );
+  const bodyFatData = sortedPhotos
+    .map((p) => ({
+      date: format(new Date(p.takenAt), 'MMM d'),
+      bodyFat: parseBodyFatMidpoint(p.analysis?.bodyFatRange ?? undefined),
+    }))
+    .filter((d) => d.bodyFat != null);
+  const weightData = sortedPhotos
+    .filter((p) => p.weightKg != null && p.weightKg > 0)
+    .map((p) => ({
+      date: format(new Date(p.takenAt), 'MMM d'),
+      weight: Math.round((p.weightKg ?? 0) * 2.205),
+    }));
+
+  async function handleDeletePhoto(id: string) {
+    if (!confirm('Delete this progress photo?')) return;
+    try {
+      const res = await fetch(`/api/progress?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      setPhotos((prev) => prev.filter((p) => p.id !== id));
+      toast.success('Photo deleted');
+    } catch {
+      toast.error('Could not delete photo');
+    }
+  }
 
   if (loading) {
     return (
@@ -222,6 +261,43 @@ export default function ProgressPage() {
         </div>
       ) : (
         <>
+          {(bodyFatData.length >= 2 || weightData.length >= 2) && (
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {bodyFatData.length >= 2 && (
+                <div className="rounded-card border border-border bg-card p-4">
+                  <h2 className="font-display text-lg text-accent uppercase tracking-wide mb-3">
+                    Body fat trend
+                  </h2>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <LineChart data={bodyFatData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                      <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} unit="%" />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="bodyFat" stroke="#f97316" strokeWidth={2} dot />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+              {weightData.length >= 2 && (
+                <div className="rounded-card border border-border bg-card p-4">
+                  <h2 className="font-display text-lg text-accent uppercase tracking-wide mb-3">
+                    Weight trend
+                  </h2>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <LineChart data={weightData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                      <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} unit=" lbs" />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={2} dot />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Comparison slider */}
           {photos.length >= 2 && (
             <section>
@@ -337,12 +413,24 @@ export default function ProgressPage() {
                     <p className="font-sans text-sm font-medium text-text">
                       {format(new Date(p.takenAt), 'MMM d, yyyy')}
                     </p>
+                    {p.weightKg != null && p.weightKg > 0 && (
+                      <p className="font-sans text-xs text-muted mt-0.5">
+                        {Math.round(p.weightKg * 2.205)} lbs
+                      </p>
+                    )}
                     {p.analysis?.bodyType && (
                       <p className="font-sans text-xs text-muted mt-0.5">
                         {p.analysis.bodyType}
                         {p.analysis.bodyFatRange ? ` · ${p.analysis.bodyFatRange}` : ''}
                       </p>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePhoto(p.id)}
+                      className="mt-2 font-sans text-xs text-red-400 hover:underline"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))}

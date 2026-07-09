@@ -22,6 +22,8 @@ const UserSchema = new Schema({
   planStartedAt: Date,
   /** When set, overrides calendar-based day progression. */
   activePlanDayNumber: Number,
+  lastInsightDate: String,
+  lastInsightText: String,
   createdAt: { type: Date, default: Date.now },
 });
 

@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import path from 'path';
 import fs from 'fs/promises';
+import { isS3Configured, uploadPhotoToS3, deletePhotoFromS3 } from '@/lib/s3';
 
 const UPLOAD_DIR = path.join(process.cwd(), '.apex-uploads');
 
@@ -11,21 +12,11 @@ export type UploadResult = {
   thumbKey: string;
 };
 
-/** On Vercel, the filesystem is read-only; local storage does not persist. */
-const isVercel = typeof process !== 'undefined' && process.env.VERCEL === '1';
-
-export async function uploadPhoto(
+async function uploadPhotoLocal(
   buffer: Buffer,
   userId: string,
   folder: 'analysis' | 'progress'
 ): Promise<UploadResult> {
-  if (isVercel) {
-    const err = new Error(
-      'Photo storage is not available on Vercel with local storage. Configure S3 (AWS_*) for production or run locally.'
-    ) as Error & { code?: string };
-    err.code = 'STORAGE_UNAVAILABLE';
-    throw err;
-  }
   const timestamp = Date.now();
   const dir = path.join(UPLOAD_DIR, 'users', userId, folder);
   await fs.mkdir(dir, { recursive: true });
@@ -59,7 +50,22 @@ export async function uploadPhoto(
   };
 }
 
+export async function uploadPhoto(
+  buffer: Buffer,
+  userId: string,
+  folder: 'analysis' | 'progress'
+): Promise<UploadResult> {
+  if (isS3Configured()) {
+    return uploadPhotoToS3(buffer, userId, folder);
+  }
+  return uploadPhotoLocal(buffer, userId, folder);
+}
+
 export async function deletePhoto(key: string): Promise<void> {
+  if (isS3Configured()) {
+    await deletePhotoFromS3(key);
+    return;
+  }
   const filePath = path.join(UPLOAD_DIR, key);
   try {
     await fs.unlink(filePath);

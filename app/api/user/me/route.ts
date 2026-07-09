@@ -5,6 +5,10 @@ import User from '@/models/User';
 
 type UserMeFields = {
   name?: string | null;
+  age?: number | null;
+  sex?: string | null;
+  heightCm?: number | null;
+  weightKg?: number | null;
   calorieTarget?: number | null;
   proteinTarget?: number | null;
   carbTarget?: number | null;
@@ -20,7 +24,32 @@ type UserMeFields = {
 };
 
 const ME_FIELDS =
-  'name calorieTarget proteinTarget carbTarget fatTarget goal fitnessLevel equipment daysPerWeek units activePlanId planStartedAt activePlanDayNumber';
+  'name age sex heightCm weightKg calorieTarget proteinTarget carbTarget fatTarget goal fitnessLevel equipment daysPerWeek units activePlanId planStartedAt activePlanDayNumber';
+
+function serializeUser(user: UserMeFields & { planStartedAt?: Date }) {
+  return {
+    name: user.name ?? null,
+    age: typeof user.age === 'number' ? user.age : null,
+    sex: user.sex ?? null,
+    heightCm: typeof user.heightCm === 'number' ? user.heightCm : null,
+    weightKg: typeof user.weightKg === 'number' ? user.weightKg : null,
+    calorieTarget: user.calorieTarget ?? null,
+    proteinTarget: user.proteinTarget ?? null,
+    carbTarget: user.carbTarget ?? null,
+    fatTarget: user.fatTarget ?? null,
+    goal: user.goal ?? null,
+    fitnessLevel: user.fitnessLevel ?? null,
+    equipment: user.equipment ?? null,
+    daysPerWeek: user.daysPerWeek ?? null,
+    units: user.units ?? null,
+    activePlanId: user.activePlanId ?? null,
+    planStartedAt: user.planStartedAt
+      ? new Date(user.planStartedAt).toISOString().slice(0, 10)
+      : null,
+    activePlanDayNumber:
+      typeof user.activePlanDayNumber === 'number' ? user.activePlanDayNumber : null,
+  };
+}
 
 export async function GET() {
   const session = await auth();
@@ -33,25 +62,7 @@ export async function GET() {
     if (!raw || Array.isArray(raw)) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-    const user = raw as UserMeFields & { planStartedAt?: Date };
-    return NextResponse.json({
-      name: user.name ?? null,
-      calorieTarget: user.calorieTarget ?? null,
-      proteinTarget: user.proteinTarget ?? null,
-      carbTarget: user.carbTarget ?? null,
-      fatTarget: user.fatTarget ?? null,
-      goal: user.goal ?? null,
-      fitnessLevel: user.fitnessLevel ?? null,
-      equipment: user.equipment ?? null,
-      daysPerWeek: user.daysPerWeek ?? null,
-      units: user.units ?? null,
-      activePlanId: user.activePlanId ?? null,
-      planStartedAt: user.planStartedAt
-        ? new Date(user.planStartedAt).toISOString().slice(0, 10)
-        : null,
-      activePlanDayNumber:
-        typeof user.activePlanDayNumber === 'number' ? user.activePlanDayNumber : null,
-    });
+    return NextResponse.json(serializeUser(raw as UserMeFields & { planStartedAt?: Date }));
   } catch (e) {
     console.error('User me error:', e);
     return NextResponse.json(
@@ -70,6 +81,16 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     const updates: Record<string, unknown> = {};
     if (typeof body.name === 'string') updates.name = body.name;
+    if (typeof body.age === 'number' && body.age >= 1 && body.age <= 120) {
+      updates.age = Math.floor(body.age);
+    }
+    if (typeof body.sex === 'string') updates.sex = body.sex;
+    if (typeof body.heightCm === 'number' && body.heightCm > 0) {
+      updates.heightCm = body.heightCm;
+    }
+    if (typeof body.weightKg === 'number' && body.weightKg > 0) {
+      updates.weightKg = body.weightKg;
+    }
     if (typeof body.calorieTarget === 'number') updates.calorieTarget = body.calorieTarget;
     if (typeof body.proteinTarget === 'number') updates.proteinTarget = body.proteinTarget;
     if (typeof body.carbTarget === 'number') updates.carbTarget = body.carbTarget;
@@ -101,25 +122,7 @@ export async function PATCH(req: Request) {
     if (!user || Array.isArray(user)) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-    const u = user as UserMeFields & { planStartedAt?: Date };
-    return NextResponse.json({
-      name: u.name ?? null,
-      calorieTarget: u.calorieTarget ?? null,
-      proteinTarget: u.proteinTarget ?? null,
-      carbTarget: u.carbTarget ?? null,
-      fatTarget: u.fatTarget ?? null,
-      goal: u.goal ?? null,
-      fitnessLevel: u.fitnessLevel ?? null,
-      equipment: u.equipment ?? null,
-      daysPerWeek: u.daysPerWeek ?? null,
-      units: u.units ?? null,
-      activePlanId: u.activePlanId ?? null,
-      planStartedAt: u.planStartedAt
-        ? new Date(u.planStartedAt).toISOString().slice(0, 10)
-        : null,
-      activePlanDayNumber:
-        typeof u.activePlanDayNumber === 'number' ? u.activePlanDayNumber : null,
-    });
+    return NextResponse.json(serializeUser(user as UserMeFields & { planStartedAt?: Date }));
   } catch (e) {
     console.error('User me PATCH error:', e);
     return NextResponse.json(

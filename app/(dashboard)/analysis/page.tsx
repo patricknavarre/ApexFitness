@@ -3,7 +3,9 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { recommendPlanId, getPlanName, todayPlanStartDate } from '@/lib/recommend-plan';
 
 const DRAFT_KEY = 'apex-analysis-draft';
 
@@ -106,12 +108,18 @@ function loadDraft(): Draft | null {
 }
 
 export default function AnalysisPage() {
+  const router = useRouter();
   const [preview, setPreview] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [context, setContext] = useState(defaultContext);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [saving, setSaving] = useState(false);
+  const [applyingNutrition, setApplyingNutrition] = useState(false);
+  const [applyingPlan, setApplyingPlan] = useState(false);
+  const [applyingAll, setApplyingAll] = useState(false);
+  const [saveWeight, setSaveWeight] = useState('');
+  const [showSaveWeight, setShowSaveWeight] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Restore draft from session when returning to the page
@@ -198,8 +206,14 @@ export default function AnalysisPage() {
 
   async function handleSaveToProgress() {
     if (!imageBase64 || !result) return;
+    if (!showSaveWeight) {
+      setShowSaveWeight(true);
+      return;
+    }
     setSaving(true);
     try {
+      const weightLbs = saveWeight.trim() ? Number(saveWeight) : undefined;
+      const weightKg = weightLbs && weightLbs > 0 ? weightLbs / 2.205 : undefined;
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -207,6 +221,7 @@ export default function AnalysisPage() {
           image: imageBase64,
           userContext: context,
           saveToProgress: true,
+          weightKg,
         }),
       });
       const data = await res.json();
@@ -217,11 +232,93 @@ export default function AnalysisPage() {
         return;
       }
       setResult((prev) => (prev ? { ...prev, ...data } : null));
+      setShowSaveWeight(false);
       toast.success('Saved to Progress timeline');
     } catch {
       toast.error('Something went wrong');
     }
     setSaving(false);
+  }
+
+  async function handleApplyNutrition() {
+    if (!result) return;
+    setApplyingNutrition(true);
+    try {
+      const res = await fetch('/api/user/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          calorieTarget: result.calorieTarget,
+          proteinTarget: result.proteinTarget,
+          carbTarget: result.carbTarget,
+          fatTarget: result.fatTarget,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      toast.success('Nutrition goals applied');
+      router.push('/nutrition');
+    } catch {
+      toast.error('Could not apply nutrition goals');
+    }
+    setApplyingNutrition(false);
+  }
+
+  async function handleApplyPlan() {
+    if (!result) return;
+    setApplyingPlan(true);
+    try {
+      const planId = recommendPlanId(
+        result.recommendedSplit,
+        result.fitnessLevelEstimate,
+        context.daysPerWeek
+      );
+      const res = await fetch('/api/user/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activePlanId: planId,
+          planStartedAt: todayPlanStartDate(),
+          activePlanDayNumber: 1,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      toast.success(`Applied plan: ${getPlanName(planId)}`);
+      router.push('/workouts');
+    } catch {
+      toast.error('Could not apply workout plan');
+    }
+    setApplyingPlan(false);
+  }
+
+  async function handleApplyAll() {
+    if (!result) return;
+    setApplyingAll(true);
+    try {
+      const planId = recommendPlanId(
+        result.recommendedSplit,
+        result.fitnessLevelEstimate,
+        context.daysPerWeek
+      );
+      const res = await fetch('/api/user/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          calorieTarget: result.calorieTarget,
+          proteinTarget: result.proteinTarget,
+          carbTarget: result.carbTarget,
+          fatTarget: result.fatTarget,
+          activePlanId: planId,
+          planStartedAt: todayPlanStartDate(),
+          activePlanDayNumber: 1,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      toast.success(`Applied nutrition goals and ${getPlanName(planId)}`);
+      router.push('/dashboard');
+    } catch {
+      toast.error('Could not apply recommendations');
+    }
+    setApplyingAll(false);
   }
 
   return (
@@ -424,11 +521,32 @@ export default function AnalysisPage() {
 
           <div className="flex flex-wrap gap-3">
             <button
-              onClick={handleSaveToProgress}
-              disabled={saving}
+              onClick={handleApplyAll}
+              disabled={applyingAll}
               className="bg-accent text-black font-sans font-bold uppercase px-6 py-3 rounded-card hover:shadow-glow disabled:opacity-50"
             >
-              {saving ? 'Saving…' : 'Save to Progress timeline'}
+              {applyingAll ? 'Applying…' : 'Apply all recommendations'}
+            </button>
+            <button
+              onClick={handleSaveToProgress}
+              disabled={saving}
+              className="bg-bg3 border border-border text-text font-sans font-bold uppercase px-6 py-3 rounded-card hover:border-accent transition-colors disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : showSaveWeight ? 'Confirm save' : 'Save to Progress timeline'}
+            </button>
+            <button
+              onClick={handleApplyNutrition}
+              disabled={applyingNutrition}
+              className="bg-bg3 border border-border text-text font-sans font-bold uppercase px-6 py-3 rounded-card hover:border-accent transition-colors disabled:opacity-50"
+            >
+              {applyingNutrition ? 'Applying…' : 'Set nutrition goals'}
+            </button>
+            <button
+              onClick={handleApplyPlan}
+              disabled={applyingPlan}
+              className="bg-bg3 border border-border text-text font-sans font-bold uppercase px-6 py-3 rounded-card hover:border-accent transition-colors disabled:opacity-50"
+            >
+              {applyingPlan ? 'Applying…' : 'Apply recommended plan'}
             </button>
             <Link
               href="/workouts"
@@ -436,13 +554,22 @@ export default function AnalysisPage() {
             >
               Browse workout plans
             </Link>
-            <Link
-              href="/nutrition"
-              className="bg-bg3 border border-border text-text font-sans font-bold uppercase px-6 py-3 rounded-card hover:border-accent transition-colors"
-            >
-              Set my nutrition goals
-            </Link>
           </div>
+          {showSaveWeight && (
+            <div className="bg-card border border-border rounded-card p-4 max-w-sm space-y-2">
+              <label className="block font-sans text-sm text-muted">
+                Optional weight (lbs) for this check-in
+              </label>
+              <input
+                type="number"
+                min={0}
+                value={saveWeight}
+                onChange={(e) => setSaveWeight(e.target.value)}
+                placeholder="e.g. 185"
+                className="w-full bg-bg3 border border-border rounded-card px-4 py-2 text-text font-sans focus:ring-2 focus:ring-accent"
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

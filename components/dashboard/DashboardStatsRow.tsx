@@ -54,6 +54,9 @@ export function DashboardStatsRow({
     calorieTarget && calorieTarget > 0
       ? Math.min(100, Math.round((totalCal / calorieTarget) * 100))
       : 0;
+  const weekGoal = 5;
+  const weekPct = Math.min(100, Math.round((daysThisWeek / weekGoal) * 100));
+  const weekCircumference = 2 * Math.PI * 18;
 
   useEffect(() => {
     let cancelled = false;
@@ -137,13 +140,37 @@ export function DashboardStatsRow({
         className="bg-card border border-border rounded-card p-3 sm:p-4 hover:border-accent/40 transition-colors"
       >
         <p className="font-mono text-[10px] uppercase tracking-wider text-muted mb-1">Streak</p>
-        <p className="font-mono text-base sm:text-lg text-accent3 leading-tight">
-          {streak}
-          <span className="text-muted text-xs font-sans"> day{streak !== 1 ? 's' : ''}</span>
-        </p>
-        <p className="font-sans text-[10px] sm:text-xs text-muted mt-1">
-          {daysThisWeek} this week
-        </p>
+        <div className="flex items-center gap-3">
+          <div className="relative w-10 h-10 shrink-0">
+            <svg className="w-10 h-10 -rotate-90" viewBox="0 0 40 40" aria-hidden>
+              <circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" strokeWidth="3" className="text-bg3" />
+              <circle
+                cx="20"
+                cy="20"
+                r="18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                className="text-accent3"
+                strokeDasharray={weekCircumference}
+                strokeDashoffset={weekCircumference * (1 - weekPct / 100)}
+              />
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-accent3">
+              {daysThisWeek}
+            </span>
+          </div>
+          <div>
+            <p className="font-mono text-base sm:text-lg text-accent3 leading-tight">
+              {streak}
+              <span className="text-muted text-xs font-sans"> day{streak !== 1 ? 's' : ''}</span>
+            </p>
+            <p className="font-sans text-[10px] sm:text-xs text-muted">
+              {daysThisWeek}/{weekGoal} this week
+            </p>
+          </div>
+        </div>
       </Link>
 
       <Link

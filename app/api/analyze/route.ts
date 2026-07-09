@@ -67,10 +67,11 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { image, userContext, saveToProgress } = body as {
+    const { image, userContext, saveToProgress, weightKg } = body as {
       image: string;
       userContext?: Record<string, unknown>;
       saveToProgress?: boolean;
+      weightKg?: number;
     };
 
     if (!image || typeof image !== 'string') {
@@ -150,6 +151,7 @@ export async function POST(req: Request) {
         thumbnailUrl: upload.thumbUrl,
         thumbnailS3Key: upload.thumbKey,
         analysisId: analysisDoc._id,
+        weightKg: typeof weightKg === 'number' && weightKg > 0 ? weightKg : undefined,
         takenAt: new Date(),
       });
 
@@ -172,7 +174,7 @@ export async function POST(req: Request) {
     if (errWithCode.code === 'STORAGE_UNAVAILABLE') {
       return NextResponse.json(
         {
-          error: 'Saving to Progress is not available on this deployment. Use a local server or configure S3 for production.',
+          error: 'Saving to Progress failed. Configure S3 (AWS_*) for production photo storage.',
           code: 'STORAGE_UNAVAILABLE',
         },
         { status: 503 }
