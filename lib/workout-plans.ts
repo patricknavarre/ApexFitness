@@ -1,3 +1,5 @@
+import { diffLocalCalendarDays, todayLocal } from '@/lib/local-date';
+
 export type WorkoutExercise = {
   name: string;
   sets: string;
@@ -29,17 +31,11 @@ export type WorkoutPlan = {
 /** Get today's workout day from plan start date (uses local calendar date). */
 export function getTodaysDay(
   plan: WorkoutPlan,
-  planStartedAt: string
+  planStartedAt: string,
+  today: string = todayLocal()
 ): { day: WorkoutDay; dayNumber: number } | null {
-  const [y, m, d] = planStartedAt.split('-').map(Number);
-  if (!y || !m || !d) return null;
-  const start = new Date(y, m - 1, d);
-  start.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diffMs = today.getTime() - start.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffDays < 0 || plan.days.length === 0) return null;
+  const diffDays = diffLocalCalendarDays(planStartedAt.slice(0, 10), today);
+  if (diffDays == null || diffDays < 0 || plan.days.length === 0) return null;
   const dayIndex = diffDays % plan.days.length;
   const day = plan.days[dayIndex];
   return { day, dayNumber: day.dayNumber };
@@ -58,18 +54,28 @@ export function getNextPlanDayNumber(plan: WorkoutPlan, completedDayNumber: numb
   return completedDayNumber;
 }
 
-/** Resolve the user's current plan day — manual pick overrides auto schedule. */
+/**
+ * Resolve the user's current plan day.
+ * Manual override applies only when activePlanDaySetOn matches today's local date;
+ * otherwise the calendar schedule from planStartedAt is used.
+ */
 export function getActivePlanDay(
   plan: WorkoutPlan,
   planStartedAt: string | null,
-  activePlanDayNumber: number | null
+  activePlanDayNumber: number | null,
+  activePlanDaySetOn: string | null = null,
+  today: string = todayLocal()
 ): { day: WorkoutDay; dayNumber: number; isManual: boolean } | null {
-  if (activePlanDayNumber != null) {
+  const overrideFresh =
+    activePlanDayNumber != null &&
+    typeof activePlanDaySetOn === 'string' &&
+    activePlanDaySetOn === today;
+  if (overrideFresh) {
     const day = plan.days.find((d) => d.dayNumber === activePlanDayNumber);
     if (day) return { day, dayNumber: day.dayNumber, isManual: true };
   }
   if (!planStartedAt) return null;
-  const auto = getTodaysDay(plan, planStartedAt);
+  const auto = getTodaysDay(plan, planStartedAt, today);
   if (!auto) return null;
   return { ...auto, isManual: false };
 }

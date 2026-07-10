@@ -11,6 +11,7 @@ import {
 import { CARDIO_OPTIONS } from '@/lib/cardio';
 import { getInteractiveWorkout } from '@/lib/interactive-workouts';
 import { RECOVERY_EQUIPMENT } from '@/lib/recoveryWorkoutData';
+import { todayLocal, toLocalDateOnly } from '@/lib/local-date';
 import { InteractiveWorkout } from '@/components/workouts/InteractiveWorkout';
 import { ExerciseGuide } from '@/components/workouts/ExerciseGuide';
 import { toast } from 'sonner';
@@ -311,6 +312,7 @@ function PlanCard({
   activePlanId,
   planStartedAt,
   activePlanDayNumber,
+  activePlanDaySetOn,
   recentLogs,
   onGetStarted,
   onSwitchPlan,
@@ -326,6 +328,7 @@ function PlanCard({
   activePlanId: string | null;
   planStartedAt: string | null;
   activePlanDayNumber: number | null;
+  activePlanDaySetOn: string | null;
   recentLogs: LogEntry[];
   onGetStarted: (planId: string) => void;
   onSwitchPlan: (planId: string) => void;
@@ -339,11 +342,13 @@ function PlanCard({
 }) {
   const [open, setOpen] = useState(false);
   const isActive = activePlanId === plan.id;
+  const today = todayLocal();
   const activeDay =
     planStartedAt && isActive
-      ? getActivePlanDay(plan, planStartedAt, activePlanDayNumber)
+      ? getActivePlanDay(plan, planStartedAt, activePlanDayNumber, activePlanDaySetOn, today)
       : null;
-  const today = todayLocal();
+  const hasSameDayOverride =
+    activePlanDayNumber != null && activePlanDaySetOn === today;
   const isTodayLogged =
     activeDay &&
     recentLogs.some(
@@ -452,7 +457,7 @@ function PlanCard({
                       </option>
                     ))}
                   </select>
-                  {activePlanDayNumber != null && (
+                  {hasSameDayOverride && (
                     <button
                       type="button"
                       onClick={onClearActiveDay}
@@ -579,19 +584,11 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function todayLocal(): string {
-  return toLocalDateOnly(new Date().toISOString());
-}
-
-function toLocalDateOnly(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 export default function WorkoutsPage() {
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [planStartedAt, setPlanStartedAt] = useState<string | null>(null);
   const [activePlanDayNumber, setActivePlanDayNumber] = useState<number | null>(null);
+  const [activePlanDaySetOn, setActivePlanDaySetOn] = useState<string | null>(null);
   const [workoutLogs, setWorkoutLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingDone, setMarkingDone] = useState(false);
@@ -613,6 +610,9 @@ export default function WorkoutsPage() {
           setPlanStartedAt(data.planStartedAt ?? null);
           setActivePlanDayNumber(
             typeof data.activePlanDayNumber === 'number' ? data.activePlanDayNumber : null
+          );
+          setActivePlanDaySetOn(
+            typeof data.activePlanDaySetOn === 'string' ? data.activePlanDaySetOn : null
           );
         }
       })
@@ -670,11 +670,7 @@ export default function WorkoutsPage() {
 
   async function setActivePlan(planId: string) {
     // Use local calendar date so Day 1 is the day they started (avoids UTC vs local mismatch)
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const startedAt = `${y}-${m}-${day}`;
+    const startedAt = todayLocal();
     try {
       const res = await fetch('/api/user/me', {
         method: 'PATCH',
@@ -682,13 +678,15 @@ export default function WorkoutsPage() {
         body: JSON.stringify({
           activePlanId: planId,
           planStartedAt: startedAt,
-          activePlanDayNumber: 1,
+          activePlanDayNumber: null,
+          activePlanDaySetOn: null,
         }),
       });
       if (!res.ok) throw new Error('Failed to save');
       setActivePlanId(planId);
       setPlanStartedAt(startedAt);
-      setActivePlanDayNumber(1);
+      setActivePlanDayNumber(null);
+      setActivePlanDaySetOn(null);
       toast.success('Plan set. Starting at Day 1.');
     } catch {
       toast.error('Could not set plan');
@@ -696,14 +694,16 @@ export default function WorkoutsPage() {
   }
 
   async function setActivePlanDay(dayNumber: number) {
+    const setOn = todayLocal();
     try {
       const res = await fetch('/api/user/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activePlanDayNumber: dayNumber }),
+        body: JSON.stringify({ activePlanDayNumber: dayNumber, activePlanDaySetOn: setOn }),
       });
       if (!res.ok) throw new Error('Failed to save');
       setActivePlanDayNumber(dayNumber);
+      setActivePlanDaySetOn(setOn);
       toast.success(`Set to Day ${dayNumber}.`);
     } catch {
       toast.error('Could not update day');
@@ -715,10 +715,11 @@ export default function WorkoutsPage() {
       const res = await fetch('/api/user/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activePlanDayNumber: null }),
+        body: JSON.stringify({ activePlanDayNumber: null, activePlanDaySetOn: null }),
       });
       if (!res.ok) throw new Error('Failed to save');
       setActivePlanDayNumber(null);
+      setActivePlanDaySetOn(null);
       toast.success('Using auto schedule from start date.');
     } catch {
       toast.error('Could not update day');
@@ -743,14 +744,16 @@ export default function WorkoutsPage() {
       const plan = WORKOUT_PLANS.find((p) => p.id === planId);
       const nextDay = plan ? getNextPlanDayNumber(plan, dayNumber) : null;
       if (plan && nextDay != null && nextDay !== dayNumber) {
+        const setOn = todayLocal();
         try {
           const patch = await fetch('/api/user/me', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ activePlanDayNumber: nextDay }),
+            body: JSON.stringify({ activePlanDayNumber: nextDay, activePlanDaySetOn: setOn }),
           });
           if (patch.ok) {
             setActivePlanDayNumber(nextDay);
+            setActivePlanDaySetOn(setOn);
             const nextTitle = plan.days.find((d) => d.dayNumber === nextDay)?.title;
             toast.success(`Workout logged. Next up: Day ${nextDay}${nextTitle ? ` — ${nextTitle}` : ''}.`);
           } else {
@@ -919,6 +922,7 @@ export default function WorkoutsPage() {
                     activePlanId={activePlanId}
                     planStartedAt={planStartedAt}
                     activePlanDayNumber={activePlanDayNumber}
+                    activePlanDaySetOn={activePlanDaySetOn}
                     recentLogs={workoutLogs}
                     onGetStarted={setActivePlan}
                     onSwitchPlan={setActivePlan}

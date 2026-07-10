@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/mongodb';
 import User from '@/models/User';
+import { dateOnlyToUtcNoon, serializeDateOnly } from '@/lib/local-date';
 
 type UserMeFields = {
   name?: string | null;
@@ -19,14 +20,15 @@ type UserMeFields = {
   daysPerWeek?: number | null;
   units?: string | null;
   activePlanId?: string | null;
-  planStartedAt?: string | null;
+  planStartedAt?: Date | string | null;
   activePlanDayNumber?: number | null;
+  activePlanDaySetOn?: string | null;
 };
 
 const ME_FIELDS =
-  'name age sex heightCm weightKg calorieTarget proteinTarget carbTarget fatTarget goal fitnessLevel equipment daysPerWeek units activePlanId planStartedAt activePlanDayNumber';
+  'name age sex heightCm weightKg calorieTarget proteinTarget carbTarget fatTarget goal fitnessLevel equipment daysPerWeek units activePlanId planStartedAt activePlanDayNumber activePlanDaySetOn';
 
-function serializeUser(user: UserMeFields & { planStartedAt?: Date }) {
+function serializeUser(user: UserMeFields) {
   return {
     name: user.name ?? null,
     age: typeof user.age === 'number' ? user.age : null,
@@ -43,11 +45,11 @@ function serializeUser(user: UserMeFields & { planStartedAt?: Date }) {
     daysPerWeek: user.daysPerWeek ?? null,
     units: user.units ?? null,
     activePlanId: user.activePlanId ?? null,
-    planStartedAt: user.planStartedAt
-      ? new Date(user.planStartedAt).toISOString().slice(0, 10)
-      : null,
+    planStartedAt: serializeDateOnly(user.planStartedAt ?? null),
     activePlanDayNumber:
       typeof user.activePlanDayNumber === 'number' ? user.activePlanDayNumber : null,
+    activePlanDaySetOn:
+      typeof user.activePlanDaySetOn === 'string' ? user.activePlanDaySetOn.slice(0, 10) : null,
   };
 }
 
@@ -62,7 +64,7 @@ export async function GET() {
     if (!raw || Array.isArray(raw)) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-    return NextResponse.json(serializeUser(raw as UserMeFields & { planStartedAt?: Date }));
+    return NextResponse.json(serializeUser(raw as UserMeFields));
   } catch (e) {
     console.error('User me error:', e);
     return NextResponse.json(
@@ -103,13 +105,25 @@ export async function PATCH(req: Request) {
       updates.units = body.units;
     if (typeof body.activePlanId === 'string') updates.activePlanId = body.activePlanId;
     if (typeof body.planStartedAt === 'string') {
-      const d = new Date(body.planStartedAt);
-      if (!Number.isNaN(d.getTime())) updates.planStartedAt = d;
+      const noon = dateOnlyToUtcNoon(body.planStartedAt.slice(0, 10));
+      if (noon) updates.planStartedAt = noon;
     }
     if (body.activePlanDayNumber === null) {
       updates.activePlanDayNumber = null;
+      updates.activePlanDaySetOn = null;
     } else if (typeof body.activePlanDayNumber === 'number' && body.activePlanDayNumber >= 1) {
       updates.activePlanDayNumber = Math.floor(body.activePlanDayNumber);
+      if (typeof body.activePlanDaySetOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.activePlanDaySetOn.slice(0, 10))) {
+        updates.activePlanDaySetOn = body.activePlanDaySetOn.slice(0, 10);
+      } else if (body.activePlanDaySetOn === null) {
+        updates.activePlanDaySetOn = null;
+      }
+    }
+    if (
+      body.activePlanDaySetOn === null &&
+      body.activePlanDayNumber === undefined
+    ) {
+      updates.activePlanDaySetOn = null;
     }
     await connectDB();
     const user = await User.findByIdAndUpdate(
@@ -122,7 +136,7 @@ export async function PATCH(req: Request) {
     if (!user || Array.isArray(user)) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-    return NextResponse.json(serializeUser(user as UserMeFields & { planStartedAt?: Date }));
+    return NextResponse.json(serializeUser(user as UserMeFields));
   } catch (e) {
     console.error('User me PATCH error:', e);
     return NextResponse.json(

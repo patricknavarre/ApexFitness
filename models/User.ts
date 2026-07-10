@@ -20,10 +20,14 @@ const UserSchema = new Schema({
   units: { type: String, default: 'imperial' },
   activePlanId: String,
   planStartedAt: Date,
-  /** When set, overrides calendar-based day progression. */
+  /** When set with activePlanDaySetOn === today, overrides calendar-based day. */
   activePlanDayNumber: Number,
+  /** Local YYYY-MM-DD when activePlanDayNumber was last set (same-day override only). */
+  activePlanDaySetOn: String,
   lastInsightDate: String,
   lastInsightText: String,
+  lastInsightContextHash: String,
+  lastInsightGeneratedAt: Date,
   createdAt: { type: Date, default: Date.now },
 });
 

@@ -278,7 +278,8 @@ export default function AnalysisPage() {
         body: JSON.stringify({
           activePlanId: planId,
           planStartedAt: todayPlanStartDate(),
-          activePlanDayNumber: 1,
+          activePlanDayNumber: null,
+          activePlanDaySetOn: null,
         }),
       });
       if (!res.ok) throw new Error('Failed to save');
@@ -309,7 +310,8 @@ export default function AnalysisPage() {
           fatTarget: result.fatTarget,
           activePlanId: planId,
           planStartedAt: todayPlanStartDate(),
-          activePlanDayNumber: 1,
+          activePlanDayNumber: null,
+          activePlanDaySetOn: null,
         }),
       });
       if (!res.ok) throw new Error('Failed to save');

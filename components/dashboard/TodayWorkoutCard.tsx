@@ -2,18 +2,23 @@
 
 import Link from 'next/link';
 import { WORKOUT_PLANS, getActivePlanDay } from '@/lib/workout-plans';
+import { useLocalTodayKey } from '@/lib/use-local-today-key';
 
 type Props = {
   activePlanId: string | null;
   planStartedAt: string | null;
   activePlanDayNumber: number | null;
+  activePlanDaySetOn: string | null;
 };
 
 export function TodayWorkoutCard({
   activePlanId,
   planStartedAt,
   activePlanDayNumber,
+  activePlanDaySetOn,
 }: Props) {
+  const todayKey = useLocalTodayKey();
+
   if (!activePlanId || !planStartedAt) {
     return (
       <div className="bg-card border border-border rounded-card p-5 sm:p-6">
@@ -49,7 +54,13 @@ export function TodayWorkoutCard({
     );
   }
 
-  const activeDay = getActivePlanDay(plan, planStartedAt, activePlanDayNumber);
+  const activeDay = getActivePlanDay(
+    plan,
+    planStartedAt,
+    activePlanDayNumber,
+    activePlanDaySetOn,
+    todayKey
+  );
   if (!activeDay) {
     return (
       <div className="bg-card border border-border rounded-card p-5 sm:p-6">

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/mongodb';
 import User from '@/models/User';
+import { serializeDateOnly } from '@/lib/local-date';
 import { DashboardStatsRow } from '@/components/dashboard/DashboardStatsRow';
 import { TodayWorkoutCard } from '@/components/dashboard/TodayWorkoutCard';
 import { SuggestMealCard } from '@/components/dashboard/SuggestMealCard';
@@ -23,19 +24,20 @@ export default async function DashboardPage() {
   let activePlanId: string | null = null;
   let planStartedAt: string | null = null;
   let activePlanDayNumber: number | null = null;
+  let activePlanDaySetOn: string | null = null;
   if (session?.user?.id) {
     try {
       await connectDB();
       const user = await User.findById(session.user.id)
-        .select('activePlanId planStartedAt activePlanDayNumber')
+        .select('activePlanId planStartedAt activePlanDayNumber activePlanDaySetOn')
         .lean();
       if (user && !Array.isArray(user)) {
         activePlanId = (user.activePlanId as string) ?? null;
-        planStartedAt = user.planStartedAt
-          ? new Date(user.planStartedAt as Date).toISOString().slice(0, 10)
-          : null;
+        planStartedAt = serializeDateOnly(user.planStartedAt as Date | undefined);
         activePlanDayNumber =
           typeof user.activePlanDayNumber === 'number' ? user.activePlanDayNumber : null;
+        activePlanDaySetOn =
+          typeof user.activePlanDaySetOn === 'string' ? user.activePlanDaySetOn : null;
       }
     } catch {
       // ignore
@@ -55,12 +57,14 @@ export default async function DashboardPage() {
         activePlanId={activePlanId}
         planStartedAt={planStartedAt}
         activePlanDayNumber={activePlanDayNumber}
+        activePlanDaySetOn={activePlanDaySetOn}
       />
 
       <TodayWorkoutCard
         activePlanId={activePlanId}
         planStartedAt={planStartedAt}
         activePlanDayNumber={activePlanDayNumber}
+        activePlanDaySetOn={activePlanDaySetOn}
       />
 
       <AiInsightCard />
