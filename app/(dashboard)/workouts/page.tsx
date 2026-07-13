@@ -12,7 +12,7 @@ import { CARDIO_OPTIONS } from '@/lib/cardio';
 import { getInteractiveWorkout } from '@/lib/interactive-workouts';
 import { RECOVERY_EQUIPMENT } from '@/lib/recoveryWorkoutData';
 import { todayLocal, toLocalDateOnly } from '@/lib/local-date';
-import { InteractiveWorkout } from '@/components/workouts/InteractiveWorkout';
+import { InteractiveWorkout, clearWorkoutSetProgress } from '@/components/workouts/InteractiveWorkout';
 import { ExerciseGuide } from '@/components/workouts/ExerciseGuide';
 import { toast } from 'sonner';
 
@@ -781,6 +781,8 @@ export default function WorkoutsPage() {
       toast.error('No workout for this day');
       return;
     }
+    // Always begin with unchecked sets — prior completions must not carry over.
+    clearWorkoutSetProgress(planId, dayNumber);
     setWorkoutMode({ planId, dayNumber, dayTitle });
   }
 
@@ -843,6 +845,7 @@ export default function WorkoutsPage() {
           }
           onClose={() => setWorkoutMode(null)}
           onMarkDone={() => {
+            clearWorkoutSetProgress(workoutMode.planId, workoutMode.dayNumber);
             markDayDone(workoutMode.planId, workoutMode.dayNumber);
             setWorkoutMode(null);
           }}

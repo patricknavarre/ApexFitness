@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { InteractiveWorkoutDay } from '@/lib/recoveryWorkoutData';
 import { EQUIP_COLORS } from '@/lib/recoveryWorkoutData';
 import { getPhaseColors } from '@/lib/interactive-workouts';
+import { todayLocal } from '@/lib/local-date';
 import { RestTimer } from './RestTimer';
 import { ExerciseGuide } from './ExerciseGuide';
 
@@ -16,6 +17,25 @@ type Props = {
   onClose: () => void;
   onMarkDone?: () => void;
 };
+
+/** localStorage keys for set checkboxes (legacy = forever; dated = today only). */
+export function workoutDoneStorageKeys(planId: string, dayNumber: number, date = todayLocal()) {
+  return {
+    legacy: `apexWorkoutDone-${planId}-${dayNumber}`,
+    today: `apexWorkoutDone-${planId}-${dayNumber}-${date}`,
+  };
+}
+
+/** Clear set-checkbox progress so the next Start workout begins fresh. */
+export function clearWorkoutSetProgress(planId: string, dayNumber: number) {
+  try {
+    const { legacy, today } = workoutDoneStorageKeys(planId, dayNumber);
+    localStorage.removeItem(legacy);
+    localStorage.removeItem(today);
+  } catch {
+    // ignore
+  }
+}
 
 function totalSets(workout: InteractiveWorkoutDay): number {
   return workout.sections.reduce(
@@ -52,8 +72,12 @@ export function InteractiveWorkout({
   onClose,
   onMarkDone,
 }: Props) {
-  const storageKey = `apexWorkoutDone-${planId}-${dayNumber}`;
+  const { today: storageKey, legacy: legacyStorageKey } = workoutDoneStorageKeys(
+    planId,
+    dayNumber
+  );
   const [done, setDone] = useState<Record<string, boolean>>({});
+  const [hydrated, setHydrated] = useState(false);
   const [showEquip, setShowEquip] = useState(false);
   const [timerVisible, setTimerVisible] = useState(false);
   const [restDuration, setRestDuration] = useState(90);
@@ -67,20 +91,24 @@ export function InteractiveWorkout({
 
   useEffect(() => {
     try {
+      // Only restore today's in-progress session — never the old forever key.
+      localStorage.removeItem(legacyStorageKey);
       const saved = localStorage.getItem(storageKey);
-      if (saved) setDone(JSON.parse(saved));
+      setDone(saved ? (JSON.parse(saved) as Record<string, boolean>) : {});
     } catch {
-      // ignore
+      setDone({});
     }
-  }, [storageKey]);
+    setHydrated(true);
+  }, [storageKey, legacyStorageKey]);
 
   useEffect(() => {
+    if (!hydrated) return;
     try {
       localStorage.setItem(storageKey, JSON.stringify(done));
     } catch {
       // ignore
     }
-  }, [done, storageKey]);
+  }, [done, storageKey, hydrated]);
 
   const closeTimer = useCallback(() => setTimerVisible(false), []);
 
