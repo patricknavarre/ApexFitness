@@ -2,12 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { WORKOUT_PLANS, getActivePlanDay } from '@/lib/workout-plans';
+import { WORKOUT_PLANS, getActivePlanDay, getPlanDayByNumber } from '@/lib/workout-plans';
 import { computeWorkoutStreak, countDaysThisWeek } from '@/lib/streak';
 import { toLocalDateOnly } from '@/lib/local-date';
 import { useLocalTodayKey } from '@/lib/use-local-today-key';
 
-function getWorkoutLabel(
+function labelForDayTitle(title: string, isRest: boolean): string {
+  if (isRest) return 'Rest day';
+  return title.length > 14 ? `${title.slice(0, 12)}…` : title;
+}
+
+function getScheduledWorkoutLabel(
   activePlanId: string | null,
   planStartedAt: string | null,
   activePlanDayNumber: number | null,
@@ -25,10 +30,7 @@ function getWorkoutLabel(
     today
   );
   if (!activeDay) return 'No plan';
-  if (activeDay.day.isRest) return 'Rest day';
-  return activeDay.day.title.length > 14
-    ? `${activeDay.day.title.slice(0, 12)}…`
-    : activeDay.day.title;
+  return labelForDayTitle(activeDay.day.title, activeDay.day.isRest);
 }
 
 type Props = {
@@ -49,15 +51,9 @@ export function DashboardStatsRow({
   const [calorieTarget, setCalorieTarget] = useState<number | null>(null);
   const [streak, setStreak] = useState(0);
   const [daysThisWeek, setDaysThisWeek] = useState(0);
+  const [workoutLabel, setWorkoutLabel] = useState('No plan');
 
   const today = useLocalTodayKey();
-  const workoutLabel = getWorkoutLabel(
-    activePlanId,
-    planStartedAt,
-    activePlanDayNumber,
-    activePlanDaySetOn,
-    today
-  );
   const calPct =
     calorieTarget && calorieTarget > 0
       ? Math.min(100, Math.round((totalCal / calorieTarget) * 100))
@@ -68,6 +64,15 @@ export function DashboardStatsRow({
 
   useEffect(() => {
     let cancelled = false;
+    const scheduledLabel = getScheduledWorkoutLabel(
+      activePlanId,
+      planStartedAt,
+      activePlanDayNumber,
+      activePlanDaySetOn,
+      today
+    );
+    setWorkoutLabel(scheduledLabel);
+
     Promise.all([
       fetch(`/api/nutrition?date=${encodeURIComponent(today)}`).then((r) =>
         r.ok ? r.json() : Promise.resolve({ entries: [] })
@@ -91,12 +96,33 @@ export function DashboardStatsRow({
         const plan = WORKOUT_PLANS.find((p) => p.id === activePlanId) ?? null;
         setStreak(computeWorkoutStreak(dates, plan, planStartedAt));
         setDaysThisWeek(countDaysThisWeek(dates));
+
+        const todaysLog = (workoutData.logs ?? []).find(
+          (log: { planId?: string | null; dayNumber?: number | null; loggedAt?: string | null }) =>
+            log.loggedAt &&
+            toLocalDateOnly(log.loggedAt) === today &&
+            log.planId === activePlanId &&
+            typeof log.dayNumber === 'number'
+        );
+        if (plan && todaysLog && typeof todaysLog.dayNumber === 'number') {
+          const logged = getPlanDayByNumber(plan, todaysLog.dayNumber);
+          if (logged) {
+            setWorkoutLabel(
+              logged.day.isRest
+                ? 'Rest day'
+                : labelForDayTitle(logged.day.title, false)
+            );
+            return;
+          }
+        }
+        setWorkoutLabel(scheduledLabel);
       })
       .catch(() => {
         if (!cancelled) {
           setTotalCal(0);
           setStreak(0);
           setDaysThisWeek(0);
+          setWorkoutLabel(scheduledLabel);
         }
       })
       .finally(() => {
@@ -105,7 +131,7 @@ export function DashboardStatsRow({
     return () => {
       cancelled = true;
     };
-  }, [today, activePlanId, planStartedAt]);
+  }, [today, activePlanId, planStartedAt, activePlanDayNumber, activePlanDaySetOn]);
 
   if (loading) {
     return (

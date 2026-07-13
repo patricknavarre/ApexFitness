@@ -80,6 +80,16 @@ export function getActivePlanDay(
   return { ...auto, isManual: false };
 }
 
+/** Look up a plan day by number. */
+export function getPlanDayByNumber(
+  plan: WorkoutPlan,
+  dayNumber: number
+): { day: WorkoutDay; dayNumber: number } | null {
+  const day = plan.days.find((d) => d.dayNumber === dayNumber);
+  if (!day) return null;
+  return { day, dayNumber: day.dayNumber };
+}
+
 export const WORKOUT_PLANS: WorkoutPlan[] = [
   {
     id: '5-day-muscle',

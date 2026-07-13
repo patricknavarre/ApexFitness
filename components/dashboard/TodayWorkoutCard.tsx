@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { WORKOUT_PLANS, getActivePlanDay } from '@/lib/workout-plans';
+import {
+  WORKOUT_PLANS,
+  getActivePlanDay,
+  getPlanDayByNumber,
+} from '@/lib/workout-plans';
 import { toLocalDateOnly } from '@/lib/local-date';
 import { useLocalTodayKey } from '@/lib/use-local-today-key';
 
@@ -19,6 +23,12 @@ type LogRow = {
   loggedAt?: string | null;
 };
 
+type DisplayState = {
+  dayNumber: number;
+  completed: boolean;
+  loaded: boolean;
+};
+
 export function TodayWorkoutCard({
   activePlanId,
   planStartedAt,
@@ -26,15 +36,18 @@ export function TodayWorkoutCard({
   activePlanDaySetOn,
 }: Props) {
   const todayKey = useLocalTodayKey();
-  const [completedToday, setCompletedToday] = useState(false);
-  const [completionLoaded, setCompletionLoaded] = useState(false);
+  const [display, setDisplay] = useState<DisplayState>({
+    dayNumber: 0,
+    completed: false,
+    loaded: false,
+  });
 
   const plan =
     activePlanId && planStartedAt
       ? WORKOUT_PLANS.find((p) => p.id === activePlanId) ?? null
       : null;
 
-  const activeDay =
+  const scheduledDay =
     plan && planStartedAt
       ? getActivePlanDay(
           plan,
@@ -45,54 +58,97 @@ export function TodayWorkoutCard({
         )
       : null;
 
-  const activeDayNumber = activeDay?.dayNumber ?? null;
-  const activeDayIsRest = activeDay?.day.isRest ?? false;
+  const scheduledDayNumber = scheduledDay?.dayNumber ?? null;
 
-  const checkCompletion = useCallback(() => {
-    if (!activePlanId || activeDayNumber == null || activeDayIsRest) {
-      setCompletedToday(false);
-      setCompletionLoaded(true);
+  const loadDisplay = useCallback(() => {
+    if (!activePlanId || !plan || scheduledDayNumber == null) {
+      setDisplay({ dayNumber: 0, completed: false, loaded: true });
       return () => {};
     }
 
     let cancelled = false;
-    setCompletionLoaded(false);
+    setDisplay((prev) => ({ ...prev, loaded: false }));
+
     fetch('/api/workout/log?limit=30')
       .then((res) => (res.ok ? res.json() : { logs: [] }))
       .then((data: { logs?: LogRow[] }) => {
         if (cancelled) return;
-        const done = (data.logs ?? []).some(
+        // Prefer the plan day actually logged today (e.g. Day 5) over a same-day
+        // "next up" override that still points at Day 6.
+        const todaysLog = (data.logs ?? []).find(
           (log) =>
             log.loggedAt &&
             toLocalDateOnly(log.loggedAt) === todayKey &&
             log.planId === activePlanId &&
-            log.dayNumber === activeDayNumber
+            typeof log.dayNumber === 'number'
         );
-        setCompletedToday(done);
+
+        if (todaysLog && typeof todaysLog.dayNumber === 'number') {
+          const logged = getPlanDayByNumber(plan, todaysLog.dayNumber);
+          if (logged && !logged.day.isRest) {
+            setDisplay({
+              dayNumber: logged.dayNumber,
+              completed: true,
+              loaded: true,
+            });
+            // Clear a stale same-day jump-ahead so Workouts/Insight agree.
+            if (
+              activePlanDaySetOn === todayKey &&
+              activePlanDayNumber != null &&
+              activePlanDayNumber !== logged.dayNumber
+            ) {
+              void fetch('/api/user/me', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  activePlanDayNumber: logged.dayNumber,
+                  activePlanDaySetOn: todayKey,
+                }),
+              });
+            }
+            return;
+          }
+        }
+
+        setDisplay({
+          dayNumber: scheduledDayNumber,
+          completed: false,
+          loaded: true,
+        });
       })
       .catch(() => {
-        if (!cancelled) setCompletedToday(false);
-      })
-      .finally(() => {
-        if (!cancelled) setCompletionLoaded(true);
+        if (!cancelled) {
+          setDisplay({
+            dayNumber: scheduledDayNumber,
+            completed: false,
+            loaded: true,
+          });
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [activePlanId, activeDayNumber, activeDayIsRest, todayKey]);
+  }, [
+    activePlanId,
+    plan,
+    scheduledDayNumber,
+    todayKey,
+    activePlanDayNumber,
+    activePlanDaySetOn,
+  ]);
 
   useEffect(() => {
-    return checkCompletion();
-  }, [checkCompletion]);
+    return loadDisplay();
+  }, [loadDisplay]);
 
   useEffect(() => {
     const onVis = () => {
-      if (document.visibilityState === 'visible') checkCompletion();
+      if (document.visibilityState === 'visible') loadDisplay();
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
-  }, [checkCompletion]);
+  }, [loadDisplay]);
 
   if (!activePlanId || !planStartedAt) {
     return (
@@ -128,7 +184,17 @@ export function TodayWorkoutCard({
     );
   }
 
-  if (!activeDay) {
+  if (!scheduledDay && !display.loaded) {
+    return (
+      <div className="bg-card border border-border rounded-card p-5 sm:p-6 animate-pulse">
+        <div className="h-4 w-28 bg-bg3 rounded mb-3" />
+        <div className="h-5 w-48 bg-bg3 rounded mb-3" />
+        <div className="h-10 w-32 bg-bg3 rounded" />
+      </div>
+    );
+  }
+
+  if (!scheduledDay) {
     return (
       <div className="bg-card border border-border rounded-card p-5 sm:p-6">
         <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
@@ -145,7 +211,16 @@ export function TodayWorkoutCard({
     );
   }
 
-  const { day } = activeDay;
+  const resolved =
+    display.loaded && display.dayNumber > 0
+      ? getPlanDayByNumber(plan, display.dayNumber)
+      : { day: scheduledDay.day, dayNumber: scheduledDay.dayNumber };
+  if (!resolved) {
+    return null;
+  }
+
+  const { day } = resolved;
+  const completed = display.loaded && display.completed;
 
   if (day.isRest) {
     return (
@@ -167,10 +242,9 @@ export function TodayWorkoutCard({
     );
   }
 
-  const showCompleted = completionLoaded && completedToday;
   const ctaLabel = plan.interactive ? 'Start workout' : 'Mark done / View plan';
 
-  if (showCompleted) {
+  if (completed) {
     return (
       <div className="bg-card border border-border rounded-card p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3 mb-2">

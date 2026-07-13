@@ -9,7 +9,7 @@ import NutritionLog from '@/models/NutritionLog';
 import WorkoutLog from '@/models/WorkoutLog';
 import Analysis from '@/models/Analysis';
 import { getAnthropicModelId } from '@/lib/anthropic-model';
-import { WORKOUT_PLANS, getActivePlanDay, getTodaysDay } from '@/lib/workout-plans';
+import { WORKOUT_PLANS, getActivePlanDay, getPlanDayByNumber, getTodaysDay } from '@/lib/workout-plans';
 import { computeWorkoutStreak, countDaysThisWeek } from '@/lib/streak';
 import {
   addLocalCalendarDays,
@@ -22,7 +22,6 @@ export const runtime = 'nodejs';
 export const maxDuration = 30;
 
 const DEFAULT_CALORIES_BURNED = 270;
-const REGEN_COOLDOWN_MS = 30 * 60 * 1000;
 const ALL_MEALS = ['breakfast', 'lunch', 'dinner', 'snacks'] as const;
 
 type InsightPayload = {
@@ -268,7 +267,7 @@ export async function GET(req: Request) {
     const planStartedAt = serializeDateOnly(user.planStartedAt as Date | undefined);
     const activePlanDaySetOn =
       typeof user.activePlanDaySetOn === 'string' ? user.activePlanDaySetOn : null;
-    const activeDay =
+    const scheduledDay =
       plan && planStartedAt
         ? getActivePlanDay(
             plan,
@@ -278,6 +277,42 @@ export async function GET(req: Request) {
             today
           )
         : null;
+
+    // Prefer the day actually trained today over a stale "next day" override.
+    const todaysPlanLog = plan
+      ? workoutLogs.find(
+          (log) =>
+            log.loggedAt &&
+            toLocalDateOnly(new Date(log.loggedAt)) === today &&
+            log.planId === plan.id &&
+            typeof log.dayNumber === 'number'
+        )
+      : null;
+    const loggedDay =
+      plan && todaysPlanLog && typeof todaysPlanLog.dayNumber === 'number'
+        ? getPlanDayByNumber(plan, todaysPlanLog.dayNumber)
+        : null;
+
+    const activeDay =
+      loggedDay && !loggedDay.day.isRest
+        ? { ...loggedDay, isManual: false as const }
+        : scheduledDay;
+
+    // Heal stale jump-ahead override so subsequent reads agree.
+    if (
+      loggedDay &&
+      !loggedDay.day.isRest &&
+      activePlanDaySetOn === today &&
+      typeof user.activePlanDayNumber === 'number' &&
+      user.activePlanDayNumber !== loggedDay.dayNumber
+    ) {
+      await User.findByIdAndUpdate(session.user.id, {
+        $set: {
+          activePlanDayNumber: loggedDay.dayNumber,
+          activePlanDaySetOn: today,
+        },
+      });
+    }
 
     const tomorrowYmd = addLocalCalendarDays(today, 1);
     const tomorrowDay =
@@ -290,17 +325,7 @@ export async function GET(req: Request) {
         : `Day ${tomorrowDay.dayNumber} — ${tomorrowDay.day.title}`
       : null;
 
-    const workoutCompletedToday = !!(
-      activeDay &&
-      !activeDay.day.isRest &&
-      workoutLogs.some(
-        (log) =>
-          log.loggedAt &&
-          toLocalDateOnly(new Date(log.loggedAt)) === today &&
-          log.planId === plan?.id &&
-          log.dayNumber === activeDay.dayNumber
-      )
-    );
+    const workoutCompletedToday = !!(loggedDay && !loggedDay.day.isRest);
 
     const workoutStatus: InsightContext['workoutStatus'] = activeDay?.day.isRest
       ? 'rest'
@@ -376,17 +401,10 @@ export async function GET(req: Request) {
       typeof user.lastInsightText === 'string' ? user.lastInsightText : null;
     const cachedHash =
       typeof user.lastInsightContextHash === 'string' ? user.lastInsightContextHash : null;
-    const generatedAt = user.lastInsightGeneratedAt
-      ? new Date(user.lastInsightGeneratedAt as Date).getTime()
-      : 0;
-    const withinCooldown =
-      generatedAt > 0 && Date.now() - generatedAt < REGEN_COOLDOWN_MS;
 
-    if (cachedDate === today && cachedText) {
-      if (cachedHash === contextHash || withinCooldown) {
-        const parsed = parseInsightText(cachedText);
-        return NextResponse.json({ insight: parsed });
-      }
+    if (cachedDate === today && cachedText && cachedHash === contextHash) {
+      const parsed = parseInsightText(cachedText);
+      return NextResponse.json({ insight: parsed });
     }
 
     let payload: InsightPayload;
