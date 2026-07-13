@@ -9,22 +9,35 @@ import NutritionLog from '@/models/NutritionLog';
 import WorkoutLog from '@/models/WorkoutLog';
 import Analysis from '@/models/Analysis';
 import { getAnthropicModelId } from '@/lib/anthropic-model';
-import { WORKOUT_PLANS, getActivePlanDay } from '@/lib/workout-plans';
+import { WORKOUT_PLANS, getActivePlanDay, getTodaysDay } from '@/lib/workout-plans';
 import { computeWorkoutStreak, countDaysThisWeek } from '@/lib/streak';
-import { serializeDateOnly, todayLocal, toLocalDateOnly } from '@/lib/local-date';
+import {
+  addLocalCalendarDays,
+  serializeDateOnly,
+  todayLocal,
+  toLocalDateOnly,
+} from '@/lib/local-date';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
 const DEFAULT_CALORIES_BURNED = 270;
 const REGEN_COOLDOWN_MS = 30 * 60 * 1000;
+const ALL_MEALS = ['breakfast', 'lunch', 'dinner', 'snacks'] as const;
+
+type InsightPayload = {
+  headline: string;
+  body: string;
+};
 
 type InsightContext = {
   goal: string;
   todayWorkout: string;
   isRestDay: boolean;
+  workoutStatus: 'completed' | 'pending' | 'rest';
   exercises: string[];
   workoutCompletedToday: boolean;
+  nextCalendarWorkout: string | null;
   nutritionReminders: string[];
   caloriesToday: number;
   calorieTarget: number | null;
@@ -38,10 +51,18 @@ type InsightContext = {
   remainingProtein: number | null;
   remainingCarbs: number | null;
   remainingFat: number | null;
+  macroPct: {
+    calories: number | null;
+    protein: number | null;
+    carbs: number | null;
+    fat: number | null;
+  };
   mealsLogged: string[];
+  mealsMissing: string[];
   caloriesBurnedToday: number;
   workoutStreak: number;
   daysThisWeek: number;
+  timeOfDayBucket: 'morning' | 'afternoon' | 'evening';
   focusAreas: string[] | null;
   latestAnalysisSummary: string | null;
 };
@@ -67,35 +88,120 @@ function remaining(target: number | null, current: number): number | null {
   return Math.max(0, Math.round(target - current));
 }
 
-function buildRulesInsight(context: InsightContext): string {
+function pctOfTarget(target: number | null, current: number): number | null {
+  if (target == null || target <= 0) return null;
+  return Math.round((current / target) * 100);
+}
+
+function timeOfDayBucket(dateYmd: string): 'morning' | 'afternoon' | 'evening' {
+  const now = new Date();
+  const localToday = todayLocal(now);
+  // If the request is for "today", use current hour; otherwise default afternoon.
+  const hour = dateYmd === localToday ? now.getHours() : 14;
+  if (hour < 12) return 'morning';
+  if (hour < 17) return 'afternoon';
+  return 'evening';
+}
+
+function serializeInsight(payload: InsightPayload): string {
+  return JSON.stringify(payload);
+}
+
+function parseInsightText(raw: string | null | undefined): InsightPayload | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed) as { headline?: unknown; body?: unknown };
+      if (typeof parsed.headline === 'string' && typeof parsed.body === 'string') {
+        return { headline: parsed.headline.trim(), body: parsed.body.trim() };
+      }
+    } catch {
+      // fall through to legacy plain string
+    }
+  }
+  return { headline: "Today's focus", body: trimmed };
+}
+
+function buildRulesInsight(context: InsightContext): InsightPayload {
   const calPart =
     context.calorieTarget != null
-      ? `${context.caloriesToday}/${context.calorieTarget} cal`
+      ? `${context.caloriesToday}/${context.calorieTarget} cal (${context.macroPct.calories ?? 0}%)`
       : `${context.caloriesToday} cal logged`;
   const proteinPart =
     context.proteinTarget != null
-      ? `${Math.round(context.proteinToday)}/${context.proteinTarget}g protein`
+      ? `${context.proteinToday}/${context.proteinTarget}g protein (${context.macroPct.protein ?? 0}%)`
       : null;
+  const missing =
+    context.mealsMissing.length > 0
+      ? `Still open: ${context.mealsMissing.slice(0, 2).join(', ')}.`
+      : 'Meals look covered for now.';
+  const forward = context.nextCalendarWorkout
+    ? `Tomorrow: ${context.nextCalendarWorkout}.`
+    : 'Keep the streak going tomorrow.';
 
-  if (context.isRestDay) {
-    const fuel = proteinPart
-      ? `Hit ${proteinPart} and keep moving lightly — recovery still counts.`
-      : `Stay on top of nutrition (${calPart}) and keep recovery light.`;
-    return `Rest day on the plan. ${fuel}`;
+  if (context.workoutStatus === 'rest') {
+    return {
+      headline: 'Recovery day',
+      body: [
+        'Rest is on the plan — treat it as training for tomorrow.',
+        proteinPart
+          ? `Nutrition checkpoint: ${proteinPart}. ${missing}`
+          : `Nutrition checkpoint: ${calPart}. ${missing}`,
+        forward,
+      ].join(' '),
+    };
   }
 
-  if (context.workoutCompletedToday) {
-    const fuel = proteinPart
-      ? `Nice work finishing ${context.todayWorkout}. Refuel toward ${proteinPart}.`
-      : `Nice work finishing ${context.todayWorkout}. Keep fueling — ${calPart} so far.`;
-    return fuel;
+  if (context.workoutStatus === 'completed') {
+    const focus = context.exercises[0] ? ` Nice work locking in work like ${context.exercises[0]}.` : '';
+    return {
+      headline: `${context.todayWorkout} — done`,
+      body: [
+        `Session logged for ${context.todayWorkout}.${focus}`,
+        proteinPart
+          ? `Refuel toward ${proteinPart}. ${missing}`
+          : `Keep fueling — ${calPart} so far. ${missing}`,
+        forward,
+      ].join(' '),
+    };
   }
 
-  const session = context.todayWorkout !== 'No active plan' ? context.todayWorkout : "today's session";
-  if (proteinPart && context.remainingProtein != null && context.remainingProtein > 0) {
-    return `${session} is on deck. You're at ${proteinPart} — leave room to hit the rest after training.`;
+  const session =
+    context.todayWorkout !== 'No active plan' ? context.todayWorkout : "today's session";
+  const liftHint = context.exercises[0]
+    ? ` Lead with ${context.exercises[0]}${context.exercises.length > 1 ? ' and follow the full list' : ''}.`
+    : '';
+  return {
+    headline: `${session} ready`,
+    body: [
+      `${session} is still open.${liftHint}`,
+      proteinPart && context.remainingProtein != null && context.remainingProtein > 0
+        ? `You're at ${proteinPart} — leave room to finish protein after training. ${missing}`
+        : `Fuel check: ${calPart}. ${missing}`,
+      forward,
+    ].join(' '),
+  };
+}
+
+function extractJsonObject(text: string): InsightPayload | null {
+  const trimmed = text.trim();
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(trimmed.slice(start, end + 1)) as {
+      headline?: unknown;
+      body?: unknown;
+    };
+    if (typeof parsed.headline === 'string' && typeof parsed.body === 'string') {
+      return { headline: parsed.headline.trim(), body: parsed.body.trim() };
+    }
+  } catch {
+    return null;
   }
-  return `${session} is on deck. You're at ${calPart} so far — train hard and stay consistent.`;
+  return null;
 }
 
 export async function GET(req: Request) {
@@ -144,6 +250,7 @@ export async function GET(req: Request) {
           .filter((m): m is string => typeof m === 'string' && m.length > 0)
       )
     );
+    const mealsMissing = ALL_MEALS.filter((m) => !mealsLogged.includes(m));
 
     const loggedDates = new Set<string>();
     let caloriesBurnedToday = 0;
@@ -172,8 +279,20 @@ export async function GET(req: Request) {
           )
         : null;
 
+    const tomorrowYmd = addLocalCalendarDays(today, 1);
+    const tomorrowDay =
+      plan && planStartedAt && tomorrowYmd
+        ? getTodaysDay(plan, planStartedAt, tomorrowYmd)
+        : null;
+    const nextCalendarWorkout = tomorrowDay
+      ? tomorrowDay.day.isRest
+        ? `Rest (Day ${tomorrowDay.dayNumber})`
+        : `Day ${tomorrowDay.dayNumber} — ${tomorrowDay.day.title}`
+      : null;
+
     const workoutCompletedToday = !!(
       activeDay &&
+      !activeDay.day.isRest &&
       workoutLogs.some(
         (log) =>
           log.loggedAt &&
@@ -182,6 +301,12 @@ export async function GET(req: Request) {
           log.dayNumber === activeDay.dayNumber
       )
     );
+
+    const workoutStatus: InsightContext['workoutStatus'] = activeDay?.day.isRest
+      ? 'rest'
+      : workoutCompletedToday
+        ? 'completed'
+        : 'pending';
 
     const calorieTarget =
       typeof user.calorieTarget === 'number' ? user.calorieTarget : null;
@@ -205,10 +330,13 @@ export async function GET(req: Request) {
           : `Day ${activeDay.dayNumber} — ${activeDay.day.title}`
         : 'No active plan',
       isRestDay: activeDay?.day.isRest ?? false,
-      exercises: activeDay && !activeDay.day.isRest
-        ? activeDay.day.exercises.map((e) => e.name).slice(0, 8)
-        : [],
+      workoutStatus,
+      exercises:
+        activeDay && !activeDay.day.isRest
+          ? activeDay.day.exercises.map((e) => e.name).slice(0, 8)
+          : [],
       workoutCompletedToday,
+      nextCalendarWorkout,
       nutritionReminders: plan?.nutritionReminders?.slice(0, 3) ?? [],
       caloriesToday: totalCal,
       calorieTarget,
@@ -222,10 +350,18 @@ export async function GET(req: Request) {
       remainingProtein: remaining(proteinTarget, totalProtein),
       remainingCarbs: remaining(carbTarget, totalCarbs),
       remainingFat: remaining(fatTarget, totalFat),
+      macroPct: {
+        calories: pctOfTarget(calorieTarget, totalCal),
+        protein: pctOfTarget(proteinTarget, totalProtein),
+        carbs: pctOfTarget(carbTarget, totalCarbs),
+        fat: pctOfTarget(fatTarget, totalFat),
+      },
       mealsLogged,
+      mealsMissing,
       caloriesBurnedToday: Math.round(caloriesBurnedToday),
       workoutStreak: computeWorkoutStreak(loggedDates, plan, planStartedAt),
       daysThisWeek: countDaysThisWeek(loggedDates),
+      timeOfDayBucket: timeOfDayBucket(today),
       focusAreas,
       latestAnalysisSummary:
         latestAnalysis && !Array.isArray(latestAnalysis) && typeof latestAnalysis.summary === 'string'
@@ -248,34 +384,46 @@ export async function GET(req: Request) {
 
     if (cachedDate === today && cachedText) {
       if (cachedHash === contextHash || withinCooldown) {
-        return NextResponse.json({ insight: cachedText });
+        const parsed = parseInsightText(cachedText);
+        return NextResponse.json({ insight: parsed });
       }
     }
 
-    let insight: string;
+    let payload: InsightPayload;
     if (!process.env.ANTHROPIC_API_KEY) {
-      insight = buildRulesInsight(context);
+      payload = buildRulesInsight(context);
     } else {
       const { text } = await generateText({
         model: anthropic(getAnthropicModelId()),
-        system:
-          'You are a concise, encouraging fitness coach. Write exactly 1-2 short sentences. Always mention today’s workout session (or that it is a rest/recovery day) by name when provided, and include one concrete nutrition or progress number from the data (calories, protein, remaining macros, streak, or burn). Be specific and motivating. No bullet points.',
-        prompt: `User data today:\n${JSON.stringify(context, null, 2)}\n\nWrite today's insight.`,
-        maxTokens: 140,
+        system: [
+          'You are a precise, encouraging fitness coach.',
+          'Return ONLY valid JSON: {"headline":"...","body":"..."}.',
+          'headline: 6-10 words, session-aware (mention workout name or Rest, and done/open when relevant).',
+          'body: exactly 2-3 short sentences covering (1) today workout status with one training detail,',
+          '(2) one concrete nutrition number (calories/protein remaining or % of target, or a missing meal),',
+          '(3) a forward look using nextCalendarWorkout or recovery.',
+          'No bullet points. No markdown fences.',
+        ].join(' '),
+        prompt: `User data today:\n${JSON.stringify(context, null, 2)}\n\nWrite today's insight JSON.`,
+        maxTokens: 220,
       });
-      insight = text.trim() || buildRulesInsight(context);
+      payload = extractJsonObject(text) ?? buildRulesInsight(context);
+      if (!payload.headline || !payload.body) {
+        payload = buildRulesInsight(context);
+      }
     }
 
+    const stored = serializeInsight(payload);
     await User.findByIdAndUpdate(session.user.id, {
       $set: {
         lastInsightDate: today,
-        lastInsightText: insight,
+        lastInsightText: stored,
         lastInsightContextHash: contextHash,
         lastInsightGeneratedAt: new Date(),
       },
     });
 
-    return NextResponse.json({ insight });
+    return NextResponse.json({ insight: payload });
   } catch (e) {
     console.error('Insight GET error:', e);
     return NextResponse.json({ insight: null });

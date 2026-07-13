@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import {
   WORKOUT_PLANS,
   getActivePlanDay,
-  getNextPlanDayNumber,
   type WorkoutPlan as WorkoutPlanType,
   type WorkoutDay,
 } from '@/lib/workout-plans';
@@ -740,31 +739,8 @@ export default function WorkoutsPage() {
         { planId: data.planId, dayNumber: data.dayNumber, loggedAt: data.loggedAt },
         ...prev,
       ]);
-
-      const plan = WORKOUT_PLANS.find((p) => p.id === planId);
-      const nextDay = plan ? getNextPlanDayNumber(plan, dayNumber) : null;
-      if (plan && nextDay != null && nextDay !== dayNumber) {
-        const setOn = todayLocal();
-        try {
-          const patch = await fetch('/api/user/me', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ activePlanDayNumber: nextDay, activePlanDaySetOn: setOn }),
-          });
-          if (patch.ok) {
-            setActivePlanDayNumber(nextDay);
-            setActivePlanDaySetOn(setOn);
-            const nextTitle = plan.days.find((d) => d.dayNumber === nextDay)?.title;
-            toast.success(`Workout logged. Next up: Day ${nextDay}${nextTitle ? ` — ${nextTitle}` : ''}.`);
-          } else {
-            toast.success('Workout logged.');
-          }
-        } catch {
-          toast.success('Workout logged.');
-        }
-      } else {
-        toast.success('Workout logged.');
-      }
+      // Stay on today's plan day until midnight — dashboard shows Completed.
+      toast.success('Workout logged.');
     } catch {
       toast.error('Could not log workout');
     }

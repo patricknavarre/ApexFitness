@@ -1,7 +1,9 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { WORKOUT_PLANS, getActivePlanDay } from '@/lib/workout-plans';
+import { toLocalDateOnly } from '@/lib/local-date';
 import { useLocalTodayKey } from '@/lib/use-local-today-key';
 
 type Props = {
@@ -11,6 +13,12 @@ type Props = {
   activePlanDaySetOn: string | null;
 };
 
+type LogRow = {
+  planId?: string | null;
+  dayNumber?: number | null;
+  loggedAt?: string | null;
+};
+
 export function TodayWorkoutCard({
   activePlanId,
   planStartedAt,
@@ -18,6 +26,73 @@ export function TodayWorkoutCard({
   activePlanDaySetOn,
 }: Props) {
   const todayKey = useLocalTodayKey();
+  const [completedToday, setCompletedToday] = useState(false);
+  const [completionLoaded, setCompletionLoaded] = useState(false);
+
+  const plan =
+    activePlanId && planStartedAt
+      ? WORKOUT_PLANS.find((p) => p.id === activePlanId) ?? null
+      : null;
+
+  const activeDay =
+    plan && planStartedAt
+      ? getActivePlanDay(
+          plan,
+          planStartedAt,
+          activePlanDayNumber,
+          activePlanDaySetOn,
+          todayKey
+        )
+      : null;
+
+  const activeDayNumber = activeDay?.dayNumber ?? null;
+  const activeDayIsRest = activeDay?.day.isRest ?? false;
+
+  const checkCompletion = useCallback(() => {
+    if (!activePlanId || activeDayNumber == null || activeDayIsRest) {
+      setCompletedToday(false);
+      setCompletionLoaded(true);
+      return () => {};
+    }
+
+    let cancelled = false;
+    setCompletionLoaded(false);
+    fetch('/api/workout/log?limit=30')
+      .then((res) => (res.ok ? res.json() : { logs: [] }))
+      .then((data: { logs?: LogRow[] }) => {
+        if (cancelled) return;
+        const done = (data.logs ?? []).some(
+          (log) =>
+            log.loggedAt &&
+            toLocalDateOnly(log.loggedAt) === todayKey &&
+            log.planId === activePlanId &&
+            log.dayNumber === activeDayNumber
+        );
+        setCompletedToday(done);
+      })
+      .catch(() => {
+        if (!cancelled) setCompletedToday(false);
+      })
+      .finally(() => {
+        if (!cancelled) setCompletionLoaded(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activePlanId, activeDayNumber, activeDayIsRest, todayKey]);
+
+  useEffect(() => {
+    return checkCompletion();
+  }, [checkCompletion]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') checkCompletion();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [checkCompletion]);
 
   if (!activePlanId || !planStartedAt) {
     return (
@@ -36,7 +111,6 @@ export function TodayWorkoutCard({
     );
   }
 
-  const plan = WORKOUT_PLANS.find((p) => p.id === activePlanId);
   if (!plan) {
     return (
       <div className="bg-card border border-border rounded-card p-5 sm:p-6">
@@ -54,13 +128,6 @@ export function TodayWorkoutCard({
     );
   }
 
-  const activeDay = getActivePlanDay(
-    plan,
-    planStartedAt,
-    activePlanDayNumber,
-    activePlanDaySetOn,
-    todayKey
-  );
   if (!activeDay) {
     return (
       <div className="bg-card border border-border rounded-card p-5 sm:p-6">
@@ -100,7 +167,35 @@ export function TodayWorkoutCard({
     );
   }
 
+  const showCompleted = completionLoaded && completedToday;
   const ctaLabel = plan.interactive ? 'Start workout' : 'Mark done / View plan';
+
+  if (showCompleted) {
+    return (
+      <div className="bg-card border border-border rounded-card p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <h2 className="font-display text-lg text-muted uppercase tracking-wide">
+            Today&apos;s Workout
+          </h2>
+          <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-accent3 border-b border-accent3/70 pb-0.5">
+            Completed
+          </span>
+        </div>
+        <p className="font-sans font-medium text-text mb-2">
+          {plan.name} — Day {day.dayNumber}: {day.title}
+        </p>
+        <p className="font-sans text-sm text-muted mb-4">
+          Session logged. Next training day unlocks tomorrow.
+        </p>
+        <Link
+          href="/workouts"
+          className="inline-block bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
+        >
+          View plan
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-card border border-border rounded-card p-5 sm:p-6">

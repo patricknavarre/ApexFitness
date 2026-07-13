@@ -19,6 +19,15 @@ export function diffLocalCalendarDays(startYmd: string, endYmd: string): number 
   return Math.round((end - start) / 86_400_000);
 }
 
+/** Add whole calendar days to a YYYY-MM-DD string (UTC-noon math, stable). */
+export function addLocalCalendarDays(ymd: string, days: number): string | null {
+  const [y, m, d] = ymd.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const next = new Date(Date.UTC(y, m - 1, d + days, 12, 0, 0));
+  if (Number.isNaN(next.getTime())) return null;
+  return next.toISOString().slice(0, 10);
+}
+
 /** Parse YYYY-MM-DD into a Date at UTC noon (stable date-only round-trip). */
 export function dateOnlyToUtcNoon(ymd: string): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
