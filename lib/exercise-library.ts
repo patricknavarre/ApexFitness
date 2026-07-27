@@ -156,15 +156,215 @@ const GUIDE_ENTRIES: GuideEntry[] = [
     aliases: [
       'calf raises',
       'standing calf raises',
+      'standing calf raise',
       'seated calf raises',
       'seated calf raise',
       'single-leg calf raise',
+      'double-leg calf raise',
+      'double-leg calf raise (endurance)',
+      'eccentric heel drop',
+      'eccentric heel drop (bilateral → single)',
     ],
-    summary: 'Rise onto the balls of your feet to strengthen calves.',
+    summary: 'Rise onto the balls of your feet to strengthen calves and Achilles loading capacity.',
     cues: [
       'Full stretch at the bottom — heels below toe level if possible.',
       'Pause briefly at the top squeeze.',
       'Lower with control; avoid bouncing.',
+    ],
+  },
+  {
+    aliases: [
+      'band ankle 4-way',
+      'band ankle 4-way (df / pf / inv / ev)',
+      'band ankle 4-way (finisher)',
+      'seated band ankle 4-way circuit',
+      'band dorsiflexion',
+      'band plantarflexion',
+      'band inversion',
+      'band eversion',
+    ],
+    summary: 'Strengthen the ankle in all four directions with a light resistance band.',
+    cues: [
+      'Isolate the ankle — don’t let the whole leg rotate.',
+      'Move slowly through a pain-free range.',
+      'Match volume on both sides after boot recovery.',
+    ],
+  },
+  {
+    aliases: [
+      'seated tibialis raise',
+      'tibialis raise',
+    ],
+    summary: 'Lift the toes toward the shin to strengthen the front of the lower leg.',
+    cues: [
+      'Heels stay planted; lift toes and forefoot.',
+      'Pause briefly at the top.',
+      'Add a light plate on the toes when bodyweight gets easy.',
+    ],
+  },
+  {
+    aliases: [
+      'single-leg balance',
+      'single-leg balance (eyes open)',
+      'single-leg balance (eyes closed)',
+      'single-leg balance on soft surface',
+    ],
+    summary: 'Stand on one leg to rebuild ankle proprioception and stability.',
+    cues: [
+      'Soft knee; keep hips level.',
+      'Stay near a wall or rack for safety.',
+      'Progress eyes open → closed, then firm → soft surface.',
+    ],
+  },
+  {
+    aliases: ['heel-to-toe walk'],
+    summary: 'Walk in a straight line placing heel directly in front of toes to challenge balance.',
+    cues: [
+      'Slow, deliberate steps on a straight line.',
+      'Eyes forward; use arms for balance.',
+      'Turn and walk back the same way.',
+    ],
+  },
+  {
+    aliases: ['lateral band walk'],
+    summary: 'Side-step against a band to train hips and lateral ankle control.',
+    cues: [
+      'Band above knees or at ankles; athletic stance.',
+      'Step sideways without letting knees cave in.',
+      'Keep tension on the band the whole set.',
+    ],
+  },
+  {
+    aliases: [
+      'step-up',
+      'step-up (low box)',
+      'db step-ups',
+    ],
+    summary: 'Step onto a box to load one leg with controlled balance through the ankle.',
+    cues: [
+      'Drive through the whole foot on the box.',
+      'Stand tall at the top without shoving off the trailing leg.',
+      'Lower with control; start with a low box post-boot.',
+    ],
+  },
+  {
+    aliases: ['star excursion reach', 'star excursion reach (supported)'],
+    summary: 'Reach the free foot in multiple directions while balancing to train ankle control.',
+    cues: [
+      'Stand on one leg near a rack for fingertip support.',
+      'Lightly touch toes forward, side, then back.',
+      'Keep the stance knee soft and hips square.',
+    ],
+  },
+  {
+    aliases: [
+      'knee-to-wall ankle mobilization',
+      'ankle circles + alphabet',
+      'towel calf stretch',
+      'towel calf stretch (gastroc + soleus)',
+      'towel scrunches / marble pickups',
+    ],
+    summary: 'Restore ankle mobility and foot intrinsic strength after immobilization.',
+    cues: [
+      'Move only in a comfortable range — no forcing.',
+      'For knee-to-wall, keep the heel down as the knee tracks forward.',
+      'Straight-knee calf stretch hits gastroc; bent-knee hits soleus.',
+    ],
+  },
+  {
+    aliases: ['treadmill incline walk'],
+    summary: 'Easy incline walking to rebuild ankle endurance and push-off mechanics.',
+    cues: [
+      'Comfortable pace; slight incline.',
+      'Focus on heel contact then smooth toe-off.',
+      'Stop early if swelling or sharp pain increases.',
+    ],
+  },
+  {
+    aliases: [
+      'leg press',
+      'leg press (bilateral)',
+      'back squat or leg press',
+      'goblet squat or leg press',
+    ],
+    summary: 'Press the platform away to load quads and glutes with stable foot support.',
+    cues: [
+      'Feet mid-platform; even pressure through both feet.',
+      'Control the descent; don’t bounce at the bottom.',
+      'Stop short of depth that irritates the ankle.',
+    ],
+  },
+  {
+    aliases: [
+      'goblet squat',
+      'goblet squat (to box if needed)',
+      'goblet squat (pause)',
+      'db goblet squats / split squats',
+    ],
+    summary: 'Hold a dumbbell at the chest and squat with an upright torso.',
+    cues: [
+      'Elbows inside knees; chest tall.',
+      'Heels stay grounded; sit back under control.',
+      'Use a box for confidence early after boot removal.',
+    ],
+  },
+  {
+    aliases: [
+      'supported split squat',
+      'walking lunge or split squat',
+      'split squat or walking lunge',
+    ],
+    summary: 'Split-stance squat with optional support to rebuild single-leg strength safely.',
+    cues: [
+      'Hold a rack or wall if balance feels shaky.',
+      'Front knee tracks over mid-foot.',
+      'Shorter stance if the ankle feels tight.',
+    ],
+  },
+  {
+    aliases: [
+      'flat barbell or db bench press',
+      'flat bench press',
+      'bench press',
+    ],
+    summary: 'Press a barbell or dumbbells from the chest to train the pecs, shoulders, and triceps.',
+    cues: [
+      'Retract shoulder blades; feet planted softly.',
+      'Lower with control to mid-chest.',
+      'Press up without bouncing or flaring elbows excessively.',
+    ],
+  },
+  {
+    aliases: [
+      'cable chest fly',
+      'cable lateral raise',
+      'cable face pull',
+      'cable tricep pushdown',
+      'overhead cable tricep extension',
+      'straight-arm cable pulldown',
+      'seated cable row',
+      'cable curl',
+    ],
+    summary: 'Cable isolation work with constant tension for precise muscle targeting.',
+    cues: [
+      'Lock the working joints that shouldn’t move.',
+      'Use a controlled tempo — no momentum.',
+      'Squeeze briefly at peak contraction.',
+    ],
+  },
+  {
+    aliases: [
+      'lat pulldown',
+      'barbell or cable row',
+      'seated leg curl',
+      'leg extension',
+      'hip thrust',
+    ],
+    summary: 'Machine or cable compound/isolation lifts for controlled loading in a full gym.',
+    cues: [
+      'Set pads and seats so joints track cleanly.',
+      'Full controlled range without pain.',
+      'Pause briefly where the target muscle is hardest.',
     ],
   },
   {

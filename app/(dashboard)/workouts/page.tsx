@@ -10,6 +10,7 @@ import {
 import { CARDIO_OPTIONS } from '@/lib/cardio';
 import { getInteractiveWorkout } from '@/lib/interactive-workouts';
 import { RECOVERY_EQUIPMENT } from '@/lib/recoveryWorkoutData';
+import { ANKLE_PT_EQUIPMENT } from '@/lib/anklePtWorkoutData';
 import { todayLocal, toLocalDateOnly } from '@/lib/local-date';
 import { InteractiveWorkout, clearWorkoutSetProgress } from '@/components/workouts/InteractiveWorkout';
 import { ExerciseGuide } from '@/components/workouts/ExerciseGuide';
@@ -554,7 +555,7 @@ const EQUIPMENT_SECTIONS: {
   {
     key: 'specialty',
     label: 'Specialty',
-    subtitle: 'Recovery & interactive workout mode with set tracking and rest timer',
+    subtitle: 'Post-boot return, ankle PT & interactive mode with set tracking',
   },
   { key: 'none', label: 'No gym', subtitle: 'Bodyweight, bands, minimal or no equipment' },
   { key: 'home', label: 'Home gym', subtitle: 'Dumbbells, bands, bench or pull-up bar' },
@@ -817,7 +818,9 @@ export default function WorkoutsPage() {
           equipment={
             workoutMode.planId === 'recovery'
               ? RECOVERY_EQUIPMENT
-              : ['Adjustable bench', 'Dumbbells', 'Resistance bands', 'Band cable column']
+              : workoutMode.planId === 'ankle-pt'
+                ? ANKLE_PT_EQUIPMENT
+                : ['Adjustable bench', 'Dumbbells', 'Resistance bands', 'Band cable column']
           }
           onClose={() => setWorkoutMode(null)}
           onMarkDone={() => {
