@@ -3,7 +3,7 @@ import type { InteractiveWorkoutDay, PhaseColor } from './recoveryWorkoutData';
 export const ANKLE_PT_PHASE_COLOR: Record<string, PhaseColor> = {
   STRENGTH: { bg: '#1a3a2a', accent: '#10b981', label: 'Ankle Strength' },
   BALANCE: { bg: '#3b2f00', accent: '#eab308', label: 'Balance & Proprioception' },
-  MOBILITY: { bg: '#1e3a5f', accent: '#3b82f6', label: 'Mobility & Endurance' },
+  MOBILITY: { bg: '#1e3a5f', accent: '#3b82f6', label: 'Mobility & Bike' },
   REST: { bg: '#1e293b', accent: '#475569', label: 'Rest' },
 };
 
@@ -18,11 +18,10 @@ export const ANKLE_PT_SCHEDULE = [
 ] as const;
 
 export const ANKLE_PT_EQUIPMENT = [
+  'Stationary bike or outdoor bike',
   'Resistance bands (light–medium)',
-  'Step or calf raise machine',
-  'Foam pad or folded towel (optional)',
   'Wall or rack for support',
-  'Light dumbbells (optional)',
+  'Foam pad or folded towel (optional)',
 ];
 
 export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
@@ -31,7 +30,7 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
     warmup:
       '3–5 min: ankle pumps, ankle circles both directions, gentle towel stretch for calves',
     caution:
-      'Post-boot strength day. Pain ≤3/10 is OK; sharp pain, swelling jump, or next-day limp means scale back. Match both sides.',
+      'Post-boot strength day — ankle isolation only, minimal leg loading. Pain ≤3/10 is OK; sharp pain, swelling jump, or next-day limp means scale back. Match both sides.',
     sections: [
       {
         title: 'Isolated Ankle Strength',
@@ -68,35 +67,21 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
         ],
       },
       {
-        title: 'Calf & Tibialis Loading',
+        title: 'Light Ankle Loading',
         exercises: [
           {
-            name: 'Double-Leg Calf Raise',
-            sets: 3,
-            reps: '12–15',
-            equip: 'Step',
-            note: 'Use a step for stretch if comfortable. 2-sec up, 3-sec down',
-          },
-          {
-            name: 'Eccentric Heel Drop (bilateral → single)',
-            sets: 3,
-            reps: '8–10',
-            equip: 'Step',
-            note: 'Rise with both feet; lower mostly on target side over 3–4 sec. Hold wall',
-          },
-          {
-            name: 'Seated Calf Raise',
-            sets: 3,
-            reps: '15–20',
-            equip: 'Machine',
-            note: 'Or DB on knee. Full stretch at bottom; targets soleus',
-          },
-          {
             name: 'Seated Tibialis Raise',
-            sets: 3,
-            reps: '15–20',
+            sets: 2,
+            reps: '12–15',
             equip: 'Bodyweight',
-            note: 'Heels down, lift toes. Add light plate on toes when easy',
+            note: 'Heels down, lift toes. Keep it easy — add a light plate only when bodyweight is trivial',
+          },
+          {
+            name: 'Double-Leg Calf Raise',
+            sets: 2,
+            reps: '10–12',
+            equip: 'Bodyweight',
+            note: 'Light only — flat ground, no step needed. Slow tempo; skip if ankle feels irritated',
           },
         ],
       },
@@ -105,9 +90,9 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
 
   BALANCE: {
     phase: 'BALANCE',
-    warmup: '3 min: ankle alphabet (write A–Z with big toe), gentle weight shifts side to side',
+    warmup: '3 min: ankle alphabet (write A–Z with big toe)',
     caution:
-      'Proprioception rebuilds what the boot took away. Stay near a wall. Quality over duration — stop before form falls apart.',
+      'Proprioception rebuilds what the boot took away. Stay near a wall. Quality over duration — stop before form falls apart. No step-ups or band walks while recovering.',
     sections: [
       {
         title: 'Static Balance',
@@ -137,28 +122,14 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
         ],
       },
       {
-        title: 'Dynamic Control',
+        title: 'Light Proprioception',
         exercises: [
           {
             name: 'Heel-to-Toe Walk',
-            sets: 3,
-            reps: '20 steps',
+            sets: 2,
+            reps: '15–20 steps',
             equip: 'Bodyweight',
             note: 'Straight line; slow and controlled. Turn and walk back',
-          },
-          {
-            name: 'Lateral Band Walk',
-            sets: 3,
-            reps: '10 steps each way',
-            equip: 'Band',
-            note: 'Band above knees or at ankles. Stay athletic — don’t let knees cave',
-          },
-          {
-            name: 'Step-Up (low box)',
-            sets: 3,
-            reps: '8–10/leg',
-            equip: 'Step',
-            note: 'Drive through whole foot; control the lower. Start with 6–8" box',
           },
           {
             name: 'Star Excursion Reach (supported)',
@@ -174,9 +145,9 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
 
   MOBILITY: {
     phase: 'MOBILITY',
-    warmup: '2–3 min easy bike or treadmill walk to warm the ankle',
+    warmup: '2–3 min easy stationary bike to warm the ankle',
     caution:
-      'Mobility + light endurance. No forcing end-range. Mild stretch is good; pinching or sharp pain is not.',
+      'Mobility + easy bike endurance. PT guidance: bike instead of running. No forcing end-range. Mild stretch is good; pinching or sharp pain is not.',
     sections: [
       {
         title: 'Ankle Mobility',
@@ -213,7 +184,7 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
         ],
       },
       {
-        title: 'Light Endurance Loading',
+        title: 'Light Endurance — Bike',
         exercises: [
           {
             name: 'Seated Band Ankle 4-Way Circuit',
@@ -223,18 +194,11 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
             note: 'DF → PF → INV → EV with minimal rest between directions',
           },
           {
-            name: 'Double-Leg Calf Raise (endurance)',
-            sets: 2,
-            reps: '20–25',
-            equip: 'Step',
-            note: 'Lighter effort, higher reps. Smooth tempo',
-          },
-          {
-            name: 'Treadmill Incline Walk',
+            name: 'Stationary Bike (easy)',
             sets: 1,
-            reps: '8–12 min',
-            equip: 'Machine',
-            note: 'Easy pace, slight incline. Focus on heel-to-toe push-off. Stop if swelling rises',
+            reps: '10–15 min',
+            equip: 'Bike',
+            note: 'Easy resistance, smooth cadence. Seat high enough for soft knee at bottom. Stop if swelling rises — no running',
           },
         ],
       },

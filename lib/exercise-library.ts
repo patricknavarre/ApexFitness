@@ -281,6 +281,15 @@ const GUIDE_ENTRIES: GuideEntry[] = [
     ],
   },
   {
+    aliases: ['stationary bike', 'stationary bike (easy)'],
+    summary: 'Easy cycling for low-impact ankle endurance — preferred over running while recovering.',
+    cues: [
+      'Easy resistance; smooth cadence — no grinding.',
+      'Seat high enough for a soft knee at the bottom of the stroke.',
+      'Stop if swelling rises; do not substitute with running.',
+    ],
+  },
+  {
     aliases: [
       'leg press',
       'leg press (bilateral)',

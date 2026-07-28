@@ -185,6 +185,11 @@ export default function NutritionPage() {
   const [shakeModalMode, setShakeModalMode] = useState<ShakeModalMode>('pre-analyze');
   const [pendingManualMeal, setPendingManualMeal] = useState<Meal | null>(null);
   const pendingPostAnalyzeItemsRef = useRef<ScanItem[] | null>(null);
+  const [textDescription, setTextDescription] = useState('');
+  const [textLoading, setTextLoading] = useState(false);
+  const [textResult, setTextResult] = useState<ScanResult | null>(null);
+  const [textTargetMeal, setTextTargetMeal] = useState<Meal>(defaultMealForTime);
+  const [addingText, setAddingText] = useState(false);
 
   /** Open camera capture. Must be synchronous so iOS Safari allows the file input to open (user gesture). */
   function openCameraForScan() {
@@ -585,6 +590,128 @@ export default function NutritionPage() {
     setAddingScan(false);
   }
 
+  async function estimateTextFood() {
+    const description = textDescription.trim();
+    if (!description) {
+      toast.error('Enter a food description');
+      return;
+    }
+    setTextLoading(true);
+    setTextResult(null);
+    try {
+      const res = await fetch('/api/nutrition/text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail ? `${data.error} (${data.detail})` : data.error || 'Lookup failed');
+      }
+      const rawItems = Array.isArray(data.items) ? data.items : [];
+      const items: ScanItem[] = rawItems.map((x: ScanItem) => ({
+        foodName: x.foodName ?? 'Unknown',
+        estimatedCalories: Math.max(0, Number(x.estimatedCalories) ?? 0),
+        proteinG: Math.max(0, Number(x.proteinG) ?? 0),
+        carbsG: Math.max(0, Number(x.carbsG) ?? 0),
+        fatG: Math.max(0, Number(x.fatG) ?? 0),
+      }));
+      if (items.length === 0) throw new Error('No food items returned');
+      setTextResult({ items });
+      toast.success('Macros estimated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Lookup failed');
+    }
+    setTextLoading(false);
+  }
+
+  async function addTextItemToMeal(meal: Meal, item: ScanItem) {
+    setAddingText(true);
+    try {
+      const res = await fetch('/api/nutrition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          logDate: date,
+          meal,
+          foodName: item.foodName,
+          calories: item.estimatedCalories,
+          proteinG: item.proteinG,
+          carbsG: item.carbsG,
+          fatG: item.fatG,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setEntries((prev) => [
+        ...prev,
+        {
+          id: data.id,
+          meal,
+          foodName: item.foodName,
+          calories: item.estimatedCalories,
+          proteinG: item.proteinG,
+          carbsG: item.carbsG,
+          fatG: item.fatG,
+        },
+      ]);
+      setTextResult((prev) => {
+        if (!prev || prev.items.length <= 1) return null;
+        const next = prev.items.filter((i) => i !== item);
+        return next.length > 0 ? { items: next } : null;
+      });
+      if (!textResult || textResult.items.length <= 1) {
+        setTextDescription('');
+      }
+      toast.success(`Added ${item.foodName} to ${meal}`);
+    } catch {
+      toast.error('Could not add to log');
+    }
+    setAddingText(false);
+  }
+
+  async function addAllTextToMeal(meal: Meal) {
+    if (!textResult?.items?.length) return;
+    setAddingText(true);
+    try {
+      for (const item of textResult.items) {
+        const res = await fetch('/api/nutrition', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            logDate: date,
+            meal,
+            foodName: item.foodName,
+            calories: item.estimatedCalories,
+            proteinG: item.proteinG,
+            carbsG: item.carbsG,
+            fatG: item.fatG,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        setEntries((prev) => [
+          ...prev,
+          {
+            id: data.id,
+            meal,
+            foodName: item.foodName,
+            calories: item.estimatedCalories,
+            proteinG: item.proteinG,
+            carbsG: item.carbsG,
+            fatG: item.fatG,
+          },
+        ]);
+      }
+      toast.success(`Added ${textResult.items.length} items to ${meal}`);
+      setTextResult(null);
+      setTextDescription('');
+    } catch {
+      toast.error('Could not add some items');
+    }
+    setAddingText(false);
+  }
+
   const remaining = {
     calories: Math.max(0, (targets?.calorieTarget ?? 0) - totals.calories),
     proteinG: Math.max(0, (targets?.proteinTarget ?? 0) - totals.proteinG),
@@ -687,7 +814,7 @@ export default function NutritionPage() {
             Nutrition
           </h1>
           <p className="font-sans text-muted mt-1 text-sm">
-            Snap a photo — AI estimates calories and macros instantly.
+            Snap a photo or type a food — AI estimates calories and macros.
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -919,6 +1046,120 @@ export default function NutritionPage() {
             </div>
           )}
         </div>
+      </section>
+
+      {/* AI text food lookup */}
+      <section className="bg-card border border-border rounded-card p-5 sm:p-6">
+        <h2 className="font-display text-lg text-accent uppercase tracking-wide mb-1">
+          Describe a food
+        </h2>
+        <p className="font-sans text-sm text-muted mb-4">
+          Type what you ate — AI estimates calories and macros. No photo needed.
+        </p>
+
+        {!textResult && (
+          <div className="space-y-3">
+            <label htmlFor="text-food-description" className="sr-only">
+              Food description
+            </label>
+            <textarea
+              id="text-food-description"
+              value={textDescription}
+              onChange={(e) => setTextDescription(e.target.value)}
+              placeholder='e.g. 2 scrambled eggs, toast with butter, and a banana'
+              rows={3}
+              maxLength={500}
+              className="w-full bg-bg3 border border-border rounded-card px-3 py-2.5 font-sans text-sm text-text focus:outline-none focus:border-accent resize-y min-h-[5rem]"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={estimateTextFood}
+                disabled={textLoading || !textDescription.trim()}
+                className="bg-accent text-black font-sans font-bold uppercase text-sm px-5 py-2.5 rounded-card hover:shadow-glow disabled:opacity-50"
+              >
+                {textLoading ? 'Estimating…' : 'Estimate macros'}
+              </button>
+              <span className="font-sans text-xs text-muted">
+                {textDescription.trim().length}/500
+              </span>
+            </div>
+          </div>
+        )}
+
+        {textResult && (
+          <div className="space-y-3">
+            <ul className="space-y-2">
+              {textResult.items.map((item, idx) => (
+                <li
+                  key={idx}
+                  className="flex flex-wrap items-center justify-between gap-2 bg-bg2/60 border border-border rounded-card px-3 py-2.5 font-sans text-sm"
+                >
+                  <span className="font-medium text-text">{item.foodName}</span>
+                  <span className="text-muted text-xs">
+                    {item.estimatedCalories} cal · P{item.proteinG} C{item.carbsG} F{item.fatG}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <label htmlFor="text-target-meal" className="font-sans text-sm text-muted">
+                Add to:
+              </label>
+              <select
+                id="text-target-meal"
+                value={textTargetMeal}
+                onChange={(e) => setTextTargetMeal(e.target.value as Meal)}
+                className="bg-bg3 border border-border text-text font-sans text-sm px-3 py-2 rounded-card focus:outline-none focus:border-accent"
+              >
+                {MEALS.map((m) => (
+                  <option key={m} value={m}>{MEAL_LABELS[m]}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => addAllTextToMeal(textTargetMeal)}
+                disabled={addingText}
+                className="bg-accent text-black font-sans font-bold uppercase text-sm px-4 py-2 rounded-card hover:shadow-glow disabled:opacity-50"
+              >
+                {addingText ? 'Adding…' : 'Add all'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTextResult(null);
+                  setTextDescription('');
+                }}
+                className="font-sans text-xs text-muted hover:text-text underline"
+              >
+                Clear
+              </button>
+            </div>
+            <details className="pt-1">
+              <summary className="font-sans text-xs text-muted cursor-pointer hover:text-text">
+                Add items to different meals
+              </summary>
+              <ul className="mt-2 space-y-2">
+                {textResult.items.map((item, idx) => (
+                  <li key={idx} className="flex flex-wrap items-center gap-2">
+                    <span className="text-text text-sm">{item.foodName}</span>
+                    {MEALS.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => addTextItemToMeal(m, item)}
+                        disabled={addingText}
+                        className="bg-bg3 border border-border text-text text-xs px-2 py-0.5 rounded-card hover:border-accent disabled:opacity-50"
+                      >
+                        {MEAL_LABELS[m]}
+                      </button>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        )}
       </section>
 
       {/* Today's log */}

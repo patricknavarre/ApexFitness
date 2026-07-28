@@ -62,6 +62,7 @@ export const EQUIP_COLORS: Record<string, string> = {
   Bodyweight: '#64748b',
   Step: '#f97316',
   Balance: '#eab308',
+  Bike: '#06b6d4',
   'Bench leg roller': '#f97316',
 };
 

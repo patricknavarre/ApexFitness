@@ -6,12 +6,13 @@ import { getAnthropicModelId } from '@/lib/anthropic-model';
 import { parseFoodJson } from '@/lib/nutrition-food-parse';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 30;
 
-const SYSTEM_PROMPT = `You are a nutrition expert. Analyze this food photo and list each distinct food item separately with estimated nutrition.
+const MAX_DESCRIPTION_LENGTH = 500;
 
-When the user provides a confirmed protein supplement amount, treat it as ground truth.
-Do not estimate or override user-confirmed supplement protein values.
+const SYSTEM_PROMPT = `You are a nutrition expert. Given a natural-language food description, estimate nutrition for each distinct food item.
+
+Interpret portions, quantities, and brands when provided (e.g. "2 scrambled eggs", "large banana", "Quest bar"). Use reasonable standard serving sizes when the user is vague.
 
 Return ONLY valid JSON with no markdown or code fences. Use this exact structure:
 {
@@ -21,9 +22,7 @@ Return ONLY valid JSON with no markdown or code fences. Use this exact structure
   ]
 }
 
-List each visible food item separately (e.g. scrambled eggs, bacon, baked beans, toast, tomatoes). Do not combine into one "meal" entry. Each item gets its own object with foodName, estimatedCalories, proteinG, carbsG, fatG. All numbers must be non-negative.`;
-
-export type { FoodItem } from '@/lib/nutrition-food-parse';
+Split multi-item descriptions into separate items (e.g. "eggs and toast with butter" → eggs, toast, butter). Do not combine into one "meal" entry. Each item gets its own object with foodName, estimatedCalories, proteinG, carbsG, fatG. All numbers must be non-negative.`;
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -40,28 +39,21 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { image, contextNote, confirmedProteinG } = body as {
-      image: string;
-      contextNote?: string;
-      confirmedProteinG?: number;
-    };
+    const rawDescription = typeof body?.description === 'string' ? body.description.trim() : '';
 
-    if (!image || typeof image !== 'string') {
+    if (!rawDescription) {
       return NextResponse.json(
-        { error: 'Missing image (base64)', code: 'BAD_REQUEST' },
+        { error: 'Missing food description', code: 'BAD_REQUEST' },
         { status: 400 }
       );
     }
-
-    const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
-
-    const textParts = ['Analyze this food photo and return the JSON object only.'];
-    if (typeof contextNote === 'string' && contextNote.trim()) {
-      textParts.push(contextNote.trim());
-    }
-    if (typeof confirmedProteinG === 'number' && confirmedProteinG >= 1) {
-      textParts.push(
-        `[SYSTEM NOTE: The user confirmed their protein supplement contains ${confirmedProteinG}g of protein. Use this exact value — do not estimate or override it.]`
+    if (rawDescription.length > MAX_DESCRIPTION_LENGTH) {
+      return NextResponse.json(
+        {
+          error: `Description too long (max ${MAX_DESCRIPTION_LENGTH} characters)`,
+          code: 'BAD_REQUEST',
+        },
+        { status: 400 }
       );
     }
 
@@ -71,17 +63,10 @@ export async function POST(req: Request) {
       messages: [
         {
           role: 'user',
-          content: [
-            { type: 'text', text: textParts.join('\n\n') },
-            {
-              type: 'image',
-              image: base64Data,
-              mimeType: 'image/jpeg',
-            },
-          ],
+          content: `Estimate nutrition for: ${rawDescription}\n\nReturn the JSON object only.`,
         },
       ],
-      maxTokens: 1000,
+      maxTokens: 800,
     });
 
     const items = parseFoodJson(text);
@@ -95,13 +80,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ items });
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e));
-    console.error('Nutrition analyze error:', err.message);
+    console.error('Nutrition text lookup error:', err.message);
     if (e instanceof Error && e.cause) console.error('Cause:', e.cause);
     const isModelOrAuth =
       /model|invalid|unauthorized|api.key|rate.limit/i.test(err.message);
     const userMessage = isModelOrAuth
       ? 'AI service error. Please check your API key and model configuration.'
-      : 'Food analysis failed. Please try again.';
+      : 'Food lookup failed. Please try again.';
     const resBody: { error: string; code: string; detail?: string } = {
       error: userMessage,
       code: 'SERVER_ERROR',
