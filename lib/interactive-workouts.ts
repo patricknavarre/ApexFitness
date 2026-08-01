@@ -4,10 +4,7 @@ import { getLtDanWorkoutForDay } from './ltDanWorkoutData';
 import { getAnklePtWorkoutForDay, ANKLE_PT_PHASE_COLOR } from './anklePtWorkoutData';
 import { getGolfWorkoutForDay, GOLF_PHASE_COLOR } from './golfWorkoutData';
 import { getSoftballWorkoutForDay, SOFTBALL_PHASE_COLOR } from './softballWorkoutData';
-import {
-  getYouthSelfDefenseWorkoutForDay,
-  YOUTH_SD_PHASE_COLOR,
-} from './youthSelfDefenseWorkoutData';
+import { YOUTH_SD_PHASE_COLOR } from './youthSelfDefenseWorkoutData';
 import type { WorkoutDay, WorkoutExercise } from './workout-plans';
 
 function parseSets(sets: string): number {
@@ -43,7 +40,6 @@ export function getInteractiveWorkout(
   if (planId === 'lt-dan') return getLtDanWorkoutForDay(dayNumber);
   if (planId === 'golf') return getGolfWorkoutForDay(dayNumber);
   if (planId === 'softball') return getSoftballWorkoutForDay(dayNumber);
-  if (planId === 'youth-sd') return getYouthSelfDefenseWorkoutForDay(dayNumber);
   if (day) return workoutDayToInteractive(day);
   return null;
 }

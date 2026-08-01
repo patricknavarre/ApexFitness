@@ -103,10 +103,19 @@ export async function PATCH(req: Request) {
     if (typeof body.daysPerWeek === 'number') updates.daysPerWeek = body.daysPerWeek;
     if (typeof body.units === 'string' && (body.units === 'imperial' || body.units === 'metric'))
       updates.units = body.units;
-    if (typeof body.activePlanId === 'string') updates.activePlanId = body.activePlanId;
+    if (body.activePlanId === null) {
+      updates.activePlanId = null;
+      updates.planStartedAt = null;
+      updates.activePlanDayNumber = null;
+      updates.activePlanDaySetOn = null;
+    } else if (typeof body.activePlanId === 'string') {
+      updates.activePlanId = body.activePlanId;
+    }
     if (typeof body.planStartedAt === 'string') {
       const noon = dateOnlyToUtcNoon(body.planStartedAt.slice(0, 10));
       if (noon) updates.planStartedAt = noon;
+    } else if (body.planStartedAt === null && body.activePlanId !== null) {
+      updates.planStartedAt = null;
     }
     if (body.activePlanDayNumber === null) {
       updates.activePlanDayNumber = null;

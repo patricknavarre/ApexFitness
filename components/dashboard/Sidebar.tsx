@@ -13,6 +13,7 @@ import {
   IconSettings,
   IconLogOut,
   IconBook,
+  IconShield,
 } from '@/components/ui/icons';
 
 const NAV = [
@@ -20,6 +21,7 @@ const NAV = [
   { href: '/daily-stoic', label: 'Daily Stoic', Icon: IconBook, mobileLabel: 'Stoic' },
   { href: '/analysis', label: 'AI Analysis', Icon: IconScan },
   { href: '/workouts', label: 'Workouts', Icon: IconDumbbell },
+  { href: '/self-defense', label: 'Self-Defense', Icon: IconShield, mobileLabel: 'Defense' },
   { href: '/nutrition', label: 'Nutrition', Icon: IconLeaf },
   { href: '/progress', label: 'Progress', Icon: IconChart },
   { href: '/settings', label: 'Settings', Icon: IconSettings },

@@ -1,22 +1,12 @@
 import type { InteractiveWorkoutDay, PhaseColor } from './recoveryWorkoutData';
 
+/** Marine-inspired OD / tan phase colors for InteractiveWorkout headers */
 export const YOUTH_SD_PHASE_COLOR: Record<string, PhaseColor> = {
-  STANCE: { bg: '#1e3a5f', accent: '#3b82f6', label: 'Stance & Movement' },
-  'BREAK-FALLS': { bg: '#3b2f00', accent: '#eab308', label: 'Break-Falls' },
-  ESCAPES: { bg: '#1a3a2a', accent: '#10b981', label: 'Escapes' },
-  STRIKES: { bg: '#3b1a00', accent: '#f97316', label: 'Basic Strikes' },
-  REST: { bg: '#1e293b', accent: '#475569', label: 'Rest' },
+  STANCE: { bg: '#2A3318', accent: '#C4A35A', label: 'Stance & Movement' },
+  'BREAK-FALLS': { bg: '#3D4A1F', accent: '#D2B48C', label: 'Break-Falls' },
+  ESCAPES: { bg: '#2A3318', accent: '#8B7355', label: 'Escapes' },
+  STRIKES: { bg: '#3D4A1F', accent: '#C4A35A', label: 'Basic Strikes' },
 };
-
-export const YOUTH_SD_SCHEDULE = [
-  'STANCE',
-  'BREAK-FALLS',
-  'REST',
-  'ESCAPES',
-  'STRIKES',
-  'REST',
-  'REST',
-] as const;
 
 export const YOUTH_SD_EQUIPMENT = [
   'Soft mat or carpeted floor (required for break-falls)',
@@ -188,10 +178,46 @@ export const youthSelfDefenseWorkouts: Record<string, InteractiveWorkoutDay> = {
   },
 };
 
-export function getYouthSelfDefenseWorkoutForDay(
-  dayNumber: number
-): InteractiveWorkoutDay | null {
-  const phase = YOUTH_SD_SCHEDULE[(dayNumber - 1) % YOUTH_SD_SCHEDULE.length];
-  if (phase === 'REST') return null;
-  return youthSelfDefenseWorkouts[phase] ?? null;
-}
+export type YouthSdModule = {
+  id: string;
+  number: number;
+  title: string;
+  phase: string;
+  summary: string;
+  workout: InteractiveWorkoutDay;
+};
+
+export const YOUTH_SD_MODULES: YouthSdModule[] = [
+  {
+    id: 'stance',
+    number: 1,
+    title: 'Stance & Movement',
+    phase: 'STANCE',
+    summary: 'Ready stance holds and 45° footwork without crossing the legs.',
+    workout: youthSelfDefenseWorkouts.STANCE,
+  },
+  {
+    id: 'break-falls',
+    number: 2,
+    title: 'Break-Falls',
+    phase: 'BREAK-FALLS',
+    summary: 'Front, back, and side break-falls from knees or squat only.',
+    workout: youthSelfDefenseWorkouts['BREAK-FALLS'],
+  },
+  {
+    id: 'escapes',
+    number: 3,
+    title: 'Escapes from Grabs',
+    phase: 'ESCAPES',
+    summary: 'Wrist, bear hug, and headlock escapes — then clear, distance, yell/run.',
+    workout: youthSelfDefenseWorkouts.ESCAPES,
+  },
+  {
+    id: 'strikes',
+    number: 4,
+    title: 'Basic Strikes',
+    phase: 'STRIKES',
+    summary: 'Palm heel, hammer fist, knee, and front kick to pad — strike then run.',
+    workout: youthSelfDefenseWorkouts.STRIKES,
+  },
+];

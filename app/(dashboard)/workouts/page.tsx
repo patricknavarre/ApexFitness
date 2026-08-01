@@ -14,7 +14,6 @@ import { RECOVERY_EQUIPMENT } from '@/lib/recoveryWorkoutData';
 import { ANKLE_PT_EQUIPMENT } from '@/lib/anklePtWorkoutData';
 import { GOLF_EQUIPMENT } from '@/lib/golfWorkoutData';
 import { SOFTBALL_EQUIPMENT } from '@/lib/softballWorkoutData';
-import { YOUTH_SD_EQUIPMENT } from '@/lib/youthSelfDefenseWorkoutData';
 import { todayLocal, toLocalDateOnly } from '@/lib/local-date';
 import { InteractiveWorkout, clearWorkoutSetProgress } from '@/components/workouts/InteractiveWorkout';
 import { ExerciseGuide } from '@/components/workouts/ExerciseGuide';
@@ -559,7 +558,7 @@ const EQUIPMENT_SECTIONS: {
   {
     key: 'specialty',
     label: 'Specialty',
-    subtitle: 'Golf, softball, youth self-defense, post-boot return & more',
+    subtitle: 'Golf, softball, post-boot return, ankle PT & interactive mode',
   },
   { key: 'none', label: 'No gym', subtitle: 'Bodyweight, bands, minimal or no equipment' },
   { key: 'home', label: 'Home gym', subtitle: 'Dumbbells, bands, bench or pull-up bar' },
@@ -878,9 +877,7 @@ function WorkoutsPageInner() {
                   ? GOLF_EQUIPMENT
                   : workoutMode.planId === 'softball'
                     ? SOFTBALL_EQUIPMENT
-                    : workoutMode.planId === 'youth-sd'
-                      ? YOUTH_SD_EQUIPMENT
-                      : ['Adjustable bench', 'Dumbbells', 'Resistance bands', 'Band cable column']
+                    : ['Adjustable bench', 'Dumbbells', 'Resistance bands', 'Band cable column']
           }
           onClose={() => setWorkoutMode(null)}
           onMarkDone={() => {
