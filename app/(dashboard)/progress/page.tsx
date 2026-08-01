@@ -123,8 +123,8 @@ export default function ProgressPage() {
   useEffect(() => {
     let cancelled = false;
     fetch('/api/user/me')
-      .then((res) => (res.ok ? res.json() : {}))
-      .then((data) => {
+      .then((res) => (res.ok ? res.json() : Promise.resolve({})))
+      .then((data: { activePlanId?: string | null; planStartedAt?: string | null }) => {
         if (cancelled) return;
         setActivePlanId(data.activePlanId ?? null);
         setPlanStartedAt(
