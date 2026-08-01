@@ -640,30 +640,30 @@ function WorkoutsPageInner() {
     const plan = WORKOUT_PLANS.find((p) => p.id === activePlanId);
     if (!plan?.interactive) return;
 
-    const day = getActivePlanDay(
+    const activeDay = getActivePlanDay(
       plan,
       planStartedAt,
       activePlanDayNumber,
       activePlanDaySetOn,
       todayLocal()
     );
-    if (!day || day.isRest) return;
+    if (!activeDay || activeDay.day.isRest) return;
 
     const workout = getInteractiveWorkout(
       activePlanId,
-      day.dayNumber,
-      plan.days.find((d) => d.dayNumber === day.dayNumber)
+      activeDay.dayNumber,
+      plan.days.find((d) => d.dayNumber === activeDay.dayNumber)
     );
     if (!workout) {
       toast.error('No workout for this day');
       return;
     }
 
-    clearWorkoutSetProgress(activePlanId, day.dayNumber);
+    clearWorkoutSetProgress(activePlanId, activeDay.dayNumber);
     setWorkoutMode({
       planId: activePlanId,
-      dayNumber: day.dayNumber,
-      dayTitle: day.title,
+      dayNumber: activeDay.dayNumber,
+      dayTitle: activeDay.day.title,
     });
   }, [
     loading,
