@@ -3,10 +3,21 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from 'recharts';
 import { toast } from 'sonner';
 import { WORKOUT_PLANS } from '@/lib/workout-plans';
 import { getCardioLabel } from '@/lib/cardio';
+import { MomentumCard } from '@/components/progress/MomentumCard';
 
 type AnalysisSummary = {
   bodyType?: string;
@@ -69,6 +80,8 @@ export default function ProgressPage() {
   const [compareLeft, setCompareLeft] = useState<string>('');
   const [compareRight, setCompareRight] = useState<string>('');
   const [sliderPos, setSliderPos] = useState(50);
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [planStartedAt, setPlanStartedAt] = useState<string | null>(null);
   const compareContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -108,6 +121,25 @@ export default function ProgressPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    fetch('/api/user/me')
+      .then((res) => (res.ok ? res.json() : {}))
+      .then((data) => {
+        if (cancelled) return;
+        setActivePlanId(data.activePlanId ?? null);
+        setPlanStartedAt(
+          typeof data.planStartedAt === 'string' ? data.planStartedAt.slice(0, 10) : null
+        );
+      })
+      .catch(() => {
+        // ignore
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (photos.length > 0 && !compareLeft) setCompareLeft(photos[0].id);
     if (photos.length > 1 && !compareRight) setCompareRight(photos[1].id);
   }, [photos, compareLeft, compareRight]);
@@ -132,6 +164,15 @@ export default function ProgressPage() {
       weight: Math.round((p.weightKg ?? 0) * 2.205),
     }));
 
+  const weeklyActivity = (dailySummary ?? [])
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((day) => ({
+      date: format(new Date(day.date + 'T12:00:00'), 'EEE'),
+      workouts: day.workouts.length,
+      burn: day.totalBurn,
+    }));
+
   async function handleDeletePhoto(id: string) {
     if (!confirm('Delete this progress photo?')) return;
     try {
@@ -147,9 +188,7 @@ export default function ProgressPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
-          Progress
-        </h1>
+        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">Progress</h1>
         <div className="rounded-card border border-border bg-bg2 h-64 animate-pulse" />
       </div>
     );
@@ -158,15 +197,77 @@ export default function ProgressPage() {
   return (
     <div className="max-w-4xl space-y-8">
       <div>
-        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
-          Progress
-        </h1>
+        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">Progress</h1>
         <p className="font-sans text-muted mt-2">
-          Your photo timeline. Save photos from AI Analysis to build your history.
+          Momentum, milestones, and your photo timeline.
         </p>
       </div>
 
-      {/* Daily calorie balance */}
+      <MomentumCard
+        activePlanId={activePlanId}
+        planStartedAt={planStartedAt}
+        variant="full"
+      />
+
+      <section>
+        <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-2">
+          Weekly activity
+        </h2>
+        <p className="font-sans text-muted text-sm mb-4">
+          Workouts logged and estimated burn over the last 7 days.
+        </p>
+        {summaryLoading ? (
+          <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
+            Loading…
+          </div>
+        ) : weeklyActivity.length > 0 ? (
+          <div className="rounded-card border border-border bg-card p-4">
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={weeklyActivity}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <YAxis
+                  yAxisId="left"
+                  allowDecimals={false}
+                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: '#13131a',
+                    border: '1px solid #334155',
+                    borderRadius: 8,
+                  }}
+                />
+                <Bar
+                  yAxisId="left"
+                  dataKey="workouts"
+                  name="Workouts"
+                  fill="#00d2ff"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  yAxisId="right"
+                  dataKey="burn"
+                  name="Burn (cal)"
+                  fill="#e8ff47"
+                  radius={[4, 4, 0, 0]}
+                  opacity={0.7}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
+            No activity yet. Complete a workout to light this up.
+          </div>
+        )}
+      </section>
+
       <section>
         <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-2">
           Daily calorie balance
@@ -201,19 +302,11 @@ export default function ProgressPage() {
                       <td className="p-3 text-text">
                         {day.workouts.length === 0
                           ? '—'
-                          : day.workouts
-                              .map((w) => getWorkoutLabel(w))
-                              .join(', ')}
+                          : day.workouts.map((w) => getWorkoutLabel(w)).join(', ')}
                       </td>
                       <td className="p-3 text-text">{day.totalBurn} cal</td>
                       <td className="p-3">
-                        <span
-                          className={
-                            day.surplus >= 0
-                              ? 'text-accent3'
-                              : 'text-accent2'
-                          }
-                        >
+                        <span className={day.surplus >= 0 ? 'text-accent3' : 'text-accent2'}>
                           {day.surplus >= 0 ? '+' : ''}
                           {day.surplus} cal
                         </span>
@@ -224,17 +317,11 @@ export default function ProgressPage() {
               </table>
             </div>
             <div className="p-3 border-t border-border">
-              <Link
-                href="/nutrition"
-                className="font-sans text-sm text-accent hover:underline"
-              >
+              <Link href="/nutrition" className="font-sans text-sm text-accent hover:underline">
                 Log meals
               </Link>
               {' · '}
-              <Link
-                href="/workouts"
-                className="font-sans text-sm text-accent hover:underline"
-              >
+              <Link href="/workouts" className="font-sans text-sm text-accent hover:underline">
                 Workouts
               </Link>
             </div>
@@ -298,7 +385,6 @@ export default function ProgressPage() {
             </section>
           )}
 
-          {/* Comparison slider */}
           {photos.length >= 2 && (
             <section>
               <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-3">
@@ -359,8 +445,8 @@ export default function ProgressPage() {
                       const onMove = (e2: MouseEvent) => {
                         const rect = compareContainerRef.current?.getBoundingClientRect();
                         if (!rect) return;
-                        const pct = ((e2.clientX - rect.left) / rect.width) * 100;
-                        setSliderPos(Math.min(100, Math.max(0, pct)));
+                        const next = ((e2.clientX - rect.left) / rect.width) * 100;
+                        setSliderPos(Math.min(100, Math.max(0, next)));
                       };
                       const onUp = () => {
                         document.removeEventListener('mousemove', onMove);
@@ -371,14 +457,10 @@ export default function ProgressPage() {
                       onMove(e.nativeEvent);
                     }}
                   />
-                  <div
-                    className="absolute top-2 left-2 font-sans text-xs bg-black/60 text-white px-2 py-1 rounded"
-                  >
+                  <div className="absolute top-2 left-2 font-sans text-xs bg-black/60 text-white px-2 py-1 rounded">
                     {format(new Date(leftPhoto!.takenAt), 'MMM d, yyyy')}
                   </div>
-                  <div
-                    className="absolute top-2 right-2 font-sans text-xs bg-black/60 text-white px-2 py-1 rounded"
-                  >
+                  <div className="absolute top-2 right-2 font-sans text-xs bg-black/60 text-white px-2 py-1 rounded">
                     {format(new Date(rightPhoto!.takenAt), 'MMM d, yyyy')}
                   </div>
                 </div>
@@ -386,7 +468,6 @@ export default function ProgressPage() {
             </section>
           )}
 
-          {/* Timeline */}
           <section>
             <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-3">
               Timeline

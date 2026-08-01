@@ -10,6 +10,7 @@ type ProgressPhotoItem = {
   photoUrl: string;
   thumbnailUrl: string;
   takenAt: string;
+  weightKg?: number | null;
 };
 
 export function ProgressSnapshotCard() {
@@ -23,7 +24,11 @@ export function ProgressSnapshotCard() {
       .then((data) => {
         if (!cancelled) {
           const list = (data.photos ?? []) as ProgressPhotoItem[];
-          setPhotos([...list].sort((a, b) => new Date(a.takenAt).getTime() - new Date(b.takenAt).getTime()));
+          setPhotos(
+            [...list].sort(
+              (a, b) => new Date(a.takenAt).getTime() - new Date(b.takenAt).getTime()
+            )
+          );
         }
       })
       .catch(() => {
@@ -49,6 +54,19 @@ export function ProgressSnapshotCard() {
   const first = photos[0];
   const latest = photos.length > 0 ? photos[photos.length - 1] : null;
 
+  let weightDeltaLbs: number | null = null;
+  if (
+    first &&
+    latest &&
+    first.id !== latest.id &&
+    typeof first.weightKg === 'number' &&
+    first.weightKg > 0 &&
+    typeof latest.weightKg === 'number' &&
+    latest.weightKg > 0
+  ) {
+    weightDeltaLbs = Math.round((latest.weightKg - first.weightKg) * 2.205 * 10) / 10;
+  }
+
   return (
     <Link
       href={photos.length >= 2 ? '/progress' : '/analysis'}
@@ -58,25 +76,55 @@ export function ProgressSnapshotCard() {
         Progress
       </h2>
       {photos.length >= 2 && first && latest ? (
-        <div className="flex gap-3 items-center">
-          <div className="flex-1 text-center">
-            <div className="relative aspect-[3/4] max-h-28 mx-auto rounded-card overflow-hidden bg-bg2">
-              <Image src={first.thumbnailUrl} alt="First photo" fill className="object-cover" unoptimized />
+        <>
+          <div className="flex gap-3 items-center">
+            <div className="flex-1 text-center">
+              <div className="relative aspect-[3/4] max-h-28 mx-auto rounded-card overflow-hidden bg-bg2">
+                <Image
+                  src={first.thumbnailUrl}
+                  alt="First photo"
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+              </div>
+              <p className="font-mono text-[10px] text-muted mt-1">
+                {format(new Date(first.takenAt), 'MMM d')}
+              </p>
             </div>
-            <p className="font-mono text-[10px] text-muted mt-1">
-              {format(new Date(first.takenAt), 'MMM d')}
-            </p>
-          </div>
-          <span className="text-muted font-mono text-xs">→</span>
-          <div className="flex-1 text-center">
-            <div className="relative aspect-[3/4] max-h-28 mx-auto rounded-card overflow-hidden bg-bg2">
-              <Image src={latest.thumbnailUrl} alt="Latest photo" fill className="object-cover" unoptimized />
+            <div className="flex flex-col items-center gap-1 shrink-0">
+              <span className="text-muted font-mono text-xs">→</span>
+              {weightDeltaLbs != null && (
+                <span
+                  className={`font-mono text-xs font-bold ${
+                    weightDeltaLbs < 0
+                      ? 'text-accent3'
+                      : weightDeltaLbs > 0
+                        ? 'text-accent'
+                        : 'text-muted'
+                  }`}
+                >
+                  {weightDeltaLbs > 0 ? '+' : ''}
+                  {weightDeltaLbs} lbs
+                </span>
+              )}
             </div>
-            <p className="font-mono text-[10px] text-muted mt-1">
-              {format(new Date(latest.takenAt), 'MMM d')}
-            </p>
+            <div className="flex-1 text-center">
+              <div className="relative aspect-[3/4] max-h-28 mx-auto rounded-card overflow-hidden bg-bg2">
+                <Image
+                  src={latest.thumbnailUrl}
+                  alt="Latest photo"
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+              </div>
+              <p className="font-mono text-[10px] text-muted mt-1">
+                {format(new Date(latest.takenAt), 'MMM d')}
+              </p>
+            </div>
           </div>
-        </div>
+        </>
       ) : (
         <p className="font-sans text-sm text-muted">
           Add progress photos via AI Analysis to track your transformation.

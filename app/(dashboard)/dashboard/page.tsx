@@ -10,6 +10,7 @@ import { CaloriesTodayCard } from '@/components/dashboard/CaloriesTodayCard';
 import { MacrosTodayCard } from '@/components/dashboard/MacrosTodayCard';
 import { ProgressSnapshotCard } from '@/components/dashboard/ProgressSnapshotCard';
 import { AiInsightCard } from '@/components/dashboard/AiInsightCard';
+import { MomentumCard } from '@/components/progress/MomentumCard';
 
 function formatDisplayDate(): string {
   return new Date().toLocaleDateString(undefined, {
@@ -59,6 +60,8 @@ export default async function DashboardPage() {
         activePlanDayNumber={activePlanDayNumber}
         activePlanDaySetOn={activePlanDaySetOn}
       />
+
+      <MomentumCard activePlanId={activePlanId} planStartedAt={planStartedAt} />
 
       <TodayWorkoutCard
         activePlanId={activePlanId}

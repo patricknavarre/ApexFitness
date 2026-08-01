@@ -7,6 +7,7 @@ import { getPhaseColors } from '@/lib/interactive-workouts';
 import { todayLocal } from '@/lib/local-date';
 import { RestTimer } from './RestTimer';
 import { ExerciseGuide } from './ExerciseGuide';
+import { toast } from 'sonner';
 
 type Props = {
   planId: string;
@@ -17,6 +18,10 @@ type Props = {
   onClose: () => void;
   onMarkDone?: () => void;
 };
+
+type SetRow = { weight: string; reps: string };
+
+type LastHint = { weight: number; reps: number; setCount: number };
 
 /** localStorage keys for set checkboxes (legacy = forever; dated = today only). */
 export function workoutDoneStorageKeys(planId: string, dayNumber: number, date = todayLocal()) {
@@ -63,6 +68,15 @@ function completedCount(
   );
 }
 
+function parsePrescribedReps(reps: string): string {
+  const m = reps.match(/\d+/);
+  return m ? m[0] : '';
+}
+
+function emptyRows(setCount: number, defaultReps: string): SetRow[] {
+  return Array.from({ length: setCount }, () => ({ weight: '', reps: defaultReps }));
+}
+
 export function InteractiveWorkout({
   planId,
   dayNumber,
@@ -81,6 +95,9 @@ export function InteractiveWorkout({
   const [showEquip, setShowEquip] = useState(false);
   const [timerVisible, setTimerVisible] = useState(false);
   const [restDuration, setRestDuration] = useState(90);
+  const [setRows, setSetRows] = useState<Record<string, SetRow[]>>({});
+  const [lastHints, setLastHints] = useState<Record<string, LastHint>>({});
+  const [savingExercise, setSavingExercise] = useState<string | null>(null);
 
   const phaseColors = getPhaseColors(planId);
   const colors = phaseColors[workout.phase] ?? {
@@ -91,7 +108,6 @@ export function InteractiveWorkout({
 
   useEffect(() => {
     try {
-      // Only restore today's in-progress session — never the old forever key.
       localStorage.removeItem(legacyStorageKey);
       const saved = localStorage.getItem(storageKey);
       setDone(saved ? (JSON.parse(saved) as Record<string, boolean>) : {});
@@ -110,6 +126,59 @@ export function InteractiveWorkout({
     }
   }, [done, storageKey, hydrated]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const initial: Record<string, SetRow[]> = {};
+    for (const section of workout.sections) {
+      for (const ex of section.exercises) {
+        initial[ex.name] = emptyRows(ex.sets, parsePrescribedReps(ex.reps));
+      }
+    }
+    setSetRows(initial);
+
+    fetch(`/api/workout/sets?latest=1&planId=${encodeURIComponent(planId)}`)
+      .then((res) => (res.ok ? res.json() : { logs: [] }))
+      .then((data: { logs?: { exerciseName?: string | null; sets?: { weight: number; reps: number }[] }[] }) => {
+        if (cancelled) return;
+        const hints: Record<string, LastHint> = {};
+        const nextRows: Record<string, SetRow[]> = { ...initial };
+        for (const log of data.logs ?? []) {
+          const name = log.exerciseName;
+          if (!name || !log.sets?.length) continue;
+          const ex = workout.sections.flatMap((s) => s.exercises).find((e) => e.name === name);
+          if (!ex) continue;
+          const defaultReps = parsePrescribedReps(ex.reps);
+          const rows = emptyRows(ex.sets, defaultReps);
+          for (let i = 0; i < rows.length; i++) {
+            const src = log.sets[i] ?? log.sets[log.sets.length - 1];
+            if (!src) continue;
+            rows[i] = {
+              weight: src.weight > 0 ? String(src.weight) : src.weight === 0 ? '0' : '',
+              reps: src.reps > 0 ? String(src.reps) : defaultReps,
+            };
+          }
+          nextRows[name] = rows;
+          const top = log.sets.reduce((best, s) =>
+            s.weight * s.reps > best.weight * best.reps ? s : best
+          );
+          hints[name] = {
+            weight: top.weight,
+            reps: top.reps,
+            setCount: log.sets.length,
+          };
+        }
+        setSetRows(nextRows);
+        setLastHints(hints);
+      })
+      .catch(() => {
+        // keep empty prefills
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [planId, workout]);
+
   const closeTimer = useCallback(() => setTimerVisible(false), []);
 
   const toggleSet = useCallback(
@@ -123,6 +192,54 @@ export function InteractiveWorkout({
   );
 
   const isDone = (exName: string, si: number) => !!done[`${dayNumber}-${exName}-${si}`];
+
+  function updateRow(exName: string, rowIdx: number, field: 'weight' | 'reps', value: string) {
+    setSetRows((prev) => {
+      const rows = [...(prev[exName] ?? [])];
+      if (!rows[rowIdx]) return prev;
+      rows[rowIdx] = { ...rows[rowIdx], [field]: value };
+      return { ...prev, [exName]: rows };
+    });
+  }
+
+  async function saveLoads(exName: string) {
+    const rows = setRows[exName] ?? [];
+    const sets = rows
+      .map((r, idx) => ({
+        setIndex: idx + 1,
+        weight: Number(r.weight) || 0,
+        reps: Number(r.reps) || 0,
+      }))
+      .filter((s) => s.reps > 0);
+
+    if (sets.length === 0) {
+      toast.error('Enter reps for at least one set');
+      return;
+    }
+
+    setSavingExercise(exName);
+    try {
+      const res = await fetch('/api/workout/sets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId, dayNumber, exerciseName: exName, sets }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save');
+      const top = sets.reduce((best, s) =>
+        s.weight * s.reps > best.weight * best.reps ? s : best
+      );
+      setLastHints((prev) => ({
+        ...prev,
+        [exName]: { weight: top.weight, reps: top.reps, setCount: sets.length },
+      }));
+      toast.success('Loads saved');
+    } catch {
+      toast.error('Could not save loads');
+    } finally {
+      setSavingExercise(null);
+    }
+  }
 
   const total = totalSets(workout);
   const completed = completedCount(workout, done, dayNumber);
@@ -210,6 +327,8 @@ export function InteractiveWorkout({
                   isDone(ex.name, si)
                 );
                 const equipColor = EQUIP_COLORS[ex.equip] ?? '#64748b';
+                const rows = setRows[ex.name] ?? emptyRows(ex.sets, parsePrescribedReps(ex.reps));
+                const hint = lastHints[ex.name];
                 return (
                   <div
                     key={ex.name}
@@ -231,29 +350,74 @@ export function InteractiveWorkout({
                     <p className="font-sans text-xs text-muted mb-1">
                       {ex.sets} sets × {ex.reps}
                     </p>
+                    {hint && (
+                      <p className="font-mono text-[10px] text-accent3 mb-1">
+                        Last: {hint.setCount} sets, top {hint.weight} × {hint.reps}
+                      </p>
+                    )}
                     {ex.note && (
                       <p className="font-sans text-xs text-muted/80 mb-2 italic">{ex.note}</p>
                     )}
                     <div className="mb-2">
                       <ExerciseGuide exerciseName={ex.name} />
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {Array.from({ length: ex.sets }).map((_, si) => (
-                        <button
-                          key={si}
-                          type="button"
-                          onClick={() => toggleSet(ex.name, si)}
-                          className="flex h-[34px] w-[34px] items-center justify-center rounded-lg border-2 font-mono text-xs font-extrabold transition-colors"
-                          style={{
-                            borderColor: isDone(ex.name, si) ? colors.accent : '#334155',
-                            backgroundColor: isDone(ex.name, si) ? colors.accent : 'transparent',
-                            color: isDone(ex.name, si) ? '#fff' : '#475569',
-                          }}
-                        >
-                          {isDone(ex.name, si) ? '✓' : si + 1}
-                        </button>
+
+                    <div className="space-y-2 mb-2">
+                      {rows.map((row, si) => (
+                        <div key={si} className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleSet(ex.name, si)}
+                            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border-2 font-mono text-xs font-extrabold transition-colors"
+                            style={{
+                              borderColor: isDone(ex.name, si) ? colors.accent : '#334155',
+                              backgroundColor: isDone(ex.name, si) ? colors.accent : 'transparent',
+                              color: isDone(ex.name, si) ? '#fff' : '#475569',
+                            }}
+                          >
+                            {isDone(ex.name, si) ? '✓' : si + 1}
+                          </button>
+                          <label className="flex flex-1 items-center gap-1.5 min-w-0">
+                            <span className="font-mono text-[9px] uppercase text-muted shrink-0">
+                              lbs
+                            </span>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={0}
+                              step="any"
+                              placeholder="0"
+                              value={row.weight}
+                              onChange={(e) => updateRow(ex.name, si, 'weight', e.target.value)}
+                              className="w-full min-w-0 rounded-lg border border-border bg-bg px-2 py-1.5 font-mono text-sm text-text outline-none focus:border-accent3"
+                            />
+                          </label>
+                          <label className="flex flex-1 items-center gap-1.5 min-w-0">
+                            <span className="font-mono text-[9px] uppercase text-muted shrink-0">
+                              reps
+                            </span>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={0}
+                              placeholder="—"
+                              value={row.reps}
+                              onChange={(e) => updateRow(ex.name, si, 'reps', e.target.value)}
+                              className="w-full min-w-0 rounded-lg border border-border bg-bg px-2 py-1.5 font-mono text-sm text-text outline-none focus:border-accent3"
+                            />
+                          </label>
+                        </div>
                       ))}
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => saveLoads(ex.name)}
+                      disabled={savingExercise === ex.name}
+                      className="w-full rounded-lg border border-border py-1.5 font-sans text-xs font-semibold text-muted hover:border-accent3 hover:text-accent3 disabled:opacity-40 transition-colors"
+                    >
+                      {savingExercise === ex.name ? 'Saving…' : 'Save loads'}
+                    </button>
                   </div>
                 );
               })}
