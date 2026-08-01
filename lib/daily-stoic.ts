@@ -56,6 +56,26 @@ export function formatDateLabel(date: Date = new Date()): string {
   });
 }
 
+export function formatDailyStoicShareText(meditation: DailyStoicMeditation & { dateLabel?: string }): string {
+  const lines: string[] = [];
+
+  if (meditation.dateLabel) {
+    lines.push(meditation.dateLabel);
+  }
+  lines.push(meditation.title);
+  lines.push('');
+  lines.push(`"${meditation.quote}"`);
+  if (meditation.source) {
+    lines.push(`— ${meditation.source}`);
+  }
+  lines.push('');
+  lines.push(meditation.reflection);
+  lines.push('');
+  lines.push('From The Daily Stoic by Ryan Holiday & Stephen Hanselman');
+
+  return lines.join('\n');
+}
+
 function formatDateLabelFromKey(key: string): string {
   const parsed = parseKey(key);
   if (!parsed) return key;
