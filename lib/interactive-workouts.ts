@@ -2,6 +2,8 @@ import type { InteractiveWorkoutDay } from './recoveryWorkoutData';
 import { getRecoveryWorkoutForDay, PHASE_COLOR } from './recoveryWorkoutData';
 import { getLtDanWorkoutForDay } from './ltDanWorkoutData';
 import { getAnklePtWorkoutForDay, ANKLE_PT_PHASE_COLOR } from './anklePtWorkoutData';
+import { getGolfWorkoutForDay, GOLF_PHASE_COLOR } from './golfWorkoutData';
+import { getSoftballWorkoutForDay, SOFTBALL_PHASE_COLOR } from './softballWorkoutData';
 import type { WorkoutDay, WorkoutExercise } from './workout-plans';
 
 function parseSets(sets: string): number {
@@ -35,6 +37,8 @@ export function getInteractiveWorkout(
   if (planId === 'recovery') return getRecoveryWorkoutForDay(dayNumber);
   if (planId === 'ankle-pt') return getAnklePtWorkoutForDay(dayNumber);
   if (planId === 'lt-dan') return getLtDanWorkoutForDay(dayNumber);
+  if (planId === 'golf') return getGolfWorkoutForDay(dayNumber);
+  if (planId === 'softball') return getSoftballWorkoutForDay(dayNumber);
   if (day) return workoutDayToInteractive(day);
   return null;
 }
@@ -52,6 +56,20 @@ export function getPhaseColors(planId: string): Record<string, { bg: string; acc
       STRENGTH: ANKLE_PT_PHASE_COLOR.STRENGTH,
       BALANCE: ANKLE_PT_PHASE_COLOR.BALANCE,
       MOBILITY: ANKLE_PT_PHASE_COLOR.MOBILITY,
+    };
+  }
+  if (planId === 'golf') {
+    return {
+      MOBILITY: GOLF_PHASE_COLOR.MOBILITY,
+      POWER: GOLF_PHASE_COLOR.POWER,
+      STABILITY: GOLF_PHASE_COLOR.STABILITY,
+    };
+  }
+  if (planId === 'softball') {
+    return {
+      POWER: SOFTBALL_PHASE_COLOR.POWER,
+      'ARM CARE': SOFTBALL_PHASE_COLOR['ARM CARE'],
+      'LOWER DRIVE': SOFTBALL_PHASE_COLOR['LOWER DRIVE'],
     };
   }
   return {
