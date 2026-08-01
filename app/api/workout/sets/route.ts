@@ -9,6 +9,15 @@ type SetInput = {
   reps: number;
 };
 
+type LeanSetLog = {
+  _id: unknown;
+  planId?: string | null;
+  dayNumber?: number | null;
+  exerciseName?: string | null;
+  sets?: SetInput[];
+  loggedAt?: Date | null;
+};
+
 function startOfDay(dateStr: string): Date {
   const d = new Date(dateStr);
   d.setUTCHours(0, 0, 0, 0);
@@ -21,14 +30,7 @@ function endOfDay(dateStr: string): Date {
   return d;
 }
 
-function mapLog(l: {
-  _id: unknown;
-  planId?: string | null;
-  dayNumber?: number | null;
-  exerciseName?: string | null;
-  sets?: SetInput[];
-  loggedAt?: Date | null;
-}) {
+function mapLog(l: LeanSetLog) {
   return {
     id: String(l._id),
     planId: l.planId ?? null,
@@ -125,10 +127,10 @@ export async function GET(req: Request) {
         sets: { $exists: true, $ne: [] },
       };
       if (planId) query.planId = planId;
-      const log = await WorkoutLog.findOne(query)
+      const log = (await WorkoutLog.findOne(query)
         .sort({ loggedAt: -1 })
         .select('planId dayNumber exerciseName sets loggedAt')
-        .lean();
+        .lean()) as LeanSetLog | null;
       return NextResponse.json({ log: log ? mapLog(log) : null });
     }
 
@@ -147,14 +149,14 @@ export async function GET(req: Request) {
         }
         query.dayNumber = dayNumber;
       }
-      const logs = await WorkoutLog.find(query)
+      const logs = (await WorkoutLog.find(query)
         .sort({ loggedAt: -1 })
         .select('planId dayNumber exerciseName sets loggedAt')
-        .lean();
+        .lean()) as LeanSetLog[];
 
       const byExercise = new Map<string, ReturnType<typeof mapLog>>();
       for (const l of logs) {
-        const name = l.exerciseName as string | null;
+        const name = l.exerciseName ?? null;
         if (!name || byExercise.has(name)) continue;
         byExercise.set(name, mapLog(l));
       }
@@ -182,10 +184,10 @@ export async function GET(req: Request) {
       query.dayNumber = dayNumber;
     }
 
-    const logs = await WorkoutLog.find(query)
+    const logs = (await WorkoutLog.find(query)
       .sort({ loggedAt: -1 })
       .select('planId dayNumber exerciseName sets loggedAt')
-      .lean();
+      .lean()) as LeanSetLog[];
 
     return NextResponse.json({
       logs: logs.map((l) => mapLog(l)),
