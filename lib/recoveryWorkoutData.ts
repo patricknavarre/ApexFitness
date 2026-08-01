@@ -65,6 +65,8 @@ export const EQUIP_COLORS: Record<string, string> = {
   Bike: '#06b6d4',
   'Bench leg roller': '#f97316',
   'Med ball': '#ef4444',
+  Pad: '#f97316',
+  Mat: '#a855f7',
 };
 
 export const recoveryWorkouts: Record<string, InteractiveWorkoutDay> = {

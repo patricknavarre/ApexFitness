@@ -4,6 +4,10 @@ import { getLtDanWorkoutForDay } from './ltDanWorkoutData';
 import { getAnklePtWorkoutForDay, ANKLE_PT_PHASE_COLOR } from './anklePtWorkoutData';
 import { getGolfWorkoutForDay, GOLF_PHASE_COLOR } from './golfWorkoutData';
 import { getSoftballWorkoutForDay, SOFTBALL_PHASE_COLOR } from './softballWorkoutData';
+import {
+  getYouthSelfDefenseWorkoutForDay,
+  YOUTH_SD_PHASE_COLOR,
+} from './youthSelfDefenseWorkoutData';
 import type { WorkoutDay, WorkoutExercise } from './workout-plans';
 
 function parseSets(sets: string): number {
@@ -39,6 +43,7 @@ export function getInteractiveWorkout(
   if (planId === 'lt-dan') return getLtDanWorkoutForDay(dayNumber);
   if (planId === 'golf') return getGolfWorkoutForDay(dayNumber);
   if (planId === 'softball') return getSoftballWorkoutForDay(dayNumber);
+  if (planId === 'youth-sd') return getYouthSelfDefenseWorkoutForDay(dayNumber);
   if (day) return workoutDayToInteractive(day);
   return null;
 }
@@ -70,6 +75,14 @@ export function getPhaseColors(planId: string): Record<string, { bg: string; acc
       POWER: SOFTBALL_PHASE_COLOR.POWER,
       'ARM CARE': SOFTBALL_PHASE_COLOR['ARM CARE'],
       'LOWER DRIVE': SOFTBALL_PHASE_COLOR['LOWER DRIVE'],
+    };
+  }
+  if (planId === 'youth-sd') {
+    return {
+      STANCE: YOUTH_SD_PHASE_COLOR.STANCE,
+      'BREAK-FALLS': YOUTH_SD_PHASE_COLOR['BREAK-FALLS'],
+      ESCAPES: YOUTH_SD_PHASE_COLOR.ESCAPES,
+      STRIKES: YOUTH_SD_PHASE_COLOR.STRIKES,
     };
   }
   return {
