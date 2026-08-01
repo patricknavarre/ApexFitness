@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   WORKOUT_PLANS,
   getActivePlanDay,
@@ -584,7 +585,10 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default function WorkoutsPage() {
+function WorkoutsPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const autoStartHandled = useRef(false);
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [planStartedAt, setPlanStartedAt] = useState<string | null>(null);
   const [activePlanDayNumber, setActivePlanDayNumber] = useState<number | null>(null);
@@ -595,7 +599,7 @@ export default function WorkoutsPage() {
   const [cardioExercise, setCardioExercise] = useState<string>(CARDIO_OPTIONS[0]?.id ?? 'cycling');
   const [cardioMinutes, setCardioMinutes] = useState<number | ''>(30);
   const [cardioLoading, setCardioLoading] = useState(false);
-   const [latestSetLogs, setLatestSetLogs] = useState<
+  const [latestSetLogs, setLatestSetLogs] = useState<
     Record<string, WorkoutSetLog | undefined>
   >({});
   const [workoutMode, setWorkoutMode] = useState<WorkoutModeState>(null);
@@ -623,6 +627,53 @@ export default function WorkoutsPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (loading || autoStartHandled.current) return;
+    if (searchParams.get('start') !== '1') return;
+
+    autoStartHandled.current = true;
+    router.replace('/workouts');
+
+    if (!activePlanId || !planStartedAt) return;
+
+    const plan = WORKOUT_PLANS.find((p) => p.id === activePlanId);
+    if (!plan?.interactive) return;
+
+    const day = getActivePlanDay(
+      plan,
+      planStartedAt,
+      activePlanDayNumber,
+      activePlanDaySetOn,
+      todayLocal()
+    );
+    if (!day || day.isRest) return;
+
+    const workout = getInteractiveWorkout(
+      activePlanId,
+      day.dayNumber,
+      plan.days.find((d) => d.dayNumber === day.dayNumber)
+    );
+    if (!workout) {
+      toast.error('No workout for this day');
+      return;
+    }
+
+    clearWorkoutSetProgress(activePlanId, day.dayNumber);
+    setWorkoutMode({
+      planId: activePlanId,
+      dayNumber: day.dayNumber,
+      dayTitle: day.title,
+    });
+  }, [
+    loading,
+    activePlanId,
+    planStartedAt,
+    activePlanDayNumber,
+    activePlanDaySetOn,
+    searchParams,
+    router,
+  ]);
 
   async function refreshSetLogs() {
     try {
@@ -923,5 +974,24 @@ export default function WorkoutsPage() {
         })
       )}
     </div>
+  );
+}
+
+function WorkoutsPageFallback() {
+  return (
+    <div className="max-w-3xl space-y-8">
+      <div>
+        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">Workouts</h1>
+        <p className="font-sans text-muted mt-2">Loading…</p>
+      </div>
+    </div>
+  );
+}
+
+export default function WorkoutsPage() {
+  return (
+    <Suspense fallback={<WorkoutsPageFallback />}>
+      <WorkoutsPageInner />
+    </Suspense>
   );
 }

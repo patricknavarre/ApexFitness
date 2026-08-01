@@ -299,7 +299,7 @@ export function TodayWorkoutCard({
         </div>
       )}
       <Link
-        href="/workouts"
+        href={plan.interactive ? '/workouts?start=1' : '/workouts'}
         className={`inline-block font-sans font-bold text-sm uppercase px-5 py-2.5 rounded-card ${
           plan.interactive
             ? 'bg-accent3 text-black hover:shadow-glow-accent3'
