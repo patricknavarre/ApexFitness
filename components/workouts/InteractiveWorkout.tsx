@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { InteractiveWorkoutDay } from '@/lib/recoveryWorkoutData';
 import { EQUIP_COLORS } from '@/lib/recoveryWorkoutData';
 import { getPhaseColors } from '@/lib/interactive-workouts';
@@ -97,7 +97,11 @@ export function InteractiveWorkout({
   const [restDuration, setRestDuration] = useState(90);
   const [setRows, setSetRows] = useState<Record<string, SetRow[]>>({});
   const [lastHints, setLastHints] = useState<Record<string, LastHint>>({});
-  const [savingExercise, setSavingExercise] = useState<string | null>(null);
+  const [finishing, setFinishing] = useState(false);
+
+  const finishingRef = useRef(false);
+  const setRowsRef = useRef(setRows);
+  setRowsRef.current = setRows;
 
   const phaseColors = getPhaseColors(planId);
   const colors = phaseColors[workout.phase] ?? {
@@ -138,38 +142,42 @@ export function InteractiveWorkout({
 
     fetch(`/api/workout/sets?latest=1&planId=${encodeURIComponent(planId)}`)
       .then((res) => (res.ok ? res.json() : { logs: [] }))
-      .then((data: { logs?: { exerciseName?: string | null; sets?: { weight: number; reps: number }[] }[] }) => {
-        if (cancelled) return;
-        const hints: Record<string, LastHint> = {};
-        const nextRows: Record<string, SetRow[]> = { ...initial };
-        for (const log of data.logs ?? []) {
-          const name = log.exerciseName;
-          if (!name || !log.sets?.length) continue;
-          const ex = workout.sections.flatMap((s) => s.exercises).find((e) => e.name === name);
-          if (!ex) continue;
-          const defaultReps = parsePrescribedReps(ex.reps);
-          const rows = emptyRows(ex.sets, defaultReps);
-          for (let i = 0; i < rows.length; i++) {
-            const src = log.sets[i] ?? log.sets[log.sets.length - 1];
-            if (!src) continue;
-            rows[i] = {
-              weight: src.weight > 0 ? String(src.weight) : src.weight === 0 ? '0' : '',
-              reps: src.reps > 0 ? String(src.reps) : defaultReps,
+      .then(
+        (data: {
+          logs?: { exerciseName?: string | null; sets?: { weight: number; reps: number }[] }[];
+        }) => {
+          if (cancelled) return;
+          const hints: Record<string, LastHint> = {};
+          const nextRows: Record<string, SetRow[]> = { ...initial };
+          for (const log of data.logs ?? []) {
+            const name = log.exerciseName;
+            if (!name || !log.sets?.length) continue;
+            const ex = workout.sections.flatMap((s) => s.exercises).find((e) => e.name === name);
+            if (!ex) continue;
+            const defaultReps = parsePrescribedReps(ex.reps);
+            const rows = emptyRows(ex.sets, defaultReps);
+            for (let i = 0; i < rows.length; i++) {
+              const src = log.sets[i] ?? log.sets[log.sets.length - 1];
+              if (!src) continue;
+              rows[i] = {
+                weight: src.weight > 0 ? String(src.weight) : src.weight === 0 ? '0' : '',
+                reps: src.reps > 0 ? String(src.reps) : defaultReps,
+              };
+            }
+            nextRows[name] = rows;
+            const top = log.sets.reduce((best, s) =>
+              s.weight * s.reps > best.weight * best.reps ? s : best
+            );
+            hints[name] = {
+              weight: top.weight,
+              reps: top.reps,
+              setCount: log.sets.length,
             };
           }
-          nextRows[name] = rows;
-          const top = log.sets.reduce((best, s) =>
-            s.weight * s.reps > best.weight * best.reps ? s : best
-          );
-          hints[name] = {
-            weight: top.weight,
-            reps: top.reps,
-            setCount: log.sets.length,
-          };
+          setSetRows(nextRows);
+          setLastHints(hints);
         }
-        setSetRows(nextRows);
-        setLastHints(hints);
-      })
+      )
       .catch(() => {
         // keep empty prefills
       });
@@ -181,14 +189,71 @@ export function InteractiveWorkout({
 
   const closeTimer = useCallback(() => setTimerVisible(false), []);
 
+  const finishWorkout = useCallback(async () => {
+    if (finishingRef.current || !onMarkDone) return;
+    finishingRef.current = true;
+    setFinishing(true);
+    setTimerVisible(false);
+
+    const rowsMap = setRowsRef.current;
+    const exercises = workout.sections.flatMap((s) => s.exercises);
+    let loadErrors = 0;
+
+    await Promise.all(
+      exercises.map(async (ex) => {
+        const rows = rowsMap[ex.name] ?? [];
+        const sets = rows
+          .map((r, idx) => ({
+            setIndex: idx + 1,
+            weight: Number(r.weight) || 0,
+            reps: Number(r.reps) || 0,
+          }))
+          .filter((s) => s.reps > 0);
+        if (sets.length === 0) return;
+        try {
+          const res = await fetch('/api/workout/sets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              planId,
+              dayNumber,
+              exerciseName: ex.name,
+              sets,
+            }),
+          });
+          if (!res.ok) loadErrors += 1;
+        } catch {
+          loadErrors += 1;
+        }
+      })
+    );
+
+    if (loadErrors > 0) {
+      toast.warning('Workout logged, but some loads could not be saved');
+    } else {
+      toast.success('Workout complete');
+    }
+
+    onMarkDone();
+  }, [onMarkDone, workout, planId, dayNumber]);
+
   const toggleSet = useCallback(
     (exName: string, si: number) => {
+      if (finishingRef.current) return;
       const key = `${dayNumber}-${exName}-${si}`;
       const wasUndone = !done[key];
-      setDone((prev) => ({ ...prev, [key]: wasUndone }));
-      if (wasUndone) setTimerVisible(true);
+      const next = { ...done, [key]: wasUndone };
+      setDone(next);
+      if (!wasUndone) return;
+      if (
+        onMarkDone &&
+        totalSets(workout) > 0 &&
+        completedCount(workout, next, dayNumber) === totalSets(workout)
+      ) {
+        void finishWorkout();
+      }
     },
-    [dayNumber, done]
+    [dayNumber, done, workout, onMarkDone, finishWorkout]
   );
 
   const isDone = (exName: string, si: number) => !!done[`${dayNumber}-${exName}-${si}`];
@@ -202,49 +267,9 @@ export function InteractiveWorkout({
     });
   }
 
-  async function saveLoads(exName: string) {
-    const rows = setRows[exName] ?? [];
-    const sets = rows
-      .map((r, idx) => ({
-        setIndex: idx + 1,
-        weight: Number(r.weight) || 0,
-        reps: Number(r.reps) || 0,
-      }))
-      .filter((s) => s.reps > 0);
-
-    if (sets.length === 0) {
-      toast.error('Enter reps for at least one set');
-      return;
-    }
-
-    setSavingExercise(exName);
-    try {
-      const res = await fetch('/api/workout/sets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId, dayNumber, exerciseName: exName, sets }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save');
-      const top = sets.reduce((best, s) =>
-        s.weight * s.reps > best.weight * best.reps ? s : best
-      );
-      setLastHints((prev) => ({
-        ...prev,
-        [exName]: { weight: top.weight, reps: top.reps, setCount: sets.length },
-      }));
-      toast.success('Loads saved');
-    } catch {
-      toast.error('Could not save loads');
-    } finally {
-      setSavingExercise(null);
-    }
-  }
-
   const total = totalSets(workout);
   const completed = completedCount(workout, done, dayNumber);
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const allDone = pct === 100;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg overflow-hidden">
@@ -262,7 +287,8 @@ export function InteractiveWorkout({
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-card border border-border px-3 py-1.5 font-sans text-xs text-muted hover:border-accent"
+            disabled={finishing}
+            className="shrink-0 min-h-[44px] rounded-card border border-border px-3 py-2 font-sans text-xs text-muted hover:border-accent disabled:opacity-40"
           >
             Exit
           </button>
@@ -276,6 +302,14 @@ export function InteractiveWorkout({
             />
           </div>
           <span className="font-mono text-xs text-muted shrink-0">{pct}%</span>
+          <button
+            type="button"
+            onClick={() => setTimerVisible(true)}
+            disabled={finishing}
+            className="shrink-0 min-h-[44px] rounded-card border border-border px-3 py-2 font-sans text-xs font-semibold text-muted hover:border-accent3 hover:text-accent3 disabled:opacity-40"
+          >
+            Rest
+          </button>
         </div>
 
         {workout.warmup && (
@@ -362,13 +396,14 @@ export function InteractiveWorkout({
                       <ExerciseGuide exerciseName={ex.name} />
                     </div>
 
-                    <div className="space-y-2 mb-2">
+                    <div className="space-y-3">
                       {rows.map((row, si) => (
-                        <div key={si} className="flex items-center gap-2">
+                        <div key={si} className="flex items-center gap-2.5">
                           <button
                             type="button"
                             onClick={() => toggleSet(ex.name, si)}
-                            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border-2 font-mono text-xs font-extrabold transition-colors"
+                            disabled={finishing}
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 font-mono text-sm font-extrabold transition-colors disabled:opacity-40"
                             style={{
                               borderColor: isDone(ex.name, si) ? colors.accent : '#334155',
                               backgroundColor: isDone(ex.name, si) ? colors.accent : 'transparent',
@@ -378,7 +413,7 @@ export function InteractiveWorkout({
                             {isDone(ex.name, si) ? '✓' : si + 1}
                           </button>
                           <label className="flex flex-1 items-center gap-1.5 min-w-0">
-                            <span className="font-mono text-[9px] uppercase text-muted shrink-0">
+                            <span className="font-mono text-[10px] uppercase text-muted shrink-0">
                               lbs
                             </span>
                             <input
@@ -388,12 +423,13 @@ export function InteractiveWorkout({
                               step="any"
                               placeholder="0"
                               value={row.weight}
+                              disabled={finishing}
                               onChange={(e) => updateRow(ex.name, si, 'weight', e.target.value)}
-                              className="w-full min-w-0 rounded-lg border border-border bg-bg px-2 py-1.5 font-mono text-sm text-text outline-none focus:border-accent3"
+                              className="w-full min-h-[44px] min-w-0 rounded-lg border border-border bg-bg px-2.5 py-2.5 font-mono text-base text-text outline-none focus:border-accent3 disabled:opacity-40"
                             />
                           </label>
                           <label className="flex flex-1 items-center gap-1.5 min-w-0">
-                            <span className="font-mono text-[9px] uppercase text-muted shrink-0">
+                            <span className="font-mono text-[10px] uppercase text-muted shrink-0">
                               reps
                             </span>
                             <input
@@ -402,22 +438,14 @@ export function InteractiveWorkout({
                               min={0}
                               placeholder="—"
                               value={row.reps}
+                              disabled={finishing}
                               onChange={(e) => updateRow(ex.name, si, 'reps', e.target.value)}
-                              className="w-full min-w-0 rounded-lg border border-border bg-bg px-2 py-1.5 font-mono text-sm text-text outline-none focus:border-accent3"
+                              className="w-full min-h-[44px] min-w-0 rounded-lg border border-border bg-bg px-2.5 py-2.5 font-mono text-base text-text outline-none focus:border-accent3 disabled:opacity-40"
                             />
                           </label>
                         </div>
                       ))}
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => saveLoads(ex.name)}
-                      disabled={savingExercise === ex.name}
-                      className="w-full rounded-lg border border-border py-1.5 font-sans text-xs font-semibold text-muted hover:border-accent3 hover:text-accent3 disabled:opacity-40 transition-colors"
-                    >
-                      {savingExercise === ex.name ? 'Saving…' : 'Save loads'}
-                    </button>
                   </div>
                 );
               })}
@@ -426,20 +454,16 @@ export function InteractiveWorkout({
         ))}
       </div>
 
-      {allDone && onMarkDone && (
+      {finishing && (
         <div className="shrink-0 border-t border-border bg-card px-4 py-3">
-          <button
-            type="button"
-            onClick={onMarkDone}
-            className="w-full rounded-card bg-accent py-3 font-sans text-sm font-bold uppercase text-black hover:shadow-glow"
-          >
-            Mark workout complete
-          </button>
+          <p className="text-center font-sans text-sm font-semibold text-muted">
+            Saving loads &amp; logging workout…
+          </p>
         </div>
       )}
 
       <RestTimer
-        visible={timerVisible}
+        visible={timerVisible && !finishing}
         duration={restDuration}
         accentColor={colors.accent}
         onClose={closeTimer}

@@ -164,7 +164,7 @@ export function RestTimer({
             setTimeLeft(duration);
             setRunning(true);
           }}
-          className="rounded-card px-5 py-2.5 font-sans text-sm font-bold text-black"
+          className="min-h-[44px] rounded-card px-6 py-3 font-sans text-sm font-bold text-black"
           style={{ backgroundColor: accentColor }}
         >
           Restart
@@ -172,7 +172,7 @@ export function RestTimer({
         <button
           type="button"
           onClick={handleSkip}
-          className="rounded-card border border-border bg-transparent px-5 py-2.5 font-sans text-sm font-bold text-muted hover:border-accent"
+          className="min-h-[44px] rounded-card border border-border bg-transparent px-6 py-3 font-sans text-sm font-bold text-muted hover:border-accent"
         >
           Skip
         </button>
