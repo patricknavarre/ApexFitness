@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { DailyStoicIndexEntry, DailyStoicResponse } from '@/lib/daily-stoic';
 import { getTodayKey } from '@/lib/daily-stoic-constants';
 import { DailyStoicContent } from '@/components/daily-stoic/DailyStoicContent';
+import { DailyStoicShareButton } from '@/components/daily-stoic/DailyStoicShareButton';
 import { MonthPicker } from '@/components/daily-stoic/MonthPicker';
 import { DayPicker } from '@/components/daily-stoic/DayPicker';
 
@@ -258,7 +259,13 @@ export function DailyStoicBrowser() {
           {loading ? (
             <ReadingSkeleton />
           ) : meditation ? (
-            <DailyStoicContent meditation={meditation} />
+            <div className="space-y-5">
+              <DailyStoicContent meditation={meditation} />
+              <DailyStoicShareButton
+                meditation={meditation}
+                className="w-full sm:w-auto rounded-card border border-border bg-transparent px-5 py-2.5 font-sans text-sm font-bold text-muted hover:border-accent3 hover:text-accent3 transition-colors disabled:opacity-40"
+              />
+            </div>
           ) : (
             <p className="font-sans text-sm text-muted">No meditation found for this date.</p>
           )}

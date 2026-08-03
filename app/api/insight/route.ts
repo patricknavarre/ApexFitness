@@ -258,6 +258,8 @@ export async function GET(req: Request) {
       const local = toLocalDateOnly(new Date(log.loggedAt));
       loggedDates.add(local);
       if (local === today) {
+        // Skip per-exercise set-logs (Save loads) — they have no session burn
+        if (typeof log.exerciseName === 'string' && log.exerciseName.length > 0) continue;
         caloriesBurnedToday +=
           log.caloriesBurned != null ? Number(log.caloriesBurned) : DEFAULT_CALORIES_BURNED;
       }

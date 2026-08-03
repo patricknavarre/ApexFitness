@@ -61,6 +61,8 @@ export async function GET(req: Request) {
           WorkoutLog.find({
             userId,
             loggedAt: { $gte: start, $lte: end },
+            // Exclude per-exercise "Save loads" set-logs — not session completions
+            $or: [{ exerciseName: { $exists: false } }, { exerciseName: null }],
           })
             .select('planId dayNumber caloriesBurned cardioExercise cardioDurationMinutes')
             .lean(),
