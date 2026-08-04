@@ -2,13 +2,18 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import {
   WORKOUT_PLANS,
   getActivePlanDay,
   getPlanDayByNumber,
 } from '@/lib/workout-plans';
-import { toLocalDateOnly } from '@/lib/local-date';
+import { todayLocal, toLocalDateOnly } from '@/lib/local-date';
 import { useLocalTodayKey } from '@/lib/use-local-today-key';
+import {
+  evaluateRestDayMacros,
+  type RestMacroStatus,
+} from '@/lib/rest-day-macros';
 
 type Props = {
   activePlanId: string | null;
@@ -21,11 +26,13 @@ type LogRow = {
   planId?: string | null;
   dayNumber?: number | null;
   loggedAt?: string | null;
+  isRestDay?: boolean;
 };
 
 type DisplayState = {
   dayNumber: number;
   completed: boolean;
+  restCredited: boolean;
   loaded: boolean;
 };
 
@@ -39,8 +46,12 @@ export function TodayWorkoutCard({
   const [display, setDisplay] = useState<DisplayState>({
     dayNumber: 0,
     completed: false,
+    restCredited: false,
     loaded: false,
   });
+  const [restMacro, setRestMacro] = useState<RestMacroStatus | null>(null);
+  const [restLoading, setRestLoading] = useState(false);
+  const [creditingRest, setCreditingRest] = useState(false);
 
   const plan =
     activePlanId && planStartedAt
@@ -62,7 +73,7 @@ export function TodayWorkoutCard({
 
   const loadDisplay = useCallback(() => {
     if (!activePlanId || !plan || scheduledDayNumber == null) {
-      setDisplay({ dayNumber: 0, completed: false, loaded: true });
+      setDisplay({ dayNumber: 0, completed: false, restCredited: false, loaded: true });
       return () => {};
     }
 
@@ -73,25 +84,25 @@ export function TodayWorkoutCard({
       .then((res) => (res.ok ? res.json() : { logs: [] }))
       .then((data: { logs?: LogRow[] }) => {
         if (cancelled) return;
-        // Prefer the plan day actually logged today (e.g. Day 5) over a same-day
-        // "next up" override that still points at Day 6.
-        const todaysLog = (data.logs ?? []).find(
+        const todayLogs = (data.logs ?? []).filter(
+          (log) => log.loggedAt && toLocalDateOnly(log.loggedAt) === todayKey
+        );
+        const restCredited = todayLogs.some((log) => log.isRestDay);
+
+        const todaysPlanLog = todayLogs.find(
           (log) =>
-            log.loggedAt &&
-            toLocalDateOnly(log.loggedAt) === todayKey &&
-            log.planId === activePlanId &&
-            typeof log.dayNumber === 'number'
+            log.planId === activePlanId && typeof log.dayNumber === 'number' && !log.isRestDay
         );
 
-        if (todaysLog && typeof todaysLog.dayNumber === 'number') {
-          const logged = getPlanDayByNumber(plan, todaysLog.dayNumber);
+        if (todaysPlanLog && typeof todaysPlanLog.dayNumber === 'number') {
+          const logged = getPlanDayByNumber(plan, todaysPlanLog.dayNumber);
           if (logged && !logged.day.isRest) {
             setDisplay({
               dayNumber: logged.dayNumber,
               completed: true,
+              restCredited: false,
               loaded: true,
             });
-            // Clear a stale same-day jump-ahead so Workouts/Insight agree.
             if (
               activePlanDaySetOn === todayKey &&
               activePlanDayNumber != null &&
@@ -113,6 +124,7 @@ export function TodayWorkoutCard({
         setDisplay({
           dayNumber: scheduledDayNumber,
           completed: false,
+          restCredited,
           loaded: true,
         });
       })
@@ -121,6 +133,7 @@ export function TodayWorkoutCard({
           setDisplay({
             dayNumber: scheduledDayNumber,
             completed: false,
+            restCredited: false,
             loaded: true,
           });
         }
@@ -149,6 +162,65 @@ export function TodayWorkoutCard({
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [loadDisplay]);
+
+  const loadRestMacros = useCallback(() => {
+    let cancelled = false;
+    setRestLoading(true);
+    const date = todayLocal();
+    Promise.all([
+      fetch(`/api/nutrition?date=${date}`).then((r) => (r.ok ? r.json() : { entries: [] })),
+      fetch('/api/user/me').then((r) => (r.ok ? r.json() : {})),
+    ])
+      .then(([nutrition, user]) => {
+        if (cancelled) return;
+        const entries = (nutrition.entries ?? []) as { calories?: number; proteinG?: number }[];
+        const calories = entries.reduce((s, e) => s + (Number(e.calories) || 0), 0);
+        const proteinG = entries.reduce((s, e) => s + (Number(e.proteinG) || 0), 0);
+        setRestMacro(
+          evaluateRestDayMacros(
+            { calories, proteinG },
+            {
+              calorieTarget: user.calorieTarget ?? null,
+              proteinTarget: user.proteinTarget ?? null,
+            }
+          )
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setRestMacro(null);
+      })
+      .finally(() => {
+        if (!cancelled) setRestLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!scheduledDay?.day.isRest) return;
+    return loadRestMacros();
+  }, [scheduledDay?.day.isRest, loadRestMacros, todayKey]);
+
+  async function creditRestDay() {
+    setCreditingRest(true);
+    try {
+      const res = await fetch('/api/workout/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restDay: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not credit rest day');
+      toast.success('Rest day credited to your streak');
+      setDisplay((prev) => ({ ...prev, restCredited: true }));
+      loadDisplay();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not credit rest day');
+    } finally {
+      setCreditingRest(false);
+    }
+  }
 
   if (!activePlanId || !planStartedAt) {
     return (
@@ -223,6 +295,33 @@ export function TodayWorkoutCard({
   const completed = display.loaded && display.completed;
 
   if (day.isRest) {
+    if (display.restCredited) {
+      return (
+        <div className="bg-card border border-border rounded-card p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <h2 className="font-display text-lg text-muted uppercase tracking-wide">
+              Today&apos;s Workout
+            </h2>
+            <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-accent3 border-b border-accent3/70 pb-0.5">
+              Rest credited
+            </span>
+          </div>
+          <p className="font-sans font-medium text-text mb-2">
+            {plan.name} — Day {day.dayNumber}
+          </p>
+          <p className="font-sans text-sm text-muted mb-4">
+            Recovery day logged. Streak stays strong.
+          </p>
+          <Link
+            href="/workouts"
+            className="inline-block bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
+          >
+            View plan
+          </Link>
+        </div>
+      );
+    }
+
     return (
       <div className="bg-card border border-border rounded-card p-5 sm:p-6">
         <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
@@ -231,13 +330,30 @@ export function TodayWorkoutCard({
         <p className="font-sans font-medium text-text mb-1">
           {plan.name} — Day {day.dayNumber}
         </p>
-        <p className="font-sans text-sm text-muted mb-4">Rest day. Recovery time.</p>
-        <Link
-          href="/workouts"
-          className="inline-block bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
-        >
-          View plan
-        </Link>
+        <p className="font-sans text-sm text-muted mb-3">
+          Rest day. Hit calories &amp; protein to credit it toward your streak.
+        </p>
+        <p className="font-sans text-xs text-muted mb-4">
+          {restLoading
+            ? 'Checking macros…'
+            : restMacro?.message ?? 'Loading nutrition status…'}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={creditingRest || restLoading || !restMacro?.ready}
+            onClick={() => void creditRestDay()}
+            className="min-h-[44px] bg-accent3 text-black font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:shadow-glow-accent3 disabled:opacity-40"
+          >
+            {creditingRest ? 'Saving…' : 'Rest day taken'}
+          </button>
+          <Link
+            href="/nutrition"
+            className="inline-flex min-h-[44px] items-center bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
+          >
+            {restMacro?.ready ? 'View nutrition' : 'Log food'}
+          </Link>
+        </div>
       </div>
     );
   }

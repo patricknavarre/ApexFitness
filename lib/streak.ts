@@ -17,10 +17,10 @@ function isScheduledRestDay(
   return plan.days[diff % plan.days.length].isRest;
 }
 
-
 /**
- * Consecutive completed workouts ending today.
- * - Scheduled rest days bridge the streak (do not break it, do not add to it).
+ * Consecutive completed days ending today.
+ * - Logged workouts and checked rest days both increment the streak.
+ * - Scheduled rest days (with no log) still bridge so a planned rest doesn't break the streak.
  * - Today not being logged yet does not break the streak (grace until it's missed).
  * - Breaks only when a past scheduled workout day has no log.
  * With no active plan, degrades to consecutive logged days (still with today grace).
@@ -41,7 +41,7 @@ export function computeWorkoutStreak(
     } else if (isToday) {
       // grace: today not done yet — don't break, don't count
     } else if (isScheduledRestDay(d, plan, planStartedAt)) {
-      // planned rest bridges the streak
+      // planned rest without a checkoff still bridges
     } else {
       break; // missed a scheduled workout
     }
@@ -50,7 +50,7 @@ export function computeWorkoutStreak(
   return streak;
 }
 
-/** Number of days in the last 7 (including today) that have a logged workout. */
+/** Number of days in the last 7 (including today) that have a logged workout or rest. */
 export function countDaysThisWeek(loggedDates: Set<string>): number {
   let count = 0;
   for (let i = 0; i < 7; i++) {

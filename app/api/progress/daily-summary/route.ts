@@ -5,6 +5,8 @@ import NutritionLog from '@/models/NutritionLog';
 import WorkoutLog from '@/models/WorkoutLog';
 
 const DEFAULT_CALORIES_BURNED = 270;
+/** App users are US-based; Progress day labels should match local workout evenings. */
+const APP_TZ = 'America/New_York';
 
 function startOfDay(dateStr: string): Date {
   const d = new Date(dateStr);
@@ -18,12 +20,29 @@ function endOfDay(dateStr: string): Date {
   return d;
 }
 
-function toDateString(d: Date): string {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+function toZonedDateString(d: Date, timeZone = APP_TZ): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
 }
+
+function addDaysYmd(ymd: string, delta: number): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const utc = new Date(Date.UTC(y, m - 1, d + delta, 12, 0, 0));
+  return utc.toISOString().slice(0, 10);
+}
+
+type SessionWorkout = {
+  planId: string | null;
+  dayNumber: number | null;
+  caloriesBurned: number;
+  cardioExercise: string | null;
+  cardioDurationMinutes: number | null;
+  isRestDay: boolean;
+};
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -38,60 +57,107 @@ export async function GET(req: Request) {
     await connectDB();
     const userId = session.user.id;
 
-    const now = new Date();
+    const todayYmd = toZonedDateString(new Date());
     const dateStrings: string[] = [];
     for (let i = 0; i < days; i++) {
-      const d = new Date(now);
-      d.setUTCDate(d.getUTCDate() - i);
-      dateStrings.push(toDateString(d));
+      dateStrings.push(addDaysYmd(todayYmd, -i));
     }
 
-    const result = await Promise.all(
-      dateStrings.map(async (dateStr) => {
-        const start = startOfDay(dateStr);
-        const end = endOfDay(dateStr);
+    const rangeStart = new Date(startOfDay(dateStrings[dateStrings.length - 1]!));
+    rangeStart.setUTCDate(rangeStart.getUTCDate() - 1);
+    const rangeEnd = new Date(endOfDay(dateStrings[0]!));
+    rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 1);
 
-        const [nutritionEntries, workoutLogs] = await Promise.all([
-          NutritionLog.find({
-            userId,
-            logDate: { $gte: start, $lte: end },
-          })
-            .select('calories')
-            .lean(),
-          WorkoutLog.find({
-            userId,
-            loggedAt: { $gte: start, $lte: end },
-            // Exclude per-exercise "Save loads" set-logs — not session completions
-            $or: [{ exerciseName: { $exists: false } }, { exerciseName: null }],
-          })
-            .select('planId dayNumber caloriesBurned cardioExercise cardioDurationMinutes')
-            .lean(),
-        ]);
-
-        const intake = nutritionEntries.reduce(
-          (sum, e) => sum + (e.calories != null ? Number(e.calories) : 0),
-          0
-        );
-        const workouts = workoutLogs.map((l) => ({
-          planId: l.planId ?? null,
-          dayNumber: l.dayNumber ?? null,
-          caloriesBurned:
-            l.caloriesBurned != null ? Number(l.caloriesBurned) : DEFAULT_CALORIES_BURNED,
-          cardioExercise: l.cardioExercise ?? null,
-          cardioDurationMinutes: l.cardioDurationMinutes ?? null,
-        }));
-        const totalBurn = workouts.reduce((sum, w) => sum + w.caloriesBurned, 0);
-        const surplus = intake - totalBurn;
-
-        return {
-          date: dateStr,
-          intake,
-          totalBurn,
-          surplus,
-          workouts,
-        };
+    const [allNutrition, allWorkouts] = await Promise.all([
+      NutritionLog.find({
+        userId,
+        logDate: {
+          $gte: startOfDay(dateStrings[dateStrings.length - 1]!),
+          $lte: endOfDay(dateStrings[0]!),
+        },
       })
-    );
+        .select('calories logDate')
+        .lean(),
+      WorkoutLog.find({
+        userId,
+        loggedAt: { $gte: rangeStart, $lte: rangeEnd },
+      })
+        .select(
+          'planId dayNumber caloriesBurned cardioExercise cardioDurationMinutes isRestDay exerciseName loggedAt'
+        )
+        .lean(),
+    ]);
+
+    const result = dateStrings.map((dateStr) => {
+      const dayStart = startOfDay(dateStr).getTime();
+      const dayEnd = endOfDay(dateStr).getTime();
+
+      const nutritionEntries = allNutrition.filter((e) => {
+        if (!e.logDate) return false;
+        const t = new Date(e.logDate).getTime();
+        return t >= dayStart && t <= dayEnd;
+      });
+
+      const dayWorkouts = allWorkouts.filter((l) => {
+        if (!l.loggedAt) return false;
+        return toZonedDateString(new Date(l.loggedAt)) === dateStr;
+      });
+
+      const sessionLogs = dayWorkouts.filter(
+        (l) => !(typeof l.exerciseName === 'string' && l.exerciseName.length > 0)
+      );
+      const setLogs = dayWorkouts.filter(
+        (l) => typeof l.exerciseName === 'string' && l.exerciseName.length > 0
+      );
+
+      let workouts: SessionWorkout[] = sessionLogs.map((l) => ({
+        planId: l.planId ?? null,
+        dayNumber: l.dayNumber ?? null,
+        caloriesBurned: l.isRestDay
+          ? 0
+          : l.caloriesBurned != null
+            ? Number(l.caloriesBurned)
+            : DEFAULT_CALORIES_BURNED,
+        cardioExercise: l.cardioExercise ?? null,
+        cardioDurationMinutes: l.cardioDurationMinutes ?? null,
+        isRestDay: !!l.isRestDay,
+      }));
+
+      // Older flow: "Save loads" only — no Mark complete. Show one session per plan day.
+      if (workouts.length === 0 && setLogs.length > 0) {
+        const seen = new Set<string>();
+        for (const l of setLogs) {
+          const planId = l.planId ?? null;
+          const dayNumber = typeof l.dayNumber === 'number' ? l.dayNumber : null;
+          const key = `${planId ?? 'x'}:${dayNumber ?? 'x'}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          workouts.push({
+            planId,
+            dayNumber,
+            caloriesBurned: DEFAULT_CALORIES_BURNED,
+            cardioExercise: null,
+            cardioDurationMinutes: null,
+            isRestDay: false,
+          });
+        }
+      }
+
+      const intake = nutritionEntries.reduce(
+        (sum, e) => sum + (e.calories != null ? Number(e.calories) : 0),
+        0
+      );
+      const totalBurn = workouts.reduce((sum, w) => sum + w.caloriesBurned, 0);
+      const surplus = intake - totalBurn;
+
+      return {
+        date: dateStr,
+        intake,
+        totalBurn,
+        surplus,
+        workouts,
+      };
+    });
 
     return NextResponse.json({ days: result });
   } catch (e) {

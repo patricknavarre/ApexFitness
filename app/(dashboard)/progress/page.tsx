@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import {
@@ -16,8 +16,9 @@ import {
 } from 'recharts';
 import { toast } from 'sonner';
 import { WORKOUT_PLANS } from '@/lib/workout-plans';
-import { getCardioLabel } from '@/lib/cardio';
+import { CARDIO_OPTIONS, getCardioLabel } from '@/lib/cardio';
 import { MomentumCard } from '@/components/progress/MomentumCard';
+import { evaluateRestDayMacros, type RestMacroStatus } from '@/lib/rest-day-macros';
 
 type AnalysisSummary = {
   bodyType?: string;
@@ -40,6 +41,7 @@ type WorkoutItem = {
   caloriesBurned: number;
   cardioExercise?: string | null;
   cardioDurationMinutes?: number | null;
+  isRestDay?: boolean;
 };
 
 type DaySummary = {
@@ -58,6 +60,7 @@ function getPlanDayLabel(planId: string | null, dayNumber: number | null): strin
 }
 
 function getWorkoutLabel(w: WorkoutItem): string {
+  if (w.isRestDay) return 'Rest';
   if (w.cardioExercise && w.cardioDurationMinutes != null) {
     return `${getCardioLabel(w.cardioExercise)} ${w.cardioDurationMinutes} min`;
   }
@@ -84,6 +87,31 @@ export default function ProgressPage() {
   const [planStartedAt, setPlanStartedAt] = useState<string | null>(null);
   const compareContainerRef = useRef<HTMLDivElement>(null);
 
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [logMode, setLogMode] = useState<'plan' | 'cardio'>('plan');
+  const [logPlanId, setLogPlanId] = useState<string>(WORKOUT_PLANS[0]?.id ?? '');
+  const [logDayNumber, setLogDayNumber] = useState<number>(1);
+  const [cardioExercise, setCardioExercise] = useState(CARDIO_OPTIONS[0]?.id ?? 'cycling');
+  const [cardioMinutes, setCardioMinutes] = useState<number | ''>(30);
+  const [logging, setLogging] = useState(false);
+  const [restMacroStatus, setRestMacroStatus] = useState<RestMacroStatus | null>(null);
+  const [restMacroLoading, setRestMacroLoading] = useState(false);
+
+  const refreshDailySummary = useCallback(() => {
+    setSummaryLoading(true);
+    return fetch('/api/progress/daily-summary?days=14')
+      .then((res) => (res.ok ? res.json() : { days: [] }))
+      .then((data) => {
+        setDailySummary(data.days ?? []);
+      })
+      .catch(() => {
+        setDailySummary([]);
+      })
+      .finally(() => {
+        setSummaryLoading(false);
+      });
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     fetch('/api/progress')
@@ -104,7 +132,7 @@ export default function ProgressPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/progress/daily-summary?days=7')
+    fetch('/api/progress/daily-summary?days=14')
       .then((res) => (res.ok ? res.json() : { days: [] }))
       .then((data) => {
         if (!cancelled) setDailySummary(data.days ?? []);
@@ -124,13 +152,19 @@ export default function ProgressPage() {
     let cancelled = false;
     fetch('/api/user/me')
       .then((res) => (res.ok ? res.json() : Promise.resolve({})))
-      .then((data: { activePlanId?: string | null; planStartedAt?: string | null }) => {
-        if (cancelled) return;
-        setActivePlanId(data.activePlanId ?? null);
-        setPlanStartedAt(
-          typeof data.planStartedAt === 'string' ? data.planStartedAt.slice(0, 10) : null
-        );
-      })
+      .then(
+        (data: {
+          activePlanId?: string | null;
+          planStartedAt?: string | null;
+        }) => {
+          if (cancelled) return;
+          setActivePlanId(data.activePlanId ?? null);
+          setPlanStartedAt(
+            typeof data.planStartedAt === 'string' ? data.planStartedAt.slice(0, 10) : null
+          );
+          if (data.activePlanId) setLogPlanId(data.activePlanId);
+        }
+      )
       .catch(() => {
         // ignore
       });
@@ -140,9 +174,117 @@ export default function ProgressPage() {
   }, []);
 
   useEffect(() => {
+    if (!selectedDate) {
+      setRestMacroStatus(null);
+      return;
+    }
+    let cancelled = false;
+    setRestMacroLoading(true);
+    Promise.all([
+      fetch(`/api/nutrition?date=${selectedDate}`).then((r) =>
+        r.ok ? r.json() : { entries: [] }
+      ),
+      fetch('/api/user/me').then((r) => (r.ok ? r.json() : {})),
+    ])
+      .then(([nutrition, user]) => {
+        if (cancelled) return;
+        const entries = (nutrition.entries ?? []) as {
+          calories?: number;
+          proteinG?: number;
+        }[];
+        const calories = entries.reduce((s, e) => s + (Number(e.calories) || 0), 0);
+        const proteinG = entries.reduce((s, e) => s + (Number(e.proteinG) || 0), 0);
+        setRestMacroStatus(
+          evaluateRestDayMacros(
+            { calories, proteinG },
+            {
+              calorieTarget: user.calorieTarget ?? null,
+              proteinTarget: user.proteinTarget ?? null,
+            }
+          )
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setRestMacroStatus(null);
+      })
+      .finally(() => {
+        if (!cancelled) setRestMacroLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate]);
+
+  useEffect(() => {
+    const plan = WORKOUT_PLANS.find((p) => p.id === logPlanId);
+    if (!plan?.days.length) return;
+    if (!plan.days.some((d) => d.dayNumber === logDayNumber)) {
+      const firstWorkout = plan.days.find((d) => !d.isRest) ?? plan.days[0];
+      setLogDayNumber(firstWorkout.dayNumber);
+    }
+  }, [logPlanId, logDayNumber]);
+
+  useEffect(() => {
     if (photos.length > 0 && !compareLeft) setCompareLeft(photos[0].id);
     if (photos.length > 1 && !compareRight) setCompareRight(photos[1].id);
   }, [photos, compareLeft, compareRight]);
+
+  const selectedDay = dailySummary?.find((d) => d.date === selectedDate) ?? null;
+  const logPlan = WORKOUT_PLANS.find((p) => p.id === logPlanId);
+  const selectedHasRest = !!selectedDay?.workouts.some((w) => w.isRestDay);
+
+  async function submitPlanOrCardio() {
+    if (!selectedDate) return;
+    setLogging(true);
+    try {
+      const body =
+        logMode === 'cardio'
+          ? {
+              logDate: selectedDate,
+              cardioExercise,
+              cardioDurationMinutes:
+                cardioMinutes === '' ? 0 : Number(cardioMinutes),
+            }
+          : {
+              logDate: selectedDate,
+              planId: logPlanId,
+              dayNumber: logDayNumber,
+            };
+      const res = await fetch('/api/workout/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to log');
+      toast.success(logMode === 'cardio' ? 'Cardio logged' : 'Workout logged');
+      await refreshDailySummary();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not log workout');
+    } finally {
+      setLogging(false);
+    }
+  }
+
+  async function submitRestDay() {
+    if (!selectedDate) return;
+    setLogging(true);
+    try {
+      const res = await fetch('/api/workout/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restDay: true, logDate: selectedDate }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not credit rest day');
+      toast.success('Rest day credited to your streak');
+      await refreshDailySummary();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not credit rest day');
+    } finally {
+      setLogging(false);
+    }
+  }
 
   const leftPhoto = photos.find((p) => p.id === compareLeft);
   const rightPhoto = photos.find((p) => p.id === compareRight);
@@ -165,6 +307,7 @@ export default function ProgressPage() {
     }));
 
   const weeklyActivity = (dailySummary ?? [])
+    .slice(0, 7)
     .slice()
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((day) => ({
@@ -273,7 +416,7 @@ export default function ProgressPage() {
           Daily calorie balance
         </h2>
         <p className="font-sans text-muted text-sm mb-4">
-          Intake minus estimated workout burn for the last 7 days.
+          Tap a day to add food, log a workout, or credit rest. Last 14 days.
         </p>
         {summaryLoading ? (
           <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
@@ -294,7 +437,20 @@ export default function ProgressPage() {
                 </thead>
                 <tbody>
                   {dailySummary.map((day) => (
-                    <tr key={day.date} className="border-b border-border last:border-0">
+                    <tr
+                      key={day.date}
+                      className="border-b border-border last:border-0 cursor-pointer hover:bg-bg3/40 transition-colors"
+                      onClick={() => setSelectedDate(day.date)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedDate(day.date);
+                        }
+                      }}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Open ${format(new Date(day.date + 'T12:00:00'), 'EEEE, MMM d')}`}
+                    >
                       <td className="p-3 text-text">
                         {format(new Date(day.date + 'T12:00:00'), 'EEE, MMM d')}
                       </td>
@@ -316,15 +472,6 @@ export default function ProgressPage() {
                 </tbody>
               </table>
             </div>
-            <div className="p-3 border-t border-border">
-              <Link href="/nutrition" className="font-sans text-sm text-accent hover:underline">
-                Log meals
-              </Link>
-              {' · '}
-              <Link href="/workouts" className="font-sans text-sm text-accent hover:underline">
-                Workouts
-              </Link>
-            </div>
           </div>
         ) : (
           <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
@@ -332,6 +479,192 @@ export default function ProgressPage() {
           </div>
         )}
       </section>
+
+      {selectedDate && selectedDay && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="day-panel-title"
+          onClick={() => setSelectedDate(null)}
+        >
+          <div
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-card border border-border bg-card p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3
+                  id="day-panel-title"
+                  className="font-display text-xl text-accent uppercase tracking-wide"
+                >
+                  {format(new Date(selectedDate + 'T12:00:00'), 'EEE, MMM d')}
+                </h3>
+                <p className="font-sans text-xs text-muted mt-1">
+                  {selectedDay.intake} cal in · {selectedDay.totalBurn} burn ·{' '}
+                  <span className={selectedDay.surplus >= 0 ? 'text-accent3' : 'text-accent2'}>
+                    {selectedDay.surplus >= 0 ? '+' : ''}
+                    {selectedDay.surplus}
+                  </span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDate(null)}
+                className="min-h-[44px] rounded-card border border-border px-3 py-2 font-sans text-xs text-muted hover:border-accent"
+              >
+                Close
+              </button>
+            </div>
+
+            {selectedDay.workouts.length > 0 && (
+              <p className="font-sans text-sm text-text">
+                Logged:{' '}
+                {selectedDay.workouts.map((w) => getWorkoutLabel(w)).join(', ')}
+              </p>
+            )}
+
+            <Link
+              href={`/nutrition?date=${selectedDate}`}
+              className="flex min-h-[44px] items-center justify-center rounded-card bg-accent3 px-4 py-2.5 font-sans text-sm font-bold uppercase text-black hover:shadow-glow-accent3"
+            >
+              Add food
+            </Link>
+
+            <div className="rounded-card border border-border p-3 space-y-3">
+              <p className="font-sans text-sm font-semibold text-text">Log workout</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLogMode('plan')}
+                  className={`min-h-[40px] flex-1 rounded-card border px-3 py-2 font-sans text-xs font-semibold ${
+                    logMode === 'plan'
+                      ? 'border-accent bg-accent/10 text-accent'
+                      : 'border-border text-muted'
+                  }`}
+                >
+                  Plan day
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLogMode('cardio')}
+                  className={`min-h-[40px] flex-1 rounded-card border px-3 py-2 font-sans text-xs font-semibold ${
+                    logMode === 'cardio'
+                      ? 'border-accent bg-accent/10 text-accent'
+                      : 'border-border text-muted'
+                  }`}
+                >
+                  Cardio
+                </button>
+              </div>
+              {logMode === 'plan' ? (
+                <div className="space-y-2">
+                  <label className="block font-sans text-xs text-muted">
+                    Plan
+                    <select
+                      value={logPlanId}
+                      onChange={(e) => setLogPlanId(e.target.value)}
+                      className="mt-1 w-full min-h-[44px] rounded-lg border border-border bg-bg px-2 py-2 font-sans text-sm text-text"
+                    >
+                      {WORKOUT_PLANS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block font-sans text-xs text-muted">
+                    Day
+                    <select
+                      value={logDayNumber}
+                      onChange={(e) => setLogDayNumber(Number(e.target.value))}
+                      className="mt-1 w-full min-h-[44px] rounded-lg border border-border bg-bg px-2 py-2 font-sans text-sm text-text"
+                    >
+                      {(logPlan?.days ?? []).map((d) => (
+                        <option key={d.dayNumber} value={d.dayNumber}>
+                          Day {d.dayNumber}: {d.title}
+                          {d.isRest ? ' (Rest)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="block font-sans text-xs text-muted">
+                    Exercise
+                    <select
+                      value={cardioExercise}
+                      onChange={(e) => setCardioExercise(e.target.value)}
+                      className="mt-1 w-full min-h-[44px] rounded-lg border border-border bg-bg px-2 py-2 font-sans text-sm text-text"
+                    >
+                      {CARDIO_OPTIONS.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block font-sans text-xs text-muted">
+                    Minutes
+                    <input
+                      type="number"
+                      min={1}
+                      max={300}
+                      value={cardioMinutes}
+                      onChange={(e) =>
+                        setCardioMinutes(e.target.value === '' ? '' : Number(e.target.value))
+                      }
+                      className="mt-1 w-full min-h-[44px] rounded-lg border border-border bg-bg px-2 py-2 font-mono text-sm text-text"
+                    />
+                  </label>
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={logging}
+                onClick={() => void submitPlanOrCardio()}
+                className="w-full min-h-[44px] rounded-card bg-accent px-4 py-2.5 font-sans text-sm font-bold uppercase text-black disabled:opacity-40"
+              >
+                {logging ? 'Saving…' : 'Save workout'}
+              </button>
+            </div>
+
+            <div className="rounded-card border border-border p-3 space-y-2">
+              <p className="font-sans text-sm font-semibold text-text">Credit rest day</p>
+              <p className="font-sans text-xs text-muted">
+                {selectedHasRest
+                  ? 'Rest already credited for this day.'
+                  : restMacroLoading
+                    ? 'Checking macros…'
+                    : restMacroStatus?.message ??
+                      'Rest counts toward streak when calories and protein targets are hit.'}
+              </p>
+              {!selectedHasRest && !restMacroStatus?.ready && (
+                <Link
+                  href={`/nutrition?date=${selectedDate}`}
+                  className="inline-block font-sans text-xs text-accent3 hover:underline"
+                >
+                  Log food for this day
+                </Link>
+              )}
+              <button
+                type="button"
+                disabled={
+                  logging ||
+                  restMacroLoading ||
+                  selectedHasRest ||
+                  !restMacroStatus?.ready
+                }
+                onClick={() => void submitRestDay()}
+                className="w-full min-h-[44px] rounded-card border border-border px-4 py-2.5 font-sans text-sm font-bold uppercase text-text hover:border-accent3 disabled:opacity-40"
+              >
+                {logging ? 'Saving…' : selectedHasRest ? 'Rest credited' : 'Check off rest'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {photos.length === 0 ? (
         <div className="rounded-card border border-border bg-card p-8 text-center">

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { IconScan } from '@/components/ui/icons';
@@ -149,9 +150,36 @@ type ScanResult = {
 
 type ShakeModalMode = 'pre-analyze' | 'post-analyze' | 'manual';
 
+function parseDateQuery(raw: string | null): string | null {
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  if (raw > todayISO()) return null;
+  return raw;
+}
+
 export default function NutritionPage() {
-  const [date, setDate] = useState(todayISO);
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-6">
+          <h1 className="font-display text-3xl text-accent uppercase tracking-wide">Nutrition</h1>
+          <p className="font-sans text-muted text-sm">Loading…</p>
+        </div>
+      }
+    >
+      <NutritionPageInner />
+    </Suspense>
+  );
+}
+
+function NutritionPageInner() {
+  const searchParams = useSearchParams();
+  const [date, setDate] = useState(() => parseDateQuery(searchParams.get('date')) ?? todayISO());
   const [entries, setEntries] = useState<LogEntry[]>([]);
+
+  useEffect(() => {
+    const fromQuery = parseDateQuery(searchParams.get('date'));
+    if (fromQuery) setDate(fromQuery);
+  }, [searchParams]);
   const [targets, setTargets] = useState<Targets | null>(null);
   const [loadingLog, setLoadingLog] = useState(true);
   const [loadingTargets, setLoadingTargets] = useState(true);

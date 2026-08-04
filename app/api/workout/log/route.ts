@@ -2,9 +2,34 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/mongodb';
 import WorkoutLog from '@/models/WorkoutLog';
+import NutritionLog from '@/models/NutritionLog';
+import User from '@/models/User';
 import { getCardioOption } from '@/lib/cardio';
+import { dateOnlyToUtcNoon, todayLocal } from '@/lib/local-date';
+import { evaluateRestDayMacros, isFutureDateOnly } from '@/lib/rest-day-macros';
 
 const DEFAULT_CALORIES_BURNED = 270;
+
+function parseLogDate(raw: unknown): { ok: true; date: Date | null } | { ok: false; error: string } {
+  if (raw == null || raw === '') return { ok: true, date: null };
+  if (typeof raw !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return { ok: false, error: 'logDate must be YYYY-MM-DD' };
+  }
+  if (isFutureDateOnly(raw, todayLocal())) {
+    return { ok: false, error: 'Cannot log a future date' };
+  }
+  const date = dateOnlyToUtcNoon(raw);
+  if (!date) return { ok: false, error: 'Invalid logDate' };
+  return { ok: true, date };
+}
+
+function nutritionDayBounds(dateStr: string): { start: Date; end: Date } {
+  const start = new Date(dateStr);
+  start.setUTCHours(0, 0, 0, 0);
+  const end = new Date(dateStr);
+  end.setUTCHours(23, 59, 59, 999);
+  return { start, end };
+}
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -18,7 +43,9 @@ export async function GET(req: Request) {
     const logs = await WorkoutLog.find({ userId: session.user.id })
       .sort({ loggedAt: -1 })
       .limit(limit)
-      .select('planId dayNumber loggedAt caloriesBurned cardioExercise cardioDurationMinutes')
+      .select(
+        'planId dayNumber loggedAt caloriesBurned cardioExercise cardioDurationMinutes isRestDay'
+      )
       .lean();
     return NextResponse.json({
       logs: logs.map((l) => ({
@@ -26,10 +53,14 @@ export async function GET(req: Request) {
         planId: l.planId ?? null,
         dayNumber: l.dayNumber ?? null,
         loggedAt: l.loggedAt ? new Date(l.loggedAt).toISOString() : null,
-        caloriesBurned:
-          l.caloriesBurned != null ? l.caloriesBurned : DEFAULT_CALORIES_BURNED,
+        caloriesBurned: l.isRestDay
+          ? 0
+          : l.caloriesBurned != null
+            ? l.caloriesBurned
+            : DEFAULT_CALORIES_BURNED,
         cardioExercise: l.cardioExercise ?? null,
         cardioDurationMinutes: l.cardioDurationMinutes ?? null,
+        isRestDay: !!l.isRestDay,
       })),
     });
   } catch (e) {
@@ -52,6 +83,8 @@ export async function POST(req: Request) {
       caloriesBurned: bodyBurn,
       cardioExercise,
       cardioDurationMinutes,
+      restDay,
+      logDate: rawLogDate,
     } = body as {
       planId?: string;
       dayNumber?: number;
@@ -59,7 +92,76 @@ export async function POST(req: Request) {
       caloriesBurned?: number;
       cardioExercise?: string;
       cardioDurationMinutes?: number;
+      restDay?: boolean;
+      logDate?: string;
     };
+
+    const parsedDate = parseLogDate(rawLogDate);
+    if (!parsedDate.ok) {
+      return NextResponse.json({ error: parsedDate.error }, { status: 400 });
+    }
+    const loggedAtOverride = parsedDate.date;
+    const dateKey =
+      typeof rawLogDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawLogDate)
+        ? rawLogDate
+        : todayLocal();
+
+    await connectDB();
+
+    if (restDay === true) {
+      const user = await User.findById(session.user.id)
+        .select('calorieTarget proteinTarget')
+        .lean();
+      const { start, end } = nutritionDayBounds(dateKey);
+      const nutritionEntries = await NutritionLog.find({
+        userId: session.user.id,
+        logDate: { $gte: start, $lte: end },
+      })
+        .select('calories proteinG')
+        .lean();
+      const calories = nutritionEntries.reduce(
+        (sum, e) => sum + (e.calories != null ? Number(e.calories) : 0),
+        0
+      );
+      const proteinG = nutritionEntries.reduce(
+        (sum, e) => sum + (e.proteinG != null ? Number(e.proteinG) : 0),
+        0
+      );
+      const status = evaluateRestDayMacros(
+        { calories, proteinG },
+        {
+          calorieTarget: user?.calorieTarget ?? null,
+          proteinTarget: user?.proteinTarget ?? null,
+        }
+      );
+      if (!status.ready) {
+        return NextResponse.json(
+          {
+            error: status.message,
+            code: status.targetsSet ? 'REST_MACROS_NOT_MET' : 'REST_TARGETS_MISSING',
+            status,
+          },
+          { status: 400 }
+        );
+      }
+
+      const doc = await WorkoutLog.create({
+        userId: session.user.id,
+        isRestDay: true,
+        caloriesBurned: 0,
+        ...(loggedAtOverride ? { loggedAt: loggedAtOverride } : {}),
+      });
+      return NextResponse.json({
+        id: String(doc._id),
+        planId: null,
+        dayNumber: null,
+        loggedAt: doc.loggedAt ? new Date(doc.loggedAt).toISOString() : null,
+        caloriesBurned: 0,
+        cardioExercise: null,
+        cardioDurationMinutes: null,
+        isRestDay: true,
+      });
+    }
 
     const isCardio =
       typeof cardioExercise === 'string' &&
@@ -70,18 +172,15 @@ export async function POST(req: Request) {
     if (isCardio) {
       const option = getCardioOption(cardioExercise);
       if (!option) {
-        return NextResponse.json(
-          { error: 'Invalid cardio exercise' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: 'Invalid cardio exercise' }, { status: 400 });
       }
       const caloriesBurned = Math.round(cardioDurationMinutes * option.calPerMin);
-      await connectDB();
       const doc = await WorkoutLog.create({
         userId: session.user.id,
         cardioExercise: option.id,
         cardioDurationMinutes,
         caloriesBurned,
+        ...(loggedAtOverride ? { loggedAt: loggedAtOverride } : {}),
       });
       return NextResponse.json({
         id: String(doc._id),
@@ -91,12 +190,16 @@ export async function POST(req: Request) {
         caloriesBurned: doc.caloriesBurned ?? caloriesBurned,
         cardioExercise: doc.cardioExercise ?? option.id,
         cardioDurationMinutes: doc.cardioDurationMinutes ?? cardioDurationMinutes,
+        isRestDay: false,
       });
     }
 
     if (!planId || typeof planId !== 'string' || typeof dayNumber !== 'number' || dayNumber < 1) {
       return NextResponse.json(
-        { error: 'Missing planId or invalid dayNumber, or provide cardioExercise and cardioDurationMinutes' },
+        {
+          error:
+            'Missing planId or invalid dayNumber, or provide cardioExercise and cardioDurationMinutes, or restDay: true',
+        },
         { status: 400 }
       );
     }
@@ -108,12 +211,12 @@ export async function POST(req: Request) {
     } else {
       caloriesBurned = DEFAULT_CALORIES_BURNED;
     }
-    await connectDB();
     const doc = await WorkoutLog.create({
       userId: session.user.id,
       planId,
       dayNumber,
       caloriesBurned,
+      ...(loggedAtOverride ? { loggedAt: loggedAtOverride } : {}),
     });
     return NextResponse.json({
       id: String(doc._id),
@@ -123,6 +226,7 @@ export async function POST(req: Request) {
       caloriesBurned: doc.caloriesBurned ?? DEFAULT_CALORIES_BURNED,
       cardioExercise: null,
       cardioDurationMinutes: null,
+      isRestDay: false,
     });
   } catch (e) {
     console.error('Workout log POST error:', e);

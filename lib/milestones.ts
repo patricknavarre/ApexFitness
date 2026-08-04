@@ -69,7 +69,7 @@ export function buildMilestones(input: MomentumInput): Milestone[] {
     {
       id: 'streak-3',
       label: '3-day streak',
-      description: 'Train three days in a row',
+      description: 'Show up three days in a row (workout or credited rest)',
       earned: streak >= 3,
       progress: Math.min(streak, 3),
       target: 3,
@@ -77,7 +77,7 @@ export function buildMilestones(input: MomentumInput): Milestone[] {
     {
       id: 'streak-7',
       label: '7-day streak',
-      description: 'Keep the fire going a full week',
+      description: 'Keep showing up for a full week',
       earned: streak >= 7,
       progress: Math.min(streak, 7),
       target: 7,
@@ -85,7 +85,7 @@ export function buildMilestones(input: MomentumInput): Milestone[] {
     {
       id: 'week-5',
       label: `${weekGoal} days this week`,
-      description: `Hit your ${weekGoal}-day weekly goal`,
+      description: `Hit your ${weekGoal}-day weekly goal (workouts or credited rest)`,
       earned: daysThisWeek >= weekGoal,
       progress: Math.min(daysThisWeek, weekGoal),
       target: weekGoal,
@@ -131,7 +131,7 @@ export function getNextGoal(milestones: Milestone[], streak: number, daysThisWee
   const nextStreak = streakTargets.find((t) => streak < t);
   if (nextStreak != null) {
     return {
-      label: `${nextStreak - streak} more training day${nextStreak - streak === 1 ? '' : 's'} → ${nextStreak}-day streak`,
+      label: `${nextStreak - streak} more active day${nextStreak - streak === 1 ? '' : 's'} → ${nextStreak}-day streak`,
       progress: streak,
       target: nextStreak,
       remaining: nextStreak - streak,
