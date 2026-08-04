@@ -121,6 +121,7 @@ export default function AnalysisPage() {
   const [saveWeight, setSaveWeight] = useState('');
   const [showSaveWeight, setShowSaveWeight] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
 
   // Restore draft from session when returning to the page
   useEffect(() => {
@@ -150,6 +151,16 @@ export default function AnalysisPage() {
     setResult(null);
     setContext(defaultContext);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (libraryInputRef.current) libraryInputRef.current.value = '';
+  }
+
+  /** Open camera. Must stay synchronous for iOS Safari user-gesture rules. */
+  function openCamera() {
+    fileInputRef.current?.click();
+  }
+
+  function openLibrary() {
+    libraryInputRef.current?.click();
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -339,10 +350,7 @@ export default function AnalysisPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-border rounded-card p-8 text-center cursor-pointer hover:border-accent transition-colors min-h-[280px] flex flex-col items-center justify-center"
-              >
+              <div className="border-2 border-dashed border-border rounded-card p-8 text-center min-h-[280px] flex flex-col items-center justify-center">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -351,8 +359,19 @@ export default function AnalysisPage() {
                   onChange={handleFile}
                   className="hidden"
                 />
+                <input
+                  ref={libraryInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFile}
+                  className="hidden"
+                />
                 {preview ? (
-                  <div className="relative w-full aspect-[3/4] max-h-[320px] rounded-card overflow-hidden bg-bg2">
+                  <button
+                    type="button"
+                    onClick={openLibrary}
+                    className="relative w-full aspect-[3/4] max-h-[320px] rounded-card overflow-hidden bg-bg2"
+                  >
                     <Image
                       src={preview}
                       alt="Preview"
@@ -360,18 +379,52 @@ export default function AnalysisPage() {
                       className="object-contain"
                       unoptimized
                     />
-                  </div>
+                  </button>
                 ) : (
                   <>
                     <span className="text-accent font-mono text-sm uppercase tracking-wider block mb-2">
                       Take or upload a photo
                     </span>
-                    <p className="font-sans text-muted text-sm">
-                      Click or tap to select an image
+                    <p className="font-sans text-muted text-sm mb-5">
+                      Use your camera or choose from your library
                     </p>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full max-w-xs">
+                      <button
+                        type="button"
+                        onClick={openCamera}
+                        className="od-cta flex-1 min-h-[44px] bg-accent text-black font-sans font-bold text-sm uppercase px-4 py-3 rounded-card hover:shadow-glow"
+                      >
+                        Take photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openLibrary}
+                        className="od-cta flex-1 min-h-[44px] border border-border text-tan font-sans font-bold text-sm uppercase px-4 py-3 rounded-card hover:border-accent"
+                      >
+                        Upload
+                      </button>
+                    </div>
                   </>
                 )}
               </div>
+              {preview && (
+                <div className="flex gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={openCamera}
+                    className="od-cta flex-1 min-h-[40px] border border-border text-tan font-sans text-xs font-bold uppercase px-3 py-2 rounded-card hover:border-accent"
+                  >
+                    Retake
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openLibrary}
+                    className="od-cta flex-1 min-h-[40px] border border-border text-tan font-sans text-xs font-bold uppercase px-3 py-2 rounded-card hover:border-accent"
+                  >
+                    Choose another
+                  </button>
+                </div>
+              )}
               <p className="font-sans text-muted text-xs mt-3">
                 Your photo is analyzed in real-time and never stored unless you choose to save it
                 to your Progress timeline.
