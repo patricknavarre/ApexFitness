@@ -109,9 +109,12 @@ export async function POST(req: Request) {
     await connectDB();
 
     if (restDay === true) {
-      const user = await User.findById(session.user.id)
+      const userDoc = (await User.findById(session.user.id)
         .select('calorieTarget proteinTarget')
-        .lean();
+        .lean()) as {
+        calorieTarget?: number | null;
+        proteinTarget?: number | null;
+      } | null;
       const { start, end } = nutritionDayBounds(dateKey);
       const nutritionEntries = await NutritionLog.find({
         userId: session.user.id,
@@ -130,8 +133,8 @@ export async function POST(req: Request) {
       const status = evaluateRestDayMacros(
         { calories, proteinG },
         {
-          calorieTarget: user?.calorieTarget ?? null,
-          proteinTarget: user?.proteinTarget ?? null,
+          calorieTarget: userDoc?.calorieTarget ?? null,
+          proteinTarget: userDoc?.proteinTarget ?? null,
         }
       );
       if (!status.ready) {
