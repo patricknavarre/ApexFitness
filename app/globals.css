@@ -3,16 +3,17 @@
 @tailwind utilities;
 
 :root {
-  --bg: #0a0a0f;
-  --bg2: #111118;
-  --bg3: #18181f;
-  --card: #13131a;
-  --border: rgba(255, 255, 255, 0.07);
-  --accent: #e8ff47;
-  --accent2: #ff4757;
-  --accent3: #00d2ff;
-  --text: #f0f0f5;
-  --muted: #6b6b7a;
+  --bg: #12140f;
+  --bg2: #161a10;
+  --bg3: #1a1f12;
+  --card: #161a10;
+  --border: #4b5320;
+  --accent: #c4a35a;
+  --accent2: #c45c4a;
+  --accent3: #4b5320;
+  --tan: #d2b48c;
+  --text: #f0ebe0;
+  --muted: #8b7355;
   --font-bebas: 'Bebas Neue', sans-serif;
   --font-dm-sans: 'DM Sans', sans-serif;
   --font-space-mono: 'Space Mono', monospace;
@@ -25,6 +26,14 @@ body {
   min-height: 100vh;
 }
 
+/* Olive field atmosphere */
+body {
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(75, 83, 32, 0.35) 0%, transparent 55%),
+    linear-gradient(165deg, #12140f 0%, #1a1f12 42%, #12140f 100%) !important;
+  background-attachment: fixed;
+}
+
 /* Subtle noise texture overlay */
 body::before {
   content: '';
@@ -32,7 +41,41 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.03;
+  opacity: 0.045;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
 }
 
+@keyframes od-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.od-enter {
+  animation: od-fade-up 0.45s ease-out both;
+}
+
+.od-enter-delay-1 {
+  animation-delay: 0.06s;
+}
+
+.od-enter-delay-2 {
+  animation-delay: 0.12s;
+}
+
+.od-enter-delay-3 {
+  animation-delay: 0.18s;
+}
+
+.od-cta {
+  transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.2s ease;
+}
+
+.od-cta:active:not(:disabled) {
+  transform: scale(0.97);
+}

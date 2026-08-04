@@ -1,10 +1,10 @@
 import type { InteractiveWorkoutDay, PhaseColor } from './recoveryWorkoutData';
 
 export const GOLF_PHASE_COLOR: Record<string, PhaseColor> = {
-  MOBILITY: { bg: '#1a3a2a', accent: '#10b981', label: 'Mobility' },
-  POWER: { bg: '#3b2f00', accent: '#eab308', label: 'Rotational Power' },
-  STABILITY: { bg: '#1e3a5f', accent: '#3b82f6', label: 'Stability' },
-  REST: { bg: '#1e293b', accent: '#475569', label: 'Rest' },
+  MOBILITY: { bg: '#2A3318', accent: '#8B7355', label: 'Mobility' },
+  POWER: { bg: '#3D4A1F', accent: '#C4A35A', label: 'Rotational Power' },
+  STABILITY: { bg: '#2A3318', accent: '#D2B48C', label: 'Stability' },
+  REST: { bg: '#161a10', accent: '#8B7355', label: 'Rest' },
 };
 
 export const GOLF_SCHEDULE = [

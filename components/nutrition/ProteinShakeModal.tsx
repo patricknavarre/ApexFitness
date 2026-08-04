@@ -50,8 +50,8 @@ export function ProteinShakeModal({ visible, value, onChange, onConfirm, onCance
             min={1}
             max={300}
             autoFocus
-            className={`w-full rounded-card bg-bg border px-4 py-3.5 pr-16 font-mono text-xl font-bold text-text outline-none focus:ring-2 focus:ring-accent3 ${
-              value && !isValid ? 'border-accent2' : 'border-border focus:border-accent3'
+            className={`w-full rounded-card bg-bg border px-4 py-3.5 pr-16 font-mono text-xl font-bold text-text outline-none focus:ring-2 focus:ring-accent ${
+              value && !isValid ? 'border-accent2' : 'border-border focus:border-accent'
             }`}
           />
           <span className="absolute right-4 top-1/2 -translate-y-1/2 font-sans text-sm font-semibold text-muted">
@@ -75,8 +75,8 @@ export function ProteinShakeModal({ visible, value, onChange, onConfirm, onCance
                 onClick={() => onChange(String(g))}
                 className={`rounded-lg border px-3.5 py-1.5 font-mono text-sm font-bold transition-colors ${
                   value === String(g)
-                    ? 'border-accent3 bg-accent3/10 text-accent3'
-                    : 'border-border text-muted hover:border-accent3/50'
+                    ? 'border-accent bg-accent/10 text-accent'
+                    : 'border-border text-muted hover:border-accent/50'
                 }`}
               >
                 {g}g
@@ -97,7 +97,7 @@ export function ProteinShakeModal({ visible, value, onChange, onConfirm, onCance
             type="button"
             onClick={onConfirm}
             disabled={!isValid}
-            className="flex-[2] rounded-card py-3 font-sans text-sm font-bold text-black bg-accent3 hover:shadow-glow-accent3 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            className="flex-[2] rounded-card py-3 font-sans text-sm font-bold text-black bg-accent hover:shadow-glow disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             Confirm
           </button>

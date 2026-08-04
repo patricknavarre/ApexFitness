@@ -41,8 +41,8 @@ function NavItem({
   return (
     <Link
       href={href}
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-card transition-colors ${
-        active ? 'bg-bg3 text-accent' : 'text-muted hover:text-text hover:bg-bg2'
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-card transition-colors duration-200 ${
+        active ? 'bg-accent3 text-tan' : 'text-muted hover:text-tan hover:bg-bg2'
       }`}
     >
       <span className="flex-shrink-0">
@@ -66,7 +66,7 @@ export function Sidebar() {
         onMouseLeave={() => setExpanded(false)}
       >
         <div className="p-3 flex items-center justify-center h-14 border-b border-border">
-          <Link href="/dashboard" className="font-display text-xl text-accent">
+          <Link href="/dashboard" className="font-display text-xl text-tan tracking-wide">
             APEX
           </Link>
         </div>
@@ -89,14 +89,14 @@ export function Sidebar() {
         </div>
       </aside>
       {/* Mobile bottom tab bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-14 bg-card border-t border-border z-20 flex items-center justify-around px-2">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-14 bg-card/95 backdrop-blur-sm border-t border-border z-20 flex items-center justify-around px-2 shadow-[0_-4px_24px_rgba(75,83,32,0.25)]">
         {NAV.map((item) => {
           const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors ${active ? 'text-accent' : 'text-muted hover:text-accent'}`}
+              className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors duration-200 ${active ? 'text-accent' : 'text-muted hover:text-tan'}`}
             >
               <item.Icon />
               <span className="font-sans text-[10px] mt-0.5">

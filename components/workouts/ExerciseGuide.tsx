@@ -18,7 +18,7 @@ export function ExerciseGuide({ exerciseName }: Props) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="text-accent3 font-sans text-xs hover:underline"
+        className="text-accent font-sans text-xs hover:underline"
       >
         {open ? 'Hide how to' : 'How to'}
       </button>

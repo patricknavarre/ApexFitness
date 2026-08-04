@@ -22,7 +22,7 @@ export default function HomePage() {
         {/* Feature callouts */}
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-3xl w-full">
           <div className="bg-card border border-border rounded-card p-6 text-center">
-            <div className="text-accent3 font-mono text-sm uppercase tracking-wider mb-2">
+            <div className="text-accent font-mono text-sm uppercase tracking-wider mb-2">
               AI Analysis
             </div>
             <p className="font-sans text-muted text-sm">
@@ -30,7 +30,7 @@ export default function HomePage() {
             </p>
           </div>
           <div className="bg-card border border-border rounded-card p-6 text-center">
-            <div className="text-accent3 font-mono text-sm uppercase tracking-wider mb-2">
+            <div className="text-accent font-mono text-sm uppercase tracking-wider mb-2">
               Smart Planning
             </div>
             <p className="font-sans text-muted text-sm">
@@ -38,7 +38,7 @@ export default function HomePage() {
             </p>
           </div>
           <div className="bg-card border border-border rounded-card p-6 text-center">
-            <div className="text-accent3 font-mono text-sm uppercase tracking-wider mb-2">
+            <div className="text-accent font-mono text-sm uppercase tracking-wider mb-2">
               Track Progress
             </div>
             <p className="font-sans text-muted text-sm">

@@ -153,7 +153,7 @@ export function DashboardStatsRow({
         className="bg-card border border-border rounded-card p-3 sm:p-4 hover:border-accent/40 transition-colors"
       >
         <p className="font-mono text-[10px] uppercase tracking-wider text-muted mb-1">Calories</p>
-        <p className="font-mono text-base sm:text-lg text-accent3 leading-tight">
+        <p className="font-mono text-base sm:text-lg text-accent leading-tight">
           {totalCal}
           {calorieTarget != null && (
             <span className="text-muted text-xs font-sans"> / {calorieTarget}</span>
@@ -186,17 +186,17 @@ export function DashboardStatsRow({
                 stroke="currentColor"
                 strokeWidth="3"
                 strokeLinecap="round"
-                className="text-accent3"
+                className="text-accent"
                 strokeDasharray={weekCircumference}
                 strokeDashoffset={weekCircumference * (1 - weekPct / 100)}
               />
             </svg>
-            <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-accent3">
+            <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-accent">
               {daysThisWeek}
             </span>
           </div>
           <div>
-            <p className="font-mono text-base sm:text-lg text-accent3 leading-tight">
+            <p className="font-mono text-base sm:text-lg text-accent leading-tight">
               {streak}
               <span className="text-muted text-xs font-sans"> day{streak !== 1 ? 's' : ''}</span>
             </p>

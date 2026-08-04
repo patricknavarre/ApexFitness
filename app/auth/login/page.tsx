@@ -63,7 +63,7 @@ function LoginForm() {
             Sign in
           </h1>
           {registered && (
-            <p className="font-sans text-accent3 text-sm text-center mt-2">
+            <p className="font-sans text-accent text-sm text-center mt-2">
               Account created. Sign in below.
             </p>
           )}

@@ -25,9 +25,9 @@ export function DailyStoicContent({ meditation, variant = 'page', className = ''
       </h2>
 
       <div className={`space-y-5 ${isModal ? 'max-h-[50vh] overflow-y-auto pr-1' : ''}`}>
-        <blockquote className="relative border-l-2 border-accent3/50 pl-5">
+        <blockquote className="relative border-l-2 border-accent/50 pl-5">
           <span
-            className="absolute -left-1 -top-2 font-display text-4xl text-accent3/20 leading-none select-none"
+            className="absolute -left-1 -top-2 font-display text-4xl text-accent/20 leading-none select-none"
             aria-hidden
           >
             &ldquo;

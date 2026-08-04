@@ -47,61 +47,70 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-4 sm:space-y-5 max-w-4xl">
-      <div className="flex items-baseline justify-between gap-4">
-        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
-          Dashboard
-        </h1>
-        <p className="font-sans text-sm text-muted shrink-0">{formatDisplayDate()}</p>
+      <div className="od-enter flex items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-1">
+            Mission · Today
+          </p>
+          <h1 className="font-display text-3xl text-tan uppercase tracking-wide">Dashboard</h1>
+        </div>
+        <p className="font-mono text-xs text-muted shrink-0 pb-1">{formatDisplayDate()}</p>
       </div>
 
-      <DashboardStatsRow
-        activePlanId={activePlanId}
-        planStartedAt={planStartedAt}
-        activePlanDayNumber={activePlanDayNumber}
-        activePlanDaySetOn={activePlanDaySetOn}
-      />
+      <div className="od-enter od-enter-delay-1">
+        <DashboardStatsRow
+          activePlanId={activePlanId}
+          planStartedAt={planStartedAt}
+          activePlanDayNumber={activePlanDayNumber}
+          activePlanDaySetOn={activePlanDaySetOn}
+        />
+      </div>
 
-      <MomentumCard activePlanId={activePlanId} planStartedAt={planStartedAt} />
+      <div className="od-enter od-enter-delay-1">
+        <MomentumCard activePlanId={activePlanId} planStartedAt={planStartedAt} />
+      </div>
 
-      <TodayWorkoutCard
-        activePlanId={activePlanId}
-        planStartedAt={planStartedAt}
-        activePlanDayNumber={activePlanDayNumber}
-        activePlanDaySetOn={activePlanDaySetOn}
-      />
+      <div className="od-enter od-enter-delay-2">
+        <TodayWorkoutCard
+          activePlanId={activePlanId}
+          planStartedAt={planStartedAt}
+          activePlanDayNumber={activePlanDayNumber}
+          activePlanDaySetOn={activePlanDaySetOn}
+        />
+      </div>
 
-      <AiInsightCard />
+      <div className="od-enter od-enter-delay-2">
+        <AiInsightCard />
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="od-enter od-enter-delay-3 grid grid-cols-1 md:grid-cols-2 gap-4">
         <CaloriesTodayCard />
         <MacrosTodayCard />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="od-enter od-enter-delay-3 grid grid-cols-1 md:grid-cols-2 gap-4">
         <SuggestMealCard />
         <ProgressSnapshotCard />
       </div>
 
       {!activePlanId && (
         <div className="bg-bg2/50 border border-border rounded-card px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="font-sans text-sm text-muted">
-            Pick a workout plan to get started.
-          </p>
+          <p className="font-sans text-sm text-muted">Pick a workout plan to get started.</p>
           <Link
             href="/workouts"
-            className="font-sans text-sm text-accent3 hover:underline shrink-0"
+            className="od-cta inline-flex min-h-[40px] items-center rounded-card bg-accent px-4 py-2 font-sans text-sm font-bold uppercase text-black hover:shadow-glow"
           >
-            Pick a plan →
+            Pick a plan
           </Link>
         </div>
       )}
 
       <p className="font-sans text-xs text-muted text-center pt-1">
-        <Link href="/workouts" className="hover:text-accent transition-colors">
+        <Link href="/workouts" className="hover:text-tan transition-colors">
           Browse workout plans
         </Link>
         <span className="mx-2">·</span>
-        <Link href="/analysis" className="hover:text-accent transition-colors">
+        <Link href="/analysis" className="hover:text-tan transition-colors">
           AI Analysis
         </Link>
       </p>

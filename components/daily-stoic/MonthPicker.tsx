@@ -19,8 +19,8 @@ export function MonthPicker({ selectedMonth, onSelectMonth }: Props) {
             onClick={() => onSelectMonth(m.key)}
             className={`shrink-0 rounded-full px-3.5 py-1.5 font-sans text-xs font-semibold transition-all ${
               active
-                ? 'border border-accent3 bg-accent3/10 text-accent3 shadow-glow-accent3'
-                : 'border border-border text-muted hover:border-accent3/40 hover:text-text'
+                ? 'border border-accent bg-accent/10 text-accent shadow-glow'
+                : 'border border-border text-muted hover:border-accent/40 hover:text-text'
             }`}
           >
             {m.label}

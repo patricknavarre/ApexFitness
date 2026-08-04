@@ -136,7 +136,7 @@ export function MomentumCard({ activePlanId, planStartedAt, variant = 'card' }: 
       <div className="flex items-start justify-between gap-3 mb-4">
         <h2 className="font-display text-lg text-muted uppercase tracking-wide">Momentum</h2>
         {!isFull && (
-          <p className="font-mono text-[10px] uppercase tracking-widest text-accent3">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-accent">
             {streak} day streak
           </p>
         )}
@@ -162,7 +162,7 @@ export function MomentumCard({ activePlanId, planStartedAt, variant = 'card' }: 
               <span
                 className={`h-2.5 w-2.5 rounded-full transition-all duration-300 ${
                   hit
-                    ? 'bg-accent3 shadow-[0_0_8px_rgba(0,210,255,0.55)] scale-110'
+                    ? 'bg-accent shadow-glow scale-110'
                     : 'bg-bg3 border border-border'
                 }`}
               />
@@ -177,7 +177,7 @@ export function MomentumCard({ activePlanId, planStartedAt, variant = 'card' }: 
           <p className="font-sans text-sm text-text mb-2">{nextGoal.label}</p>
           <div className="h-1.5 rounded-full bg-bg3 overflow-hidden">
             <div
-              className="h-full rounded-full bg-accent3 transition-all duration-500 ease-out"
+              className="h-full rounded-full bg-accent transition-all duration-500 ease-out"
               style={{ width: `${pct(nextGoal.progress, nextGoal.target)}%` }}
             />
           </div>
@@ -195,13 +195,13 @@ export function MomentumCard({ activePlanId, planStartedAt, variant = 'card' }: 
               key={m.id}
               className={`rounded-card border px-3 py-3 transition-colors ${
                 m.earned
-                  ? 'border-accent3/50 bg-accent3/5'
+                  ? 'border-accent/50 bg-accent/5'
                   : 'border-border bg-bg2/40 opacity-70'
               }`}
             >
               <p
                 className={`font-sans text-sm font-semibold ${
-                  m.earned ? 'text-accent3' : 'text-muted'
+                  m.earned ? 'text-accent' : 'text-muted'
                 }`}
               >
                 {m.earned ? '✓ ' : ''}
@@ -211,7 +211,7 @@ export function MomentumCard({ activePlanId, planStartedAt, variant = 'card' }: 
               {!m.earned && (
                 <div className="mt-2 h-1 rounded-full bg-bg3 overflow-hidden">
                   <div
-                    className="h-full bg-accent3/60 transition-all duration-500"
+                    className="h-full bg-accent/60 transition-all duration-500"
                     style={{ width: `${pct(m.progress, m.target)}%` }}
                   />
                 </div>
@@ -226,7 +226,7 @@ export function MomentumCard({ activePlanId, planStartedAt, variant = 'card' }: 
               key={m.id}
               className={`shrink-0 rounded-full border px-3 py-1 font-mono text-[10px] uppercase tracking-wide transition-all ${
                 m.earned
-                  ? 'border-accent3/60 text-accent3 shadow-[0_0_10px_rgba(0,210,255,0.25)]'
+                  ? 'border-accent/60 text-accent shadow-glow'
                   : 'border-border text-muted'
               }`}
             >
@@ -240,7 +240,7 @@ export function MomentumCard({ activePlanId, planStartedAt, variant = 'card' }: 
       {!isFull && (
         <Link
           href="/progress"
-          className="mt-4 inline-block font-sans text-xs text-accent3 hover:underline"
+          className="mt-4 inline-block font-sans text-xs text-accent hover:underline"
         >
           See all progress →
         </Link>
@@ -285,7 +285,7 @@ export function ProgressHeroStats({
           <p className="font-mono text-[9px] uppercase tracking-widest text-muted mb-1">
             {stat.label}
           </p>
-          <p className="font-display text-2xl sm:text-3xl text-accent3 leading-none">
+          <p className="font-display text-2xl sm:text-3xl text-accent leading-none">
             {stat.value}
           </p>
           <p className="font-sans text-[10px] text-muted mt-1">{stat.suffix}</p>

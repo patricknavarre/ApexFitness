@@ -41,7 +41,7 @@ function MacroBar({
   label,
   current,
   target,
-  color = 'var(--accent3)',
+  color = 'var(--accent)',
 }: {
   label: string;
   current: number;
@@ -161,7 +161,7 @@ export default function NutritionPage() {
     <Suspense
       fallback={
         <div className="space-y-6">
-          <h1 className="font-display text-3xl text-accent uppercase tracking-wide">Nutrition</h1>
+          <h1 className="font-display text-3xl text-tan uppercase tracking-wide">Nutrition</h1>
           <p className="font-sans text-muted text-sm">Loading…</p>
         </div>
       }
@@ -838,7 +838,7 @@ function NutritionPageInner() {
       {/* Header + date */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
+          <h1 className="font-display text-3xl text-tan uppercase tracking-wide">
             Nutrition
           </h1>
           <p className="font-sans text-muted mt-1 text-sm">
@@ -862,7 +862,7 @@ function NutritionPageInner() {
               <button
                 type="button"
                 onClick={() => setDate(todayISO())}
-                className="font-sans text-[10px] text-accent3 hover:underline mt-0.5"
+                className="font-sans text-[10px] text-accent hover:underline mt-0.5"
               >
                 Jump to today
               </button>
@@ -909,12 +909,12 @@ function NutritionPageInner() {
       )}
 
       {/* AI Scan hero */}
-      <section className="relative overflow-hidden rounded-card border-2 border-accent3/40 bg-gradient-to-br from-accent3/10 via-card to-card p-5 sm:p-6 shadow-glow-accent3">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-accent3/5 rounded-full blur-3xl pointer-events-none" />
+      <section className="relative overflow-hidden rounded-card border-2 border-accent/40 bg-gradient-to-br from-accent/10 via-card to-card p-5 sm:p-6 shadow-glow">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl pointer-events-none" />
         <div className="relative">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-accent3"><IconScan /></span>
-            <h2 className="font-display text-xl text-accent3 uppercase tracking-wide">
+            <span className="text-accent"><IconScan /></span>
+            <h2 className="font-display text-xl text-accent uppercase tracking-wide">
               AI Food Scanner
             </h2>
           </div>
@@ -933,7 +933,7 @@ function NutritionPageInner() {
                 value={scanDescription}
                 onChange={(e) => setScanDescription(e.target.value)}
                 placeholder="What's in the photo?"
-                className="w-full bg-bg3 border border-border rounded-card px-3 py-2.5 font-sans text-sm text-text focus:outline-none focus:border-accent3"
+                className="w-full bg-bg3 border border-border rounded-card px-3 py-2.5 font-sans text-sm text-text focus:outline-none focus:border-accent"
               />
             </div>
           )}
@@ -943,7 +943,7 @@ function NutritionPageInner() {
               <button
                 type="button"
                 onClick={openCameraForScan}
-                className="flex-1 flex items-center justify-center gap-2 bg-accent3 text-black font-sans font-bold text-sm uppercase px-6 py-4 rounded-card hover:shadow-glow-accent3 transition-shadow"
+                className="flex-1 flex items-center justify-center gap-2 bg-accent text-black font-sans font-bold text-sm uppercase px-6 py-4 rounded-card hover:shadow-glow transition-shadow"
               >
                 <IconScan />
                 Take photo
@@ -951,7 +951,7 @@ function NutritionPageInner() {
               <button
                 type="button"
                 onClick={openLibraryForScan}
-                className="flex-1 bg-bg3 border border-border text-text font-sans font-medium text-sm px-6 py-4 rounded-card hover:border-accent3 transition-colors"
+                className="flex-1 bg-bg3 border border-border text-text font-sans font-medium text-sm px-6 py-4 rounded-card hover:border-accent transition-colors"
               >
                 Choose from library
               </button>
@@ -978,7 +978,7 @@ function NutritionPageInner() {
                         type="button"
                         onClick={handleAnalyze}
                         disabled={scanLoading || !scanImage}
-                        className="bg-accent3 text-black font-sans font-bold uppercase text-sm px-6 py-3 rounded-card hover:shadow-glow-accent3 disabled:opacity-50 w-fit"
+                        className="bg-accent text-black font-sans font-bold uppercase text-sm px-6 py-3 rounded-card hover:shadow-glow disabled:opacity-50 w-fit"
                       >
                         {scanLoading ? 'Analyzing…' : 'Analyze with AI'}
                       </button>
@@ -1022,7 +1022,7 @@ function NutritionPageInner() {
                       id="scan-target-meal"
                       value={scanTargetMeal}
                       onChange={(e) => setScanTargetMeal(e.target.value as Meal)}
-                      className="bg-bg3 border border-border text-text font-sans text-sm px-3 py-2 rounded-card focus:outline-none focus:border-accent3"
+                      className="bg-bg3 border border-border text-text font-sans text-sm px-3 py-2 rounded-card focus:outline-none focus:border-accent"
                     >
                       {MEALS.map((m) => (
                         <option key={m} value={m}>{MEAL_LABELS[m]}</option>
@@ -1208,7 +1208,7 @@ function NutritionPageInner() {
                   className="bg-card border border-border rounded-card overflow-hidden flex flex-col"
                 >
                   <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-bg2/30">
-                    <h3 className="font-display text-sm text-accent3 uppercase tracking-wide">
+                    <h3 className="font-display text-sm text-accent uppercase tracking-wide">
                       {MEAL_LABELS[meal]}
                     </h3>
                     {items.length > 0 && (
@@ -1285,7 +1285,7 @@ function NutritionPageInner() {
                       <button
                         type="button"
                         onClick={() => setAddingMeal(meal)}
-                        className="font-sans text-xs text-muted hover:text-accent3 transition-colors mt-1"
+                        className="font-sans text-xs text-muted hover:text-accent transition-colors mt-1"
                       >
                         + Add manually
                       </button>
@@ -1382,7 +1382,7 @@ function NutritionPageInner() {
                   />
                   <Bar
                     dataKey="calories"
-                    fill="var(--accent3)"
+                    fill="var(--accent)"
                     radius={[3, 3, 0, 0]}
                     className="cursor-pointer"
                     onClick={(entry) => {
@@ -1403,7 +1403,7 @@ function NutritionPageInner() {
       {historyDate && (
         <div className="bg-card border border-border rounded-card p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-display text-lg text-accent3 uppercase tracking-wide">
+            <h2 className="font-display text-lg text-accent uppercase tracking-wide">
               Meals on {formatDisplayDate(historyDate)}
             </h2>
             <button

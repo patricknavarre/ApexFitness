@@ -26,10 +26,10 @@ export type PhaseColor = {
 };
 
 export const PHASE_COLOR: Record<string, PhaseColor> = {
-  PUSH: { bg: '#1e3a5f', accent: '#3b82f6', label: 'Push Day' },
-  PULL: { bg: '#1a3a2a', accent: '#10b981', label: 'Pull Day' },
-  'LOWER + ANKLE': { bg: '#3b1a00', accent: '#f97316', label: 'Lower + Ankle' },
-  REST: { bg: '#1e293b', accent: '#475569', label: 'Rest' },
+  PUSH: { bg: '#2A3318', accent: '#C4A35A', label: 'Push Day' },
+  PULL: { bg: '#3D4A1F', accent: '#D2B48C', label: 'Pull Day' },
+  'LOWER + ANKLE': { bg: '#2A3318', accent: '#8B7355', label: 'Lower + Ankle' },
+  REST: { bg: '#161a10', accent: '#8B7355', label: 'Rest' },
 };
 
 export const RECOVERY_SCHEDULE = [

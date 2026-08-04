@@ -19,7 +19,7 @@ export function DailyStoicModal({ meditation, onDismiss }: Props) {
         <Link
           href="/daily-stoic"
           onClick={onDismiss}
-          className="font-sans text-xs text-accent3 hover:underline mb-4 mt-1"
+          className="font-sans text-xs text-accent hover:underline mb-4 mt-1"
         >
           Browse all days →
         </Link>
@@ -29,7 +29,7 @@ export function DailyStoicModal({ meditation, onDismiss }: Props) {
           <button
             type="button"
             onClick={onDismiss}
-            className="w-full rounded-card py-3 font-sans text-sm font-bold text-black bg-accent3 hover:shadow-glow-accent3 transition-all"
+            className="w-full rounded-card py-3 font-sans text-sm font-bold text-black bg-accent hover:shadow-glow transition-all"
           >
             Got it
           </button>

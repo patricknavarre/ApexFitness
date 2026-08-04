@@ -47,9 +47,9 @@ export function getInteractiveWorkout(
 export function getPhaseColors(planId: string): Record<string, { bg: string; accent: string; label: string }> {
   if (planId === 'lt-dan') {
     return {
-      PUSH: { bg: '#1e3a5f', accent: '#3b82f6', label: 'Push Day' },
-      PULL: { bg: '#1a3a2a', accent: '#10b981', label: 'Pull Day' },
-      ARMS: { bg: '#2d1b4e', accent: '#a855f7', label: 'Arms & Core' },
+      PUSH: { bg: '#2A3318', accent: '#C4A35A', label: 'Push Day' },
+      PULL: { bg: '#3D4A1F', accent: '#D2B48C', label: 'Pull Day' },
+      ARMS: { bg: '#2A3318', accent: '#8B7355', label: 'Arms & Core' },
     };
   }
   if (planId === 'ankle-pt') {
@@ -85,7 +85,7 @@ export function getPhaseColors(planId: string): Record<string, { bg: string; acc
     PUSH: PHASE_COLOR.PUSH,
     PULL: PHASE_COLOR.PULL,
     'LOWER + ANKLE': PHASE_COLOR['LOWER + ANKLE'],
-    'CORE + LEGS': { bg: '#3b1a00', accent: '#f97316', label: 'Core + Legs' },
-    ARMS: { bg: '#2d1b4e', accent: '#a855f7', label: 'Arms & Core' },
+    'CORE + LEGS': { bg: '#3D4A1F', accent: '#C4A35A', label: 'Core + Legs' },
+    ARMS: { bg: '#2A3318', accent: '#8B7355', label: 'Arms & Core' },
   };
 }

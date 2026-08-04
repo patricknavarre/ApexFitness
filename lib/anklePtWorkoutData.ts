@@ -1,10 +1,10 @@
 import type { InteractiveWorkoutDay, PhaseColor } from './recoveryWorkoutData';
 
 export const ANKLE_PT_PHASE_COLOR: Record<string, PhaseColor> = {
-  STRENGTH: { bg: '#1a3a2a', accent: '#10b981', label: 'Ankle Strength' },
-  BALANCE: { bg: '#3b2f00', accent: '#eab308', label: 'Balance & Proprioception' },
-  MOBILITY: { bg: '#1e3a5f', accent: '#3b82f6', label: 'Mobility & Bike' },
-  REST: { bg: '#1e293b', accent: '#475569', label: 'Rest' },
+  STRENGTH: { bg: '#2A3318', accent: '#C4A35A', label: 'Ankle Strength' },
+  BALANCE: { bg: '#3D4A1F', accent: '#D2B48C', label: 'Balance & Proprioception' },
+  MOBILITY: { bg: '#2A3318', accent: '#8B7355', label: 'Mobility & Bike' },
+  REST: { bg: '#161a10', accent: '#8B7355', label: 'Rest' },
 };
 
 export const ANKLE_PT_SCHEDULE = [

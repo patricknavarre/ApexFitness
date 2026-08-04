@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
@@ -234,37 +234,62 @@ export function TodayWorkoutCard({
     }
   }
 
+  function Shell({
+    children,
+    badge,
+  }: {
+    children: ReactNode;
+    badge?: string;
+  }) {
+    return (
+      <div className="bg-card border border-border rounded-card overflow-hidden">
+        <div className="px-5 sm:px-6 py-3 border-b border-border bg-bg3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent mb-0.5">
+                Today&apos;s mission
+              </p>
+              <h2 className="font-display text-xl text-tan uppercase tracking-wide">
+                Today&apos;s Workout
+              </h2>
+            </div>
+            {badge ? (
+              <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-accent border-b border-accent/70 pb-0.5">
+                {badge}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div className="p-5 sm:p-6">{children}</div>
+      </div>
+    );
+  }
+
   if (!activePlanId || !planStartedAt) {
     return (
-      <div className="bg-card border border-border rounded-card p-5 sm:p-6">
-        <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
-          Today&apos;s Workout
-        </h2>
+      <Shell>
         <p className="font-sans text-muted text-sm mb-4">No workout plan selected.</p>
         <Link
           href="/workouts"
-          className="inline-block bg-accent text-black font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:shadow-glow"
+          className="od-cta inline-flex w-full min-h-[44px] items-center justify-center bg-accent text-black font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:shadow-glow"
         >
           Pick a plan
         </Link>
-      </div>
+      </Shell>
     );
   }
 
   if (!plan) {
     return (
-      <div className="bg-card border border-border rounded-card p-5 sm:p-6">
-        <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
-          Today&apos;s Workout
-        </h2>
+      <Shell>
         <p className="font-sans text-muted text-sm mb-4">Plan not found.</p>
         <Link
           href="/workouts"
-          className="inline-block bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
+          className="od-cta inline-flex w-full min-h-[44px] items-center justify-center border border-border text-tan font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
         >
           Browse plans
         </Link>
-      </div>
+      </Shell>
     );
   }
 
@@ -280,18 +305,15 @@ export function TodayWorkoutCard({
 
   if (!scheduledDay) {
     return (
-      <div className="bg-card border border-border rounded-card p-5 sm:p-6">
-        <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
-          Today&apos;s Workout
-        </h2>
+      <Shell>
         <p className="font-sans text-muted text-sm mb-4">Invalid start date.</p>
         <Link
           href="/workouts"
-          className="inline-block bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
+          className="od-cta inline-flex w-full min-h-[44px] items-center justify-center border border-border text-tan font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
         >
           Go to Workouts
         </Link>
-      </div>
+      </Shell>
     );
   }
 
@@ -309,15 +331,7 @@ export function TodayWorkoutCard({
   if (day.isRest) {
     if (display.restCredited) {
       return (
-        <div className="bg-card border border-border rounded-card p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-3 mb-2">
-            <h2 className="font-display text-lg text-muted uppercase tracking-wide">
-              Today&apos;s Workout
-            </h2>
-            <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-accent3 border-b border-accent3/70 pb-0.5">
-              Rest credited
-            </span>
-          </div>
+        <Shell badge="Rest credited">
           <p className="font-sans font-medium text-text mb-2">
             {plan.name} — Day {day.dayNumber}
           </p>
@@ -326,19 +340,16 @@ export function TodayWorkoutCard({
           </p>
           <Link
             href="/workouts"
-            className="inline-block bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
+            className="od-cta inline-flex w-full min-h-[44px] items-center justify-center border border-border text-tan font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
           >
             View plan
           </Link>
-        </div>
+        </Shell>
       );
     }
 
     return (
-      <div className="bg-card border border-border rounded-card p-5 sm:p-6">
-        <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
-          Today&apos;s Workout
-        </h2>
+      <Shell>
         <p className="font-sans font-medium text-text mb-1">
           {plan.name} — Day {day.dayNumber}
         </p>
@@ -350,23 +361,23 @@ export function TodayWorkoutCard({
             ? 'Checking macros…'
             : restMacro?.message ?? 'Loading nutrition status…'}
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2">
           <button
             type="button"
             disabled={creditingRest || restLoading || !restMacro?.ready}
             onClick={() => void creditRestDay()}
-            className="min-h-[44px] bg-accent3 text-black font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:shadow-glow-accent3 disabled:opacity-40"
+            className="od-cta w-full min-h-[44px] bg-accent text-black font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:shadow-glow disabled:opacity-40"
           >
             {creditingRest ? 'Saving…' : 'Rest day taken'}
           </button>
           <Link
             href="/nutrition"
-            className="inline-flex min-h-[44px] items-center bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
+            className="od-cta inline-flex w-full min-h-[44px] items-center justify-center border border-border text-tan font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
           >
             {restMacro?.ready ? 'View nutrition' : 'Log food'}
           </Link>
         </div>
-      </div>
+      </Shell>
     );
   }
 
@@ -374,15 +385,7 @@ export function TodayWorkoutCard({
 
   if (completed) {
     return (
-      <div className="bg-card border border-border rounded-card p-5 sm:p-6">
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <h2 className="font-display text-lg text-muted uppercase tracking-wide">
-            Today&apos;s Workout
-          </h2>
-          <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-accent3 border-b border-accent3/70 pb-0.5">
-            Completed
-          </span>
-        </div>
+      <Shell badge="Completed">
         <p className="font-sans font-medium text-text mb-2">
           {plan.name} — Day {day.dayNumber}: {day.title}
         </p>
@@ -391,19 +394,16 @@ export function TodayWorkoutCard({
         </p>
         <Link
           href="/workouts"
-          className="inline-block bg-bg3 border border-border text-text font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
+          className="od-cta inline-flex w-full min-h-[44px] items-center justify-center border border-border text-tan font-sans font-bold text-sm uppercase px-4 py-2.5 rounded-card hover:border-accent"
         >
           View plan
         </Link>
-      </div>
+      </Shell>
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-card p-5 sm:p-6">
-      <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
-        Today&apos;s Workout
-      </h2>
+    <Shell>
       <p className="font-sans font-medium text-text mb-3">
         {plan.name} — Day {day.dayNumber}: {day.title}
       </p>
@@ -428,14 +428,10 @@ export function TodayWorkoutCard({
       )}
       <Link
         href={plan.interactive ? '/workouts?start=1' : '/workouts'}
-        className={`inline-block font-sans font-bold text-sm uppercase px-5 py-2.5 rounded-card ${
-          plan.interactive
-            ? 'bg-accent3 text-black hover:shadow-glow-accent3'
-            : 'bg-accent text-black hover:shadow-glow'
-        }`}
+        className="od-cta inline-flex w-full min-h-[44px] items-center justify-center bg-accent text-black font-sans font-bold text-sm uppercase px-5 py-2.5 rounded-card hover:shadow-glow"
       >
         {ctaLabel}
       </Link>
-    </div>
+    </Shell>
   );
 }

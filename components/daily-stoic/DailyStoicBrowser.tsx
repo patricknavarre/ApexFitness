@@ -230,7 +230,7 @@ export function DailyStoicBrowser() {
         <button
           type="button"
           onClick={handleToday}
-          className="shrink-0 rounded-full border border-accent3/50 px-4 py-1.5 font-sans text-xs font-semibold text-accent3 hover:bg-accent3/10 hover:shadow-glow-accent3 transition-all"
+          className="shrink-0 rounded-full border border-accent/50 px-4 py-1.5 font-sans text-xs font-semibold text-accent hover:bg-accent/10 hover:shadow-glow transition-all"
         >
           Today
         </button>
@@ -248,11 +248,11 @@ export function DailyStoicBrowser() {
 
       <div className="relative">
         <div
-          className="absolute -inset-4 rounded-card bg-gradient-to-b from-accent3/5 via-transparent to-transparent pointer-events-none"
+          className="absolute -inset-4 rounded-card bg-gradient-to-b from-accent/5 via-transparent to-transparent pointer-events-none"
           aria-hidden
         />
         <div
-          className={`relative rounded-card border border-border bg-card p-6 sm:p-8 shadow-glow-accent3 transition-opacity duration-300 ${
+          className={`relative rounded-card border border-border bg-card p-6 sm:p-8 shadow-glow transition-opacity duration-300 ${
             fade ? 'opacity-100' : 'opacity-0'
           }`}
         >
@@ -263,7 +263,7 @@ export function DailyStoicBrowser() {
               <DailyStoicContent meditation={meditation} />
               <DailyStoicShareButton
                 meditation={meditation}
-                className="w-full sm:w-auto rounded-card border border-border bg-transparent px-5 py-2.5 font-sans text-sm font-bold text-muted hover:border-accent3 hover:text-accent3 transition-colors disabled:opacity-40"
+                className="w-full sm:w-auto rounded-card border border-border bg-transparent px-5 py-2.5 font-sans text-sm font-bold text-muted hover:border-accent hover:text-accent transition-colors disabled:opacity-40"
               />
             </div>
           ) : (
@@ -277,7 +277,7 @@ export function DailyStoicBrowser() {
           type="button"
           disabled={!adjacent.prev}
           onClick={() => adjacent.prev && selectByKey(adjacent.prev)}
-          className="rounded-card border border-border px-4 py-2.5 font-sans text-sm font-semibold text-muted hover:border-accent3/50 hover:text-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="rounded-card border border-border px-4 py-2.5 font-sans text-sm font-semibold text-muted hover:border-accent/50 hover:text-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           ← Previous
         </button>
@@ -288,7 +288,7 @@ export function DailyStoicBrowser() {
           type="button"
           disabled={!adjacent.next}
           onClick={() => adjacent.next && selectByKey(adjacent.next)}
-          className="rounded-card border border-border px-4 py-2.5 font-sans text-sm font-semibold text-muted hover:border-accent3/50 hover:text-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="rounded-card border border-border px-4 py-2.5 font-sans text-sm font-semibold text-muted hover:border-accent/50 hover:text-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           Next →
         </button>

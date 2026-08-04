@@ -367,7 +367,7 @@ export default function ProgressPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">Progress</h1>
+        <h1 className="font-display text-3xl text-tan uppercase tracking-wide">Progress</h1>
         <div className="rounded-card border border-border bg-bg2 h-64 animate-pulse" />
       </div>
     );
@@ -376,7 +376,7 @@ export default function ProgressPage() {
   return (
     <div className="max-w-4xl space-y-8">
       <div>
-        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">Progress</h1>
+        <h1 className="font-display text-3xl text-tan uppercase tracking-wide">Progress</h1>
         <p className="font-sans text-muted mt-2">
           Momentum, milestones, and your photo timeline.
         </p>
@@ -389,7 +389,7 @@ export default function ProgressPage() {
       />
 
       <section>
-        <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-2">
+        <h2 className="font-display text-xl text-tan uppercase tracking-wide mb-2">
           Exercise maxes
         </h2>
         <p className="font-sans text-muted text-sm mb-4">
@@ -441,7 +441,7 @@ export default function ProgressPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-2">
+        <h2 className="font-display text-xl text-tan uppercase tracking-wide mb-2">
           Weekly activity
         </h2>
         <p className="font-sans text-muted text-sm mb-4">
@@ -455,22 +455,22 @@ export default function ProgressPage() {
           <div className="rounded-card border border-border bg-card p-4">
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={weeklyActivity}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#4B5320" />
+                <XAxis dataKey="date" tick={{ fill: '#8B7355', fontSize: 11 }} />
                 <YAxis
                   yAxisId="left"
                   allowDecimals={false}
-                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  tick={{ fill: '#8B7355', fontSize: 11 }}
                 />
                 <YAxis
                   yAxisId="right"
                   orientation="right"
-                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  tick={{ fill: '#8B7355', fontSize: 11 }}
                 />
                 <Tooltip
                   contentStyle={{
-                    background: '#13131a',
-                    border: '1px solid #334155',
+                    background: '#161a10',
+                    border: '1px solid #4B5320',
                     borderRadius: 8,
                   }}
                 />
@@ -478,16 +478,16 @@ export default function ProgressPage() {
                   yAxisId="left"
                   dataKey="workouts"
                   name="Workouts"
-                  fill="#00d2ff"
+                  fill="#C4A35A"
                   radius={[4, 4, 0, 0]}
                 />
                 <Bar
                   yAxisId="right"
                   dataKey="burn"
                   name="Burn (cal)"
-                  fill="#e8ff47"
+                  fill="#4B5320"
                   radius={[4, 4, 0, 0]}
-                  opacity={0.7}
+                  opacity={0.9}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -500,7 +500,7 @@ export default function ProgressPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-2">
+        <h2 className="font-display text-xl text-tan uppercase tracking-wide mb-2">
           Daily calorie balance
         </h2>
         <p className="font-sans text-muted text-sm mb-4">
@@ -550,7 +550,7 @@ export default function ProgressPage() {
                       </td>
                       <td className="p-3 text-text">{day.totalBurn} cal</td>
                       <td className="p-3">
-                        <span className={day.surplus >= 0 ? 'text-accent3' : 'text-accent2'}>
+                        <span className={day.surplus >= 0 ? 'text-accent' : 'text-accent2'}>
                           {day.surplus >= 0 ? '+' : ''}
                           {day.surplus} cal
                         </span>
@@ -584,13 +584,13 @@ export default function ProgressPage() {
               <div>
                 <h3
                   id="day-panel-title"
-                  className="font-display text-xl text-accent uppercase tracking-wide"
+                  className="font-display text-xl text-tan uppercase tracking-wide"
                 >
                   {format(new Date(selectedDate + 'T12:00:00'), 'EEE, MMM d')}
                 </h3>
                 <p className="font-sans text-xs text-muted mt-1">
                   {selectedDay.intake} cal in · {selectedDay.totalBurn} burn ·{' '}
-                  <span className={selectedDay.surplus >= 0 ? 'text-accent3' : 'text-accent2'}>
+                  <span className={selectedDay.surplus >= 0 ? 'text-accent' : 'text-accent2'}>
                     {selectedDay.surplus >= 0 ? '+' : ''}
                     {selectedDay.surplus}
                   </span>
@@ -614,7 +614,7 @@ export default function ProgressPage() {
 
             <Link
               href={`/nutrition?date=${selectedDate}`}
-              className="flex min-h-[44px] items-center justify-center rounded-card bg-accent3 px-4 py-2.5 font-sans text-sm font-bold uppercase text-black hover:shadow-glow-accent3"
+              className="flex min-h-[44px] items-center justify-center rounded-card bg-accent px-4 py-2.5 font-sans text-sm font-bold uppercase text-black hover:shadow-glow"
             >
               Add food
             </Link>
@@ -731,7 +731,7 @@ export default function ProgressPage() {
               {!selectedHasRest && !restMacroStatus?.ready && (
                 <Link
                   href={`/nutrition?date=${selectedDate}`}
-                  className="inline-block font-sans text-xs text-accent3 hover:underline"
+                  className="inline-block font-sans text-xs text-accent hover:underline"
                 >
                   Log food for this day
                 </Link>
@@ -745,7 +745,7 @@ export default function ProgressPage() {
                   !restMacroStatus?.ready
                 }
                 onClick={() => void submitRestDay()}
-                className="w-full min-h-[44px] rounded-card border border-border px-4 py-2.5 font-sans text-sm font-bold uppercase text-text hover:border-accent3 disabled:opacity-40"
+                className="w-full min-h-[44px] rounded-card border border-border px-4 py-2.5 font-sans text-sm font-bold uppercase text-text hover:border-accent disabled:opacity-40"
               >
                 {logging ? 'Saving…' : selectedHasRest ? 'Rest credited' : 'Check off rest'}
               </button>
@@ -773,32 +773,32 @@ export default function ProgressPage() {
             <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {bodyFatData.length >= 2 && (
                 <div className="rounded-card border border-border bg-card p-4">
-                  <h2 className="font-display text-lg text-accent uppercase tracking-wide mb-3">
+                  <h2 className="font-display text-lg text-tan uppercase tracking-wide mb-3">
                     Body fat trend
                   </h2>
                   <ResponsiveContainer width="100%" height={180}>
                     <LineChart data={bodyFatData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                      <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} unit="%" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#4B5320" />
+                      <XAxis dataKey="date" tick={{ fill: '#8B7355', fontSize: 11 }} />
+                      <YAxis tick={{ fill: '#8B7355', fontSize: 11 }} unit="%" />
                       <Tooltip />
-                      <Line type="monotone" dataKey="bodyFat" stroke="#f97316" strokeWidth={2} dot />
+                      <Line type="monotone" dataKey="bodyFat" stroke="#C4A35A" strokeWidth={2} dot />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               )}
               {weightData.length >= 2 && (
                 <div className="rounded-card border border-border bg-card p-4">
-                  <h2 className="font-display text-lg text-accent uppercase tracking-wide mb-3">
+                  <h2 className="font-display text-lg text-tan uppercase tracking-wide mb-3">
                     Weight trend
                   </h2>
                   <ResponsiveContainer width="100%" height={180}>
                     <LineChart data={weightData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                      <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} unit=" lbs" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#4B5320" />
+                      <XAxis dataKey="date" tick={{ fill: '#8B7355', fontSize: 11 }} />
+                      <YAxis tick={{ fill: '#8B7355', fontSize: 11 }} unit=" lbs" />
                       <Tooltip />
-                      <Line type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={2} dot />
+                      <Line type="monotone" dataKey="weight" stroke="#D2B48C" strokeWidth={2} dot />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -808,7 +808,7 @@ export default function ProgressPage() {
 
           {photos.length >= 2 && (
             <section>
-              <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-3">
+              <h2 className="font-display text-xl text-tan uppercase tracking-wide mb-3">
                 Compare
               </h2>
               <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -890,7 +890,7 @@ export default function ProgressPage() {
           )}
 
           <section>
-            <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-3">
+            <h2 className="font-display text-xl text-tan uppercase tracking-wide mb-3">
               Timeline
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">

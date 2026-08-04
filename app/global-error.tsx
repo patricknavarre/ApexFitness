@@ -16,7 +16,7 @@ export default function GlobalError({
           <button
             onClick={reset}
             style={{
-              background: '#e8ff47',
+              background: '#c4a35a',
               color: '#000',
               fontWeight: 'bold',
               padding: '0.75rem 1.5rem',

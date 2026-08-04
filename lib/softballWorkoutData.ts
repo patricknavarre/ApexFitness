@@ -1,10 +1,10 @@
 import type { InteractiveWorkoutDay, PhaseColor } from './recoveryWorkoutData';
 
 export const SOFTBALL_PHASE_COLOR: Record<string, PhaseColor> = {
-  POWER: { bg: '#3b1a00', accent: '#f97316', label: 'Power' },
-  'ARM CARE': { bg: '#1e3a5f', accent: '#3b82f6', label: 'Arm Care' },
-  'LOWER DRIVE': { bg: '#1a3a2a', accent: '#10b981', label: 'Lower Drive' },
-  REST: { bg: '#1e293b', accent: '#475569', label: 'Rest' },
+  POWER: { bg: '#3D4A1F', accent: '#C4A35A', label: 'Power' },
+  'ARM CARE': { bg: '#2A3318', accent: '#D2B48C', label: 'Arm Care' },
+  'LOWER DRIVE': { bg: '#2A3318', accent: '#8B7355', label: 'Lower Drive' },
+  REST: { bg: '#161a10', accent: '#8B7355', label: 'Rest' },
 };
 
 export const SOFTBALL_SCHEDULE = [

@@ -131,7 +131,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div>
-        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">Settings</h1>
+        <h1 className="font-display text-3xl text-tan uppercase tracking-wide">Settings</h1>
         <p className="font-sans text-muted mt-2">Loading…</p>
       </div>
     );
@@ -140,13 +140,13 @@ export default function SettingsPage() {
   return (
     <div className="max-w-2xl space-y-8">
       <div>
-        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">Settings</h1>
+        <h1 className="font-display text-3xl text-tan uppercase tracking-wide">Settings</h1>
         <p className="font-sans text-muted mt-2">Profile and nutrition targets.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-card border border-border rounded-card p-6 space-y-4">
-          <h2 className="font-display text-lg text-accent3 uppercase tracking-wide">Profile</h2>
+          <h2 className="font-display text-lg text-accent uppercase tracking-wide">Profile</h2>
           <label className="block font-sans text-sm text-muted">Name</label>
           <input
             type="text"
@@ -219,7 +219,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="bg-card border border-border rounded-card p-6 space-y-4">
-          <h2 className="font-display text-lg text-accent3 uppercase tracking-wide">
+          <h2 className="font-display text-lg text-accent uppercase tracking-wide">
             Nutrition targets
           </h2>
           <p className="font-sans text-sm text-muted">
@@ -294,7 +294,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="bg-card border border-border rounded-card p-6 space-y-4">
-          <h2 className="font-display text-lg text-accent3 uppercase tracking-wide">Fitness</h2>
+          <h2 className="font-display text-lg text-accent uppercase tracking-wide">Fitness</h2>
           <div>
             <label className="block font-sans text-sm text-muted">Goal</label>
             <select
@@ -361,7 +361,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="bg-card border border-border rounded-card p-6 space-y-4">
-          <h2 className="font-display text-lg text-accent3 uppercase tracking-wide">Units</h2>
+          <h2 className="font-display text-lg text-accent uppercase tracking-wide">Units</h2>
           <select
             value={profile.units ?? 'imperial'}
             onChange={(e) =>

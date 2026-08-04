@@ -78,45 +78,23 @@ export function SelfDefenseBrowser() {
   }
 
   return (
-    <div
-      className="max-w-3xl space-y-6 rounded-card p-1"
-      style={{
-        background:
-          'linear-gradient(160deg, #12140F 0%, #1a1f12 45%, #12140F 100%)',
-      }}
-    >
-      <div className="px-1 pt-1">
-        <p
-          className="font-mono text-[10px] uppercase tracking-[0.22em] mb-2"
-          style={{ color: '#C4A35A' }}
-        >
+    <div className="max-w-3xl space-y-6 od-enter">
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent mb-2">
           Youth program · MCMAP-adapted
         </p>
-        <h1
-          className="font-display text-3xl uppercase tracking-wide"
-          style={{ color: '#D2B48C' }}
-        >
-          Self-Defense
-        </h1>
-        <p className="font-sans text-sm mt-2 leading-relaxed" style={{ color: '#a89b7c' }}>
-          Four modules. Progress in order. Adult/instructor supervision required.
-          Escape and get to a safe adult — never win the fight.
+        <h1 className="font-display text-3xl uppercase tracking-wide text-tan">Self-Defense</h1>
+        <p className="font-sans text-sm mt-2 leading-relaxed text-muted">
+          Four modules. Progress in order. Adult/instructor supervision required. Escape and get
+          to a safe adult — never win the fight.
         </p>
       </div>
 
-      <div
-        className="rounded-card border px-4 py-3"
-        style={{ borderColor: '#8B7355', backgroundColor: '#1a1f12' }}
-      >
-        <p
-          className="font-mono text-[10px] uppercase tracking-widest mb-2"
-          style={{ color: '#C4A35A' }}
-        >
-          Gear
-        </p>
+      <div className="rounded-card border border-border bg-bg3 px-4 py-3">
+        <p className="font-mono text-[10px] uppercase tracking-widest text-accent mb-2">Gear</p>
         <ul className="space-y-1">
           {YOUTH_SD_EQUIPMENT.map((item) => (
-            <li key={item} className="font-sans text-xs" style={{ color: '#a89b7c' }}>
+            <li key={item} className="font-sans text-xs text-muted">
               · {item}
             </li>
           ))}
@@ -129,54 +107,33 @@ export function SelfDefenseBrowser() {
             (n, s) => n + s.exercises.length,
             0
           );
-          const accent =
-            mod.phase === 'STRIKES'
-              ? '#C4A35A'
-              : mod.phase === 'ESCAPES'
-                ? '#8B7355'
-                : '#D2B48C';
           return (
             <div
               key={mod.id}
-              className="rounded-card border overflow-hidden"
-              style={{ borderColor: '#4B5320', backgroundColor: '#161a10' }}
+              className="rounded-card border border-border bg-card overflow-hidden"
             >
-              <div
-                className="px-4 py-3 border-b"
-                style={{ borderColor: '#3D4A1F', backgroundColor: '#2A3318' }}
-              >
+              <div className="px-4 py-3 border-b border-border bg-bg3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <p
-                    className="font-mono text-[10px] uppercase tracking-[0.2em]"
-                    style={{ color: accent }}
-                  >
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent">
                     Module {String(mod.number).padStart(2, '0')}
                   </p>
-                  <p className="font-mono text-[10px]" style={{ color: '#8B7355' }}>
-                    {exerciseCount} drills
-                  </p>
+                  <p className="font-mono text-[10px] text-muted">{exerciseCount} drills</p>
                 </div>
-                <h2
-                  className="font-display text-xl uppercase tracking-wide mt-1"
-                  style={{ color: '#D2B48C' }}
-                >
+                <h2 className="font-display text-xl uppercase tracking-wide mt-1 text-tan">
                   {mod.title}
                 </h2>
               </div>
               <div className="px-4 py-4 space-y-3">
-                <p className="font-sans text-sm" style={{ color: '#a89b7c' }}>
-                  {mod.summary}
-                </p>
+                <p className="font-sans text-sm text-muted">{mod.summary}</p>
                 <ul className="space-y-1">
                   {mod.workout.sections.flatMap((section) =>
                     section.exercises.map((ex) => (
                       <li
                         key={ex.name}
-                        className="font-sans text-xs flex justify-between gap-3"
-                        style={{ color: '#c4b896' }}
+                        className="font-sans text-xs flex justify-between gap-3 text-tan/90"
                       >
                         <span className="truncate">{ex.name}</span>
-                        <span className="shrink-0 font-mono" style={{ color: '#8B7355' }}>
+                        <span className="shrink-0 font-mono text-muted">
                           {ex.sets}×{ex.reps}
                         </span>
                       </li>
@@ -186,8 +143,7 @@ export function SelfDefenseBrowser() {
                 <button
                   type="button"
                   onClick={() => setActive(mod)}
-                  className="w-full rounded-card py-3 font-sans text-sm font-bold uppercase tracking-wide transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: '#4B5320', color: '#D2B48C' }}
+                                  className="od-cta w-full rounded-card py-3 font-sans text-sm font-bold uppercase tracking-wide bg-accent3 text-tan hover:shadow-glow-accent3"
                 >
                   Practice
                 </button>
@@ -197,10 +153,7 @@ export function SelfDefenseBrowser() {
         })}
       </div>
 
-      <p
-        className="font-mono text-[10px] uppercase tracking-widest text-center pb-2"
-        style={{ color: '#5c5340' }}
-      >
+      <p className="font-mono text-[10px] uppercase tracking-widest text-center text-muted/80 pb-2">
         Clear space · Create distance · Yell / run
       </p>
     </div>

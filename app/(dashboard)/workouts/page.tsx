@@ -135,14 +135,14 @@ function DayCard({
         <span className="font-sans font-medium text-muted">
           Day {day.dayNumber} — Rest
           {isToday && (
-            <span className="ml-2 font-mono text-xs text-accent3 uppercase">Your day</span>
+            <span className="ml-2 font-mono text-xs text-accent uppercase">Your day</span>
           )}
         </span>
         {!isToday && onSetAsActiveDay && (
           <button
             type="button"
             onClick={onSetAsActiveDay}
-            className="font-sans text-xs text-accent3 hover:underline shrink-0"
+            className="font-sans text-xs text-accent hover:underline shrink-0"
           >
             Do this day
           </button>
@@ -160,7 +160,7 @@ function DayCard({
         <span className="font-sans font-medium text-text">
           Day {day.dayNumber} — {day.title}
           {isToday && (
-            <span className="ml-2 font-mono text-xs text-accent3 uppercase">Your day</span>
+            <span className="ml-2 font-mono text-xs text-accent uppercase">Your day</span>
           )}
           {isLogged && <span className="ml-2 text-accent text-xs">Done</span>}
         </span>
@@ -172,7 +172,7 @@ function DayCard({
             <button
               type="button"
               onClick={onSetAsActiveDay}
-              className="font-sans text-xs text-accent3 hover:underline"
+              className="font-sans text-xs text-accent hover:underline"
             >
               Set as my day →
             </button>
@@ -182,7 +182,7 @@ function DayCard({
               <button
                 type="button"
                 onClick={onStartWorkout}
-                className="w-full bg-accent3 text-black font-sans font-bold text-sm uppercase px-3 py-2.5 rounded-card hover:shadow-glow-accent3"
+                className="w-full bg-accent text-black font-sans font-bold text-sm uppercase px-3 py-2.5 rounded-card hover:shadow-glow"
               >
                 {isToday ? 'Start today\'s workout' : 'Start workout mode'}
               </button>
@@ -238,7 +238,7 @@ function DayCard({
                   }));
                   ensureRows(i);
                 }}
-                className="text-accent3 font-sans text-xs hover:underline"
+                className="text-accent font-sans text-xs hover:underline"
               >
                 {exerciseOpen[i] ? 'Hide sets' : 'Log sets'}
               </button>
@@ -386,10 +386,10 @@ function PlanCard({
                   : 'Full gym'}
           </span>
           {plan.interactive && (
-            <span className="ml-2 font-sans text-xs text-accent3">Interactive</span>
+            <span className="ml-2 font-sans text-xs text-accent">Interactive</span>
           )}
           {activeDay && (
-            <p className="font-sans text-sm text-accent3 mt-2">
+            <p className="font-sans text-sm text-accent mt-2">
               Your day: Day {activeDay.dayNumber} — {activeDay.day.title}
               {!activeDay.isManual && (
                 <span className="text-muted text-xs ml-1">(auto)</span>
@@ -434,7 +434,7 @@ function PlanCard({
                       e.stopPropagation();
                       onStartWorkout(plan.id, activeDay.dayNumber, activeDay.day.title);
                     }}
-                    className="bg-accent3 text-black font-sans font-bold text-sm uppercase px-4 py-2 rounded-card hover:shadow-glow-accent3"
+                    className="bg-accent text-black font-sans font-bold text-sm uppercase px-4 py-2 rounded-card hover:shadow-glow"
                   >
                     Start workout
                   </button>
@@ -452,7 +452,7 @@ function PlanCard({
                     id={`plan-day-${plan.id}`}
                     value={activeDay?.dayNumber ?? plan.days[0]?.dayNumber ?? 1}
                     onChange={(e) => onSetActiveDay(Number(e.target.value))}
-                    className="flex-1 min-w-[12rem] bg-bg3 border border-border text-text font-sans text-sm px-3 py-2 rounded-card focus:outline-none focus:border-accent3"
+                    className="flex-1 min-w-[12rem] bg-bg3 border border-border text-text font-sans text-sm px-3 py-2 rounded-card focus:outline-none focus:border-accent"
                   >
                     {plan.days.map((d) => (
                       <option key={d.dayNumber} value={d.dayNumber}>
@@ -888,7 +888,7 @@ function WorkoutsPageInner() {
         />
       )}
       <div>
-        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
+        <h1 className="font-display text-3xl text-tan uppercase tracking-wide">
           Workouts
         </h1>
         <p className="font-sans text-muted mt-2">
@@ -987,7 +987,7 @@ function WorkoutsPageFallback() {
   return (
     <div className="max-w-3xl space-y-8">
       <div>
-        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">Workouts</h1>
+        <h1 className="font-display text-3xl text-tan uppercase tracking-wide">Workouts</h1>
         <p className="font-sans text-muted mt-2">Loading…</p>
       </div>
     </div>

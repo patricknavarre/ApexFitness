@@ -326,7 +326,7 @@ export default function AnalysisPage() {
   return (
     <div className="max-w-4xl space-y-8">
       <div>
-        <h1 className="font-display text-3xl text-accent uppercase tracking-wide">
+        <h1 className="font-display text-3xl text-tan uppercase tracking-wide">
           AI Body Analysis
         </h1>
         <p className="font-sans text-muted mt-2">
@@ -341,7 +341,7 @@ export default function AnalysisPage() {
             <div>
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-border rounded-card p-8 text-center cursor-pointer hover:border-accent3 transition-colors min-h-[280px] flex flex-col items-center justify-center"
+                className="border-2 border-dashed border-border rounded-card p-8 text-center cursor-pointer hover:border-accent transition-colors min-h-[280px] flex flex-col items-center justify-center"
               >
                 <input
                   ref={fileInputRef}
@@ -363,7 +363,7 @@ export default function AnalysisPage() {
                   </div>
                 ) : (
                   <>
-                    <span className="text-accent3 font-mono text-sm uppercase tracking-wider block mb-2">
+                    <span className="text-accent font-mono text-sm uppercase tracking-wider block mb-2">
                       Take or upload a photo
                     </span>
                     <p className="font-sans text-muted text-sm">
@@ -466,7 +466,7 @@ export default function AnalysisPage() {
               <span className="bg-bg3 text-accent font-mono text-sm px-3 py-1 rounded-card">
                 {result.bodyType}
               </span>
-              <span className="bg-bg3 text-accent3 font-mono text-sm px-3 py-1 rounded-card">
+              <span className="bg-bg3 text-accent font-mono text-sm px-3 py-1 rounded-card">
                 {result.recommendedSplit}
               </span>
             </div>
@@ -474,26 +474,26 @@ export default function AnalysisPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-mono text-sm">
               <div>
                 <span className="text-muted block">Body fat est.</span>
-                <span className="text-accent3">{result.estimatedBodyFatRange}</span>
+                <span className="text-accent">{result.estimatedBodyFatRange}</span>
               </div>
               <div>
                 <span className="text-muted block">Calories</span>
-                <span className="text-accent3">{result.calorieTarget}</span>
+                <span className="text-accent">{result.calorieTarget}</span>
               </div>
               <div>
                 <span className="text-muted block">Protein (g)</span>
-                <span className="text-accent3">{result.proteinTarget}</span>
+                <span className="text-accent">{result.proteinTarget}</span>
               </div>
               <div>
                 <span className="text-muted block">Carbs / Fat (g)</span>
-                <span className="text-accent3">{result.carbTarget} / {result.fatTarget}</span>
+                <span className="text-accent">{result.carbTarget} / {result.fatTarget}</span>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-card border border-border rounded-card p-6">
-              <h3 className="font-display text-lg text-accent3 uppercase tracking-wide mb-3">
+              <h3 className="font-display text-lg text-accent uppercase tracking-wide mb-3">
                 Strengths
               </h3>
               <ul className="font-sans text-muted space-y-1">

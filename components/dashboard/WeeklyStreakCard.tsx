@@ -52,7 +52,7 @@ export function WeeklyStreakCard() {
         <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
           Weekly streak
         </h2>
-        <p className="font-mono text-accent3">…</p>
+        <p className="font-mono text-accent">…</p>
       </div>
     );
   }
@@ -65,7 +65,7 @@ export function WeeklyStreakCard() {
       <h2 className="font-display text-lg text-muted uppercase tracking-wide mb-2">
         Weekly streak
       </h2>
-      <p className="font-mono text-accent3">
+      <p className="font-mono text-accent">
         {streakNum} day{streakNum !== 1 ? 's' : ''} streak
       </p>
       <p className="font-sans text-sm text-muted mt-1">

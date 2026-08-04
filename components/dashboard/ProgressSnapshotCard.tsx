@@ -98,7 +98,7 @@ export function ProgressSnapshotCard() {
                 <span
                   className={`font-mono text-xs font-bold ${
                     weightDeltaLbs < 0
-                      ? 'text-accent3'
+                      ? 'text-accent'
                       : weightDeltaLbs > 0
                         ? 'text-accent'
                         : 'text-muted'

@@ -306,7 +306,7 @@ export function InteractiveWorkout({
             type="button"
             onClick={() => setTimerVisible(true)}
             disabled={finishing}
-            className="shrink-0 min-h-[44px] rounded-card border border-border px-3 py-2 font-sans text-xs font-semibold text-muted hover:border-accent3 hover:text-accent3 disabled:opacity-40"
+            className="shrink-0 min-h-[44px] rounded-card border border-border px-3 py-2 font-sans text-xs font-semibold text-muted hover:border-accent hover:text-accent disabled:opacity-40"
           >
             Rest
           </button>
@@ -314,7 +314,7 @@ export function InteractiveWorkout({
 
         {workout.warmup && (
           <p className="font-sans text-xs text-muted mb-1">
-            <span className="text-accent3 font-semibold">Warmup:</span> {workout.warmup}
+            <span className="text-accent font-semibold">Warmup:</span> {workout.warmup}
           </p>
         )}
         {workout.caution && (
@@ -325,7 +325,7 @@ export function InteractiveWorkout({
           <button
             type="button"
             onClick={() => setShowEquip((v) => !v)}
-            className="mt-2 font-sans text-xs text-accent3 hover:underline"
+            className="mt-2 font-sans text-xs text-accent hover:underline"
           >
             {showEquip ? 'Hide equipment' : 'Show equipment'}
           </button>
@@ -385,7 +385,7 @@ export function InteractiveWorkout({
                       {ex.sets} sets × {ex.reps}
                     </p>
                     {hint && (
-                      <p className="font-mono text-[10px] text-accent3 mb-1">
+                      <p className="font-mono text-[10px] text-accent mb-1">
                         Last: {hint.setCount} sets, top {hint.weight} × {hint.reps}
                       </p>
                     )}
@@ -425,7 +425,7 @@ export function InteractiveWorkout({
                               value={row.weight}
                               disabled={finishing}
                               onChange={(e) => updateRow(ex.name, si, 'weight', e.target.value)}
-                              className="w-full min-h-[44px] min-w-0 rounded-lg border border-border bg-bg px-2.5 py-2.5 font-mono text-base text-text outline-none focus:border-accent3 disabled:opacity-40"
+                              className="w-full min-h-[44px] min-w-0 rounded-lg border border-border bg-bg px-2.5 py-2.5 font-mono text-base text-text outline-none focus:border-accent disabled:opacity-40"
                             />
                           </label>
                           <label className="flex flex-1 items-center gap-1.5 min-w-0">
@@ -440,7 +440,7 @@ export function InteractiveWorkout({
                               value={row.reps}
                               disabled={finishing}
                               onChange={(e) => updateRow(ex.name, si, 'reps', e.target.value)}
-                              className="w-full min-h-[44px] min-w-0 rounded-lg border border-border bg-bg px-2.5 py-2.5 font-mono text-base text-text outline-none focus:border-accent3 disabled:opacity-40"
+                              className="w-full min-h-[44px] min-w-0 rounded-lg border border-border bg-bg px-2.5 py-2.5 font-mono text-base text-text outline-none focus:border-accent disabled:opacity-40"
                             />
                           </label>
                         </div>

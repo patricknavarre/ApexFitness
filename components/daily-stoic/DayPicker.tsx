@@ -51,8 +51,8 @@ export function DayPicker({ month, availableDays, selectedDay, onSelectDay }: Pr
               onClick={() => onSelectDay(day)}
               className={`relative aspect-square rounded-lg font-mono text-sm font-bold transition-all flex items-center justify-center ${
                 isSelected
-                  ? 'border border-accent3 bg-accent3/15 text-accent3 shadow-glow-accent3'
-                  : 'border border-border text-muted hover:border-accent3/40 hover:text-text hover:bg-bg2'
+                  ? 'border border-accent bg-accent/15 text-accent shadow-glow'
+                  : 'border border-border text-muted hover:border-accent/40 hover:text-text hover:bg-bg2'
               }`}
             >
               {day}
