@@ -169,11 +169,22 @@ export function TodayWorkoutCard({
     const date = todayLocal();
     Promise.all([
       fetch(`/api/nutrition?date=${date}`).then((r) => (r.ok ? r.json() : { entries: [] })),
-      fetch('/api/user/me').then((r) => (r.ok ? r.json() : {})),
+      fetch('/api/user/me').then((r) =>
+        r.ok
+          ? r.json()
+          : Promise.resolve({
+              calorieTarget: null as number | null,
+              proteinTarget: null as number | null,
+            })
+      ),
     ])
-      .then(([nutrition, user]) => {
+      .then(
+        ([nutrition, user]: [
+          { entries?: { calories?: number; proteinG?: number }[] },
+          { calorieTarget?: number | null; proteinTarget?: number | null },
+        ]) => {
         if (cancelled) return;
-        const entries = (nutrition.entries ?? []) as { calories?: number; proteinG?: number }[];
+        const entries = nutrition.entries ?? [];
         const calories = entries.reduce((s, e) => s + (Number(e.calories) || 0), 0);
         const proteinG = entries.reduce((s, e) => s + (Number(e.proteinG) || 0), 0);
         setRestMacro(
@@ -185,7 +196,8 @@ export function TodayWorkoutCard({
             }
           )
         );
-      })
+      }
+      )
       .catch(() => {
         if (!cancelled) setRestMacro(null);
       })
