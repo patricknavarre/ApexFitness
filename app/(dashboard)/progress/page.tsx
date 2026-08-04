@@ -90,6 +90,7 @@ export default function ProgressPage() {
   const [exerciseMaxes, setExerciseMaxes] = useState<ExerciseMax[]>([]);
   const [maxesLoading, setMaxesLoading] = useState(true);
   const [maxesOpen, setMaxesOpen] = useState(false);
+  const [calorieBalanceOpen, setCalorieBalanceOpen] = useState(false);
   const [compareLeft, setCompareLeft] = useState<string>('');
   const [compareRight, setCompareRight] = useState<string>('');
   const [sliderPos, setSliderPos] = useState(50);
@@ -526,70 +527,98 @@ export default function ProgressPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-xl text-tan uppercase tracking-wide mb-2">
-          Daily calorie balance
-        </h2>
-        <p className="font-sans text-muted text-sm mb-4">
-          Tap a day to add food, log a workout, or credit rest. Last 14 days.
-        </p>
-        {summaryLoading ? (
-          <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
-            Loading…
+        <button
+          type="button"
+          onClick={() => setCalorieBalanceOpen((o) => !o)}
+          className="w-full flex items-start justify-between gap-3 text-left group"
+          aria-expanded={calorieBalanceOpen}
+        >
+          <div>
+            <h2 className="font-display text-xl text-tan uppercase tracking-wide">
+              Daily calorie balance
+            </h2>
+            <p className="font-sans text-muted text-sm mt-1">
+              {summaryLoading
+                ? 'Loading…'
+                : dailySummary && dailySummary.length > 0
+                  ? `Last 14 days · tap to ${calorieBalanceOpen ? 'hide' : 'show'}`
+                  : 'No data yet'}
+            </p>
           </div>
-        ) : dailySummary && dailySummary.length > 0 ? (
-          <div className="rounded-card border border-border bg-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full font-sans text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-muted">
-                    <th className="p-3 font-medium">Date</th>
-                    <th className="p-3 font-medium">Intake</th>
-                    <th className="p-3 font-medium">Workouts</th>
-                    <th className="p-3 font-medium">Burn</th>
-                    <th className="p-3 font-medium">Surplus / Deficit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dailySummary.map((day) => (
-                    <tr
-                      key={day.date}
-                      className="border-b border-border last:border-0 cursor-pointer hover:bg-bg3/40 transition-colors"
-                      onClick={() => setSelectedDate(day.date)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setSelectedDate(day.date);
-                        }
-                      }}
-                      tabIndex={0}
-                      role="button"
-                      aria-label={`Open ${format(new Date(day.date + 'T12:00:00'), 'EEEE, MMM d')}`}
-                    >
-                      <td className="p-3 text-text">
-                        {format(new Date(day.date + 'T12:00:00'), 'EEE, MMM d')}
-                      </td>
-                      <td className="p-3 text-text">{day.intake} cal</td>
-                      <td className="p-3 text-text">
-                        {day.workouts.length === 0
-                          ? '—'
-                          : day.workouts.map((w) => getWorkoutLabel(w)).join(', ')}
-                      </td>
-                      <td className="p-3 text-text">{day.totalBurn} cal</td>
-                      <td className="p-3">
-                        <span className={day.surplus >= 0 ? 'text-accent' : 'text-accent2'}>
-                          {day.surplus >= 0 ? '+' : ''}
-                          {day.surplus} cal
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
-            No data yet. Log meals in Nutrition and complete workouts to see balance.
+          <span
+            className={`shrink-0 mt-1 font-mono text-sm text-muted transition-transform duration-200 ${
+              calorieBalanceOpen ? 'rotate-180' : ''
+            }`}
+            aria-hidden
+          >
+            ▾
+          </span>
+        </button>
+        {calorieBalanceOpen && (
+          <div className="mt-4">
+            <p className="font-sans text-muted text-sm mb-4">
+              Tap a day to add food, log a workout, or credit rest.
+            </p>
+            {summaryLoading ? (
+              <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
+                Loading…
+              </div>
+            ) : dailySummary && dailySummary.length > 0 ? (
+              <div className="rounded-card border border-border bg-card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full font-sans text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-muted">
+                        <th className="p-3 font-medium">Date</th>
+                        <th className="p-3 font-medium">Intake</th>
+                        <th className="p-3 font-medium">Workouts</th>
+                        <th className="p-3 font-medium">Burn</th>
+                        <th className="p-3 font-medium">Surplus / Deficit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dailySummary.map((day) => (
+                        <tr
+                          key={day.date}
+                          className="border-b border-border last:border-0 cursor-pointer hover:bg-bg3/40 transition-colors"
+                          onClick={() => setSelectedDate(day.date)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setSelectedDate(day.date);
+                            }
+                          }}
+                          tabIndex={0}
+                          role="button"
+                          aria-label={`Open ${format(new Date(day.date + 'T12:00:00'), 'EEEE, MMM d')}`}
+                        >
+                          <td className="p-3 text-text">
+                            {format(new Date(day.date + 'T12:00:00'), 'EEE, MMM d')}
+                          </td>
+                          <td className="p-3 text-text">{day.intake} cal</td>
+                          <td className="p-3 text-text">
+                            {day.workouts.length === 0
+                              ? '—'
+                              : day.workouts.map((w) => getWorkoutLabel(w)).join(', ')}
+                          </td>
+                          <td className="p-3 text-text">{day.totalBurn} cal</td>
+                          <td className="p-3">
+                            <span className={day.surplus >= 0 ? 'text-accent' : 'text-accent2'}>
+                              {day.surplus >= 0 ? '+' : ''}
+                              {day.surplus} cal
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
+                No data yet. Log meals in Nutrition and complete workouts to see balance.
+              </div>
+            )}
           </div>
         )}
       </section>
