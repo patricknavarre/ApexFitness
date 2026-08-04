@@ -2,7 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* Default / Olive (OD) */
+:root,
+[data-theme='od'] {
   --bg: #12140f;
   --bg2: #161a10;
   --bg3: #1a1f12;
@@ -14,9 +16,54 @@
   --tan: #d2b48c;
   --text: #f0ebe0;
   --muted: #8b7355;
+  --glow-accent: rgba(196, 163, 90, 0.18);
+  --glow-accent2: rgba(196, 92, 74, 0.18);
+  --glow-accent3: rgba(75, 83, 32, 0.35);
+  --atmosphere-a: rgba(75, 83, 32, 0.35);
+  --atmosphere-mid: #1a1f12;
   --font-bebas: 'Bebas Neue', sans-serif;
   --font-dm-sans: 'DM Sans', sans-serif;
   --font-space-mono: 'Space Mono', monospace;
+}
+
+/* Classic neon lime / cyan */
+[data-theme='neon'] {
+  --bg: #0a0a0f;
+  --bg2: #111118;
+  --bg3: #18181f;
+  --card: #13131a;
+  --border: rgba(255, 255, 255, 0.07);
+  --accent: #e8ff47;
+  --accent2: #ff4757;
+  --accent3: #00d2ff;
+  --tan: #e8ff47;
+  --text: #f0f0f5;
+  --muted: #6b6b7a;
+  --glow-accent: rgba(232, 255, 71, 0.22);
+  --glow-accent2: rgba(255, 71, 87, 0.2);
+  --glow-accent3: rgba(0, 210, 255, 0.22);
+  --atmosphere-a: rgba(232, 255, 71, 0.12);
+  --atmosphere-mid: #111118;
+}
+
+/* Feminine dark pink / purple */
+[data-theme='bloom'] {
+  --bg: #1a0f18;
+  --bg2: #221420;
+  --bg3: #2a1830;
+  --card: #221420;
+  --border: #6b3a62;
+  --accent: #e8a0bf;
+  --accent2: #ff6b8a;
+  --accent3: #c77dff;
+  --tan: #f0c4d8;
+  --text: #f8eef4;
+  --muted: #a8889c;
+  --glow-accent: rgba(232, 160, 191, 0.22);
+  --glow-accent2: rgba(255, 107, 138, 0.2);
+  --glow-accent3: rgba(199, 125, 255, 0.22);
+  --atmosphere-a: rgba(199, 125, 255, 0.2);
+  --atmosphere-mid: #2a1830;
 }
 
 html,
@@ -26,11 +73,10 @@ body {
   min-height: 100vh;
 }
 
-/* Olive field atmosphere */
 body {
   background-image:
-    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(75, 83, 32, 0.35) 0%, transparent 55%),
-    linear-gradient(165deg, #12140f 0%, #1a1f12 42%, #12140f 100%) !important;
+    radial-gradient(ellipse 120% 80% at 50% -20%, var(--atmosphere-a) 0%, transparent 55%),
+    linear-gradient(165deg, var(--bg) 0%, var(--atmosphere-mid) 42%, var(--bg) 100%) !important;
   background-attachment: fixed;
 }
 

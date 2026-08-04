@@ -30,9 +30,9 @@ const config: Config = {
         card: '12px',
       },
       boxShadow: {
-        glow: '0 0 20px rgba(196, 163, 90, 0.18)',
-        'glow-accent2': '0 0 20px rgba(196, 92, 74, 0.18)',
-        'glow-accent3': '0 0 18px rgba(75, 83, 32, 0.35)',
+        glow: '0 0 20px var(--glow-accent)',
+        'glow-accent2': '0 0 20px var(--glow-accent2)',
+        'glow-accent3': '0 0 18px var(--glow-accent3)',
       },
     },
   },

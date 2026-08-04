@@ -19,6 +19,7 @@ type UserMeFields = {
   equipment?: string | null;
   daysPerWeek?: number | null;
   units?: string | null;
+  colorTheme?: string | null;
   activePlanId?: string | null;
   planStartedAt?: Date | string | null;
   activePlanDayNumber?: number | null;
@@ -26,7 +27,9 @@ type UserMeFields = {
 };
 
 const ME_FIELDS =
-  'name age sex heightCm weightKg calorieTarget proteinTarget carbTarget fatTarget goal fitnessLevel equipment daysPerWeek units activePlanId planStartedAt activePlanDayNumber activePlanDaySetOn';
+  'name age sex heightCm weightKg calorieTarget proteinTarget carbTarget fatTarget goal fitnessLevel equipment daysPerWeek units colorTheme activePlanId planStartedAt activePlanDayNumber activePlanDaySetOn';
+
+const COLOR_THEMES = new Set(['od', 'neon', 'bloom']);
 
 function serializeUser(user: UserMeFields) {
   return {
@@ -44,6 +47,7 @@ function serializeUser(user: UserMeFields) {
     equipment: user.equipment ?? null,
     daysPerWeek: user.daysPerWeek ?? null,
     units: user.units ?? null,
+    colorTheme: COLOR_THEMES.has(user.colorTheme ?? '') ? user.colorTheme : 'od',
     activePlanId: user.activePlanId ?? null,
     planStartedAt: serializeDateOnly(user.planStartedAt ?? null),
     activePlanDayNumber:
@@ -103,6 +107,9 @@ export async function PATCH(req: Request) {
     if (typeof body.daysPerWeek === 'number') updates.daysPerWeek = body.daysPerWeek;
     if (typeof body.units === 'string' && (body.units === 'imperial' || body.units === 'metric'))
       updates.units = body.units;
+    if (typeof body.colorTheme === 'string' && COLOR_THEMES.has(body.colorTheme)) {
+      updates.colorTheme = body.colorTheme;
+    }
     if (body.activePlanId === null) {
       updates.activePlanId = null;
       updates.planStartedAt = null;

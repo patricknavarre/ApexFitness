@@ -2,10 +2,23 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { useColorTheme } from '@/components/theme/ThemeProvider';
+import {
+  COLOR_THEMES,
+  COLOR_THEME_LABELS,
+  isColorTheme,
+  type ColorTheme,
+} from '@/lib/color-theme';
 
 const GOALS = ['lose fat', 'build muscle', 'maintain', 'improve performance'];
 const FITNESS_LEVELS = ['beginner', 'intermediate', 'advanced'];
 const EQUIPMENT = ['none', 'bodyweight', 'dumbbells', 'full gym', 'home gym'];
+
+const THEME_SWATCHES: Record<ColorTheme, { a: string; b: string; c: string }> = {
+  od: { a: '#c4a35a', b: '#4b5320', c: '#12140f' },
+  neon: { a: '#e8ff47', b: '#00d2ff', c: '#0a0a0f' },
+  bloom: { a: '#e8a0bf', b: '#c77dff', c: '#1a0f18' },
+};
 
 type Profile = {
   name: string | null;
@@ -25,8 +38,10 @@ type Profile = {
 };
 
 export default function SettingsPage() {
+  const { theme, setTheme } = useColorTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingTheme, setSavingTheme] = useState(false);
   const [profile, setProfile] = useState<Profile>({
     name: null,
     age: null,
@@ -66,6 +81,9 @@ export default function SettingsPage() {
             daysPerWeek: data.daysPerWeek ?? null,
             units: data.units ?? null,
           });
+          if (isColorTheme(data.colorTheme)) {
+            setTheme(data.colorTheme);
+          }
         }
       })
       .catch(() => {
@@ -77,7 +95,29 @@ export default function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setTheme]);
+
+  async function handleThemeSelect(next: ColorTheme) {
+    if (next === theme || savingTheme) return;
+    const previous = theme;
+    setTheme(next);
+    setSavingTheme(true);
+    try {
+      const res = await fetch('/api/user/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ colorTheme: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save theme');
+      if (isColorTheme(data.colorTheme)) setTheme(data.colorTheme);
+      toast.success('Theme saved');
+    } catch (err) {
+      setTheme(previous);
+      toast.error(err instanceof Error ? err.message : 'Could not save theme');
+    }
+    setSavingTheme(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -141,7 +181,42 @@ export default function SettingsPage() {
     <div className="max-w-2xl space-y-8">
       <div>
         <h1 className="font-display text-3xl text-tan uppercase tracking-wide">Settings</h1>
-        <p className="font-sans text-muted mt-2">Profile and nutrition targets.</p>
+        <p className="font-sans text-muted mt-2">Profile, appearance, and nutrition targets.</p>
+      </div>
+
+      <div className="bg-card border border-border rounded-card p-6 space-y-4">
+        <h2 className="font-display text-lg text-accent uppercase tracking-wide">Appearance</h2>
+        <p className="font-sans text-sm text-muted">
+          Color theme for the whole app. Saves when you tap.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {COLOR_THEMES.map((id) => {
+            const swatch = THEME_SWATCHES[id];
+            const selected = theme === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                disabled={savingTheme}
+                onClick={() => void handleThemeSelect(id)}
+                className={`rounded-card border p-3 text-left transition-colors disabled:opacity-50 ${
+                  selected
+                    ? 'border-accent bg-accent/10 ring-1 ring-accent'
+                    : 'border-border hover:border-accent/60'
+                }`}
+              >
+                <div className="mb-3 flex h-10 overflow-hidden rounded-lg border border-border/80">
+                  <span className="flex-1" style={{ background: swatch.a }} />
+                  <span className="flex-1" style={{ background: swatch.b }} />
+                  <span className="flex-1" style={{ background: swatch.c }} />
+                </div>
+                <span className="font-sans text-sm font-semibold text-text">
+                  {COLOR_THEME_LABELS[id]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">

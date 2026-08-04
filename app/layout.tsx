@@ -35,6 +35,8 @@ export const metadata: Metadata = {
   },
 };
 
+const themeBootScript = `(function(){try{var t=localStorage.getItem('apex-color-theme');if(t==='od'||t==='neon'||t==='bloom')document.documentElement.dataset.theme=t;}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -44,7 +46,11 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${bebas.variable} ${dmSans.variable} ${spaceMono.variable} bg-bg text-text`}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
       <body className="font-sans antialiased relative bg-bg text-text min-h-screen">
         {children}
         <Toaster theme="dark" position="top-right" richColors />

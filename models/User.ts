@@ -18,6 +18,7 @@ const UserSchema = new Schema({
   carbTarget: Number,
   fatTarget: Number,
   units: { type: String, default: 'imperial' },
+  colorTheme: { type: String, default: 'od', enum: ['od', 'neon', 'bloom'] },
   activePlanId: String,
   planStartedAt: Date,
   /** When set with activePlanDaySetOn === today, overrides calendar-based day. */

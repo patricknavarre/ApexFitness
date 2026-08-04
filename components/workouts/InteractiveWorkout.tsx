@@ -7,6 +7,7 @@ import { getPhaseColors } from '@/lib/interactive-workouts';
 import { todayLocal } from '@/lib/local-date';
 import { RestTimer } from './RestTimer';
 import { ExerciseGuide } from './ExerciseGuide';
+import { WorkoutPrModal, type WorkoutPr } from './WorkoutPrModal';
 import { toast } from 'sonner';
 
 type Props = {
@@ -98,10 +99,13 @@ export function InteractiveWorkout({
   const [setRows, setSetRows] = useState<Record<string, SetRow[]>>({});
   const [lastHints, setLastHints] = useState<Record<string, LastHint>>({});
   const [finishing, setFinishing] = useState(false);
+  const [prList, setPrList] = useState<WorkoutPr[]>([]);
+  const [showPrModal, setShowPrModal] = useState(false);
 
   const finishingRef = useRef(false);
   const setRowsRef = useRef(setRows);
   setRowsRef.current = setRows;
+  const sessionMaxesRef = useRef<Record<string, { weight: number; reps: number }>>({});
 
   const phaseColors = getPhaseColors(planId);
   const colors = phaseColors[workout.phase] ?? {
@@ -139,6 +143,7 @@ export function InteractiveWorkout({
       }
     }
     setSetRows(initial);
+    sessionMaxesRef.current = {};
 
     fetch(`/api/workout/sets?latest=1&planId=${encodeURIComponent(planId)}`)
       .then((res) => (res.ok ? res.json() : { logs: [] }))
@@ -180,6 +185,28 @@ export function InteractiveWorkout({
       )
       .catch(() => {
         // keep empty prefills
+      });
+
+    fetch('/api/workout/sets?maxes=1')
+      .then((res) => (res.ok ? res.json() : { maxes: [] }))
+      .then(
+        (data: {
+          maxes?: { exerciseName: string; weight: number; reps: number }[];
+        }) => {
+          if (cancelled) return;
+          const snapshot: Record<string, { weight: number; reps: number }> = {};
+          for (const row of data.maxes ?? []) {
+            if (!row.exerciseName) continue;
+            snapshot[row.exerciseName] = {
+              weight: Number(row.weight) || 0,
+              reps: Number(row.reps) || 0,
+            };
+          }
+          sessionMaxesRef.current = snapshot;
+        }
+      )
+      .catch(() => {
+        // snapshot stays empty → first weighted lifts count as PRs
       });
 
     return () => {
@@ -234,8 +261,46 @@ export function InteractiveWorkout({
       toast.success('Workout complete');
     }
 
+    const snapshot = sessionMaxesRef.current;
+    const prs: WorkoutPr[] = [];
+    for (const ex of exercises) {
+      const rows = rowsMap[ex.name] ?? [];
+      let bestWeight = 0;
+      let bestReps = 0;
+      for (const r of rows) {
+        const weight = Number(r.weight) || 0;
+        const reps = Number(r.reps) || 0;
+        if (reps <= 0) continue;
+        if (weight > bestWeight || (weight === bestWeight && reps > bestReps)) {
+          bestWeight = weight;
+          bestReps = reps;
+        }
+      }
+      if (bestWeight <= 0) continue;
+      const prior = snapshot[ex.name]?.weight ?? 0;
+      if (bestWeight > prior) {
+        prs.push({
+          name: ex.name,
+          weight: bestWeight,
+          reps: bestReps,
+          previousWeight: prior,
+        });
+      }
+    }
+
+    if (prs.length > 0) {
+      setPrList(prs);
+      setShowPrModal(true);
+      return;
+    }
+
     onMarkDone();
   }, [onMarkDone, workout, planId, dayNumber]);
+
+  const dismissPrModal = useCallback(() => {
+    setShowPrModal(false);
+    onMarkDone?.();
+  }, [onMarkDone]);
 
   const toggleSet = useCallback(
     (exName: string, si: number) => {
@@ -469,6 +534,8 @@ export function InteractiveWorkout({
         onClose={closeTimer}
         onDurationChange={setRestDuration}
       />
+
+      {showPrModal && <WorkoutPrModal prs={prList} onClose={dismissPrModal} />}
     </div>
   );
 }
