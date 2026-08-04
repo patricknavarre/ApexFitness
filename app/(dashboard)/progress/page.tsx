@@ -89,6 +89,7 @@ export default function ProgressPage() {
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [exerciseMaxes, setExerciseMaxes] = useState<ExerciseMax[]>([]);
   const [maxesLoading, setMaxesLoading] = useState(true);
+  const [maxesOpen, setMaxesOpen] = useState(false);
   const [compareLeft, setCompareLeft] = useState<string>('');
   const [compareRight, setCompareRight] = useState<string>('');
   const [sliderPos, setSliderPos] = useState(50);
@@ -389,53 +390,78 @@ export default function ProgressPage() {
       />
 
       <section>
-        <h2 className="font-display text-xl text-tan uppercase tracking-wide mb-2">
-          Exercise maxes
-        </h2>
-        <p className="font-sans text-muted text-sm mb-4">
-          Your all-time heaviest set for each exercise logged in Interactive Workout.
-        </p>
-        {maxesLoading ? (
-          <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
-            Loading…
+        <button
+          type="button"
+          onClick={() => setMaxesOpen((o) => !o)}
+          className="w-full flex items-start justify-between gap-3 text-left group"
+          aria-expanded={maxesOpen}
+        >
+          <div>
+            <h2 className="font-display text-xl text-tan uppercase tracking-wide">
+              Exercise maxes
+            </h2>
+            <p className="font-sans text-muted text-sm mt-1">
+              {maxesLoading
+                ? 'Loading…'
+                : exerciseMaxes.length > 0
+                  ? `${exerciseMaxes.length} exercises · tap to ${maxesOpen ? 'hide' : 'show'}`
+                  : 'No loads logged yet'}
+            </p>
           </div>
-        ) : exerciseMaxes.length > 0 ? (
-          <div className="rounded-card border border-border bg-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full font-sans text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-muted">
-                    <th className="p-3 font-medium">Exercise</th>
-                    <th className="p-3 font-medium">Weight</th>
-                    <th className="p-3 font-medium">Reps</th>
-                    <th className="p-3 font-medium">Logged</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {exerciseMaxes.map((row) => (
-                    <tr
-                      key={row.exerciseName}
-                      className="border-b border-border last:border-0"
-                    >
-                      <td className="p-3 text-text">{row.exerciseName}</td>
-                      <td className="p-3 font-mono text-text">
-                        {row.weight === 0 ? 'BW' : `${row.weight} lb`}
-                      </td>
-                      <td className="p-3 font-mono text-text">{row.reps}</td>
-                      <td className="p-3 text-muted">
-                        {row.loggedAt
-                          ? format(new Date(row.loggedAt), 'MMM d, yyyy')
-                          : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
-            No loads logged yet. Complete sets in Interactive Workout to build your maxes.
+          <span
+            className={`shrink-0 mt-1 font-mono text-sm text-muted transition-transform duration-200 ${
+              maxesOpen ? 'rotate-180' : ''
+            }`}
+            aria-hidden
+          >
+            ▾
+          </span>
+        </button>
+        {maxesOpen && (
+          <div className="mt-4">
+            {maxesLoading ? (
+              <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
+                Loading…
+              </div>
+            ) : exerciseMaxes.length > 0 ? (
+              <div className="rounded-card border border-border bg-card overflow-hidden max-h-72 overflow-y-auto">
+                <div className="overflow-x-auto">
+                  <table className="w-full font-sans text-sm">
+                    <thead className="sticky top-0 bg-card">
+                      <tr className="border-b border-border text-left text-muted">
+                        <th className="p-3 font-medium">Exercise</th>
+                        <th className="p-3 font-medium">Weight</th>
+                        <th className="p-3 font-medium">Reps</th>
+                        <th className="p-3 font-medium">Logged</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {exerciseMaxes.map((row) => (
+                        <tr
+                          key={row.exerciseName}
+                          className="border-b border-border last:border-0"
+                        >
+                          <td className="p-3 text-text">{row.exerciseName}</td>
+                          <td className="p-3 font-mono text-text">
+                            {row.weight === 0 ? 'BW' : `${row.weight} lb`}
+                          </td>
+                          <td className="p-3 font-mono text-text">{row.reps}</td>
+                          <td className="p-3 text-muted">
+                            {row.loggedAt
+                              ? format(new Date(row.loggedAt), 'MMM d, yyyy')
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
+                No loads logged yet. Complete sets in Interactive Workout to build your maxes.
+              </div>
+            )}
           </div>
         )}
       </section>
