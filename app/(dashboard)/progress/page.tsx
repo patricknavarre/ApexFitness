@@ -75,11 +75,20 @@ function parseBodyFatMidpoint(range?: string): number | null {
   return (nums[0] + nums[1]) / 2;
 }
 
+type ExerciseMax = {
+  exerciseName: string;
+  weight: number;
+  reps: number;
+  loggedAt: string | null;
+};
+
 export default function ProgressPage() {
   const [photos, setPhotos] = useState<ProgressPhotoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [dailySummary, setDailySummary] = useState<DaySummary[] | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
+  const [exerciseMaxes, setExerciseMaxes] = useState<ExerciseMax[]>([]);
+  const [maxesLoading, setMaxesLoading] = useState(true);
   const [compareLeft, setCompareLeft] = useState<string>('');
   const [compareRight, setCompareRight] = useState<string>('');
   const [sliderPos, setSliderPos] = useState(50);
@@ -142,6 +151,24 @@ export default function ProgressPage() {
       })
       .finally(() => {
         if (!cancelled) setSummaryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/workout/sets?maxes=1')
+      .then((res) => (res.ok ? res.json() : { maxes: [] }))
+      .then((data: { maxes?: ExerciseMax[] }) => {
+        if (!cancelled) setExerciseMaxes(data.maxes ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setExerciseMaxes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setMaxesLoading(false);
       });
     return () => {
       cancelled = true;
@@ -360,6 +387,58 @@ export default function ProgressPage() {
         planStartedAt={planStartedAt}
         variant="full"
       />
+
+      <section>
+        <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-2">
+          Exercise maxes
+        </h2>
+        <p className="font-sans text-muted text-sm mb-4">
+          Lifetime heaviest set for each exercise you&apos;ve logged (weight, then reps).
+        </p>
+        {maxesLoading ? (
+          <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
+            Loading…
+          </div>
+        ) : exerciseMaxes.length > 0 ? (
+          <div className="rounded-card border border-border bg-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full font-sans text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted">
+                    <th className="p-3 font-medium">Exercise</th>
+                    <th className="p-3 font-medium">Weight</th>
+                    <th className="p-3 font-medium">Reps</th>
+                    <th className="p-3 font-medium">Logged</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {exerciseMaxes.map((row) => (
+                    <tr
+                      key={row.exerciseName}
+                      className="border-b border-border last:border-0"
+                    >
+                      <td className="p-3 text-text">{row.exerciseName}</td>
+                      <td className="p-3 font-mono text-text">
+                        {row.weight === 0 ? 'BW' : `${row.weight} lb`}
+                      </td>
+                      <td className="p-3 font-mono text-text">{row.reps}</td>
+                      <td className="p-3 text-muted">
+                        {row.loggedAt
+                          ? format(new Date(row.loggedAt), 'MMM d, yyyy')
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
+            No loads logged yet. Complete sets in Interactive Workout to build your maxes.
+          </div>
+        )}
+      </section>
 
       <section>
         <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-2">

@@ -119,6 +119,52 @@ export async function GET(req: Request) {
   try {
     await connectDB();
 
+    // Lifetime heaviest set per exercise (max weight; higher reps wins ties)
+    if (searchParams.get('maxes') === '1') {
+      const logs = (await WorkoutLog.find({
+        userId: session.user.id,
+        exerciseName: { $exists: true, $ne: null },
+        sets: { $exists: true, $ne: [] },
+      })
+        .select('exerciseName sets loggedAt')
+        .lean()) as LeanSetLog[];
+
+      type MaxRow = {
+        exerciseName: string;
+        weight: number;
+        reps: number;
+        loggedAt: string | null;
+      };
+      const byExercise = new Map<string, MaxRow>();
+
+      for (const log of logs) {
+        const name = log.exerciseName?.trim();
+        if (!name || !log.sets?.length) continue;
+        for (const set of log.sets) {
+          const weight = Number(set.weight) || 0;
+          const reps = Number(set.reps) || 0;
+          if (reps <= 0) continue;
+          const loggedAt = log.loggedAt ? new Date(log.loggedAt).toISOString() : null;
+          const prev = byExercise.get(name);
+          if (
+            !prev ||
+            weight > prev.weight ||
+            (weight === prev.weight && reps > prev.reps) ||
+            (weight === prev.weight &&
+              reps === prev.reps &&
+              (loggedAt ?? '') > (prev.loggedAt ?? ''))
+          ) {
+            byExercise.set(name, { exerciseName: name, weight, reps, loggedAt });
+          }
+        }
+      }
+
+      const maxes = Array.from(byExercise.values()).sort((a, b) =>
+        a.exerciseName.localeCompare(b.exerciseName)
+      );
+      return NextResponse.json({ maxes });
+    }
+
     // Latest log for one exercise (prefills) — no date required
     if (latest === '1' && exerciseName) {
       const query: Record<string, unknown> = {
