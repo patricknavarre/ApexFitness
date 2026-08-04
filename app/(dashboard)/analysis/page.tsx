@@ -150,8 +150,15 @@ export default function AnalysisPage() {
     setImageBase64(null);
     setResult(null);
     setContext(defaultContext);
+    setShowSaveWeight(false);
+    setSaveWeight('');
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (libraryInputRef.current) libraryInputRef.current.value = '';
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // ignore
+    }
   }
 
   /** Open camera. Must stay synchronous for iOS Safari user-gesture rules. */
@@ -505,7 +512,7 @@ export default function AnalysisPage() {
               <button
                 type="button"
                 onClick={handleClear}
-                className="text-text-muted hover:text-text font-sans text-sm underline"
+                className="text-muted hover:text-tan font-sans text-sm underline"
               >
                 Clear & start over
               </button>
@@ -514,6 +521,18 @@ export default function AnalysisPage() {
         </>
       ) : (
         <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
+              Last analysis restored
+            </p>
+            <button
+              type="button"
+              onClick={handleClear}
+              className="od-cta min-h-[44px] rounded-card border border-border px-4 py-2.5 font-sans text-xs font-bold uppercase text-tan hover:border-accent"
+            >
+              New analysis
+            </button>
+          </div>
           <div className="bg-card border border-border rounded-card p-6">
             <div className="flex flex-wrap gap-2 mb-4">
               <span className="bg-bg3 text-accent font-mono text-sm px-3 py-1 rounded-card">
@@ -609,6 +628,13 @@ export default function AnalysisPage() {
             >
               Browse workout plans
             </Link>
+            <button
+              type="button"
+              onClick={handleClear}
+              className="od-cta bg-bg3 border border-border text-tan font-sans font-bold uppercase px-6 py-3 rounded-card hover:border-accent transition-colors"
+            >
+              New analysis
+            </button>
           </div>
           {showSaveWeight && (
             <div className="bg-card border border-border rounded-card p-4 max-w-sm space-y-2">
