@@ -393,7 +393,7 @@ export default function ProgressPage() {
           Exercise maxes
         </h2>
         <p className="font-sans text-muted text-sm mb-4">
-          Lifetime heaviest set for each exercise you&apos;ve logged (weight, then reps).
+          Your all-time heaviest set for each exercise logged in Interactive Workout.
         </p>
         {maxesLoading ? (
           <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
