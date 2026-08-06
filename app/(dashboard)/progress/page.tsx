@@ -373,6 +373,7 @@ export default function ProgressPage() {
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((day) => ({
       date: format(new Date(day.date + 'T12:00:00'), 'EEE'),
+      fullDate: format(new Date(day.date + 'T12:00:00'), 'EEE, MMM d'),
       workouts: day.workouts.length,
       burn: day.totalBurn,
     }));
@@ -495,7 +496,8 @@ export default function ProgressPage() {
           Weekly activity
         </h2>
         <p className="font-sans text-muted text-sm mb-4">
-          Workouts logged and estimated burn over the last 7 days.
+          Last 7 days — gold bars are workout sessions (left axis). Olive bars are estimated
+          calories burned (right axis). Tap a bar for the exact numbers.
         </p>
         {summaryLoading ? (
           <div className="rounded-card border border-border bg-card p-6 font-sans text-muted text-sm">
@@ -503,41 +505,100 @@ export default function ProgressPage() {
           </div>
         ) : weeklyActivity.length > 0 ? (
           <div className="rounded-card border border-border bg-card p-4">
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={weeklyActivity}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#4B5320" />
-                <XAxis dataKey="date" tick={{ fill: '#8B7355', fontSize: 11 }} />
+            <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 font-sans text-xs text-muted">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm bg-accent" aria-hidden />
+                Workouts (count)
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm bg-accent3" aria-hidden />
+                Burn (calories)
+              </span>
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart
+                data={weeklyActivity}
+                margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.7} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: 'var(--muted)', fontSize: 11 }}
+                  axisLine={{ stroke: 'var(--border)' }}
+                  tickLine={false}
+                />
                 <YAxis
                   yAxisId="left"
                   allowDecimals={false}
-                  tick={{ fill: '#8B7355', fontSize: 11 }}
+                  width={36}
+                  tick={{ fill: 'var(--accent)', fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  label={{
+                    value: 'Workouts',
+                    angle: -90,
+                    position: 'insideLeft',
+                    offset: 10,
+                    style: { fill: 'var(--accent)', fontSize: 10 },
+                  }}
                 />
                 <YAxis
                   yAxisId="right"
                   orientation="right"
-                  tick={{ fill: '#8B7355', fontSize: 11 }}
+                  width={44}
+                  tick={{ fill: 'var(--muted)', fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  label={{
+                    value: 'Cal burned',
+                    angle: 90,
+                    position: 'insideRight',
+                    offset: 8,
+                    style: { fill: 'var(--muted)', fontSize: 10 },
+                  }}
                 />
                 <Tooltip
-                  contentStyle={{
-                    background: '#161a10',
-                    border: '1px solid #4B5320',
-                    borderRadius: 8,
+                  cursor={{ fill: 'var(--bg3)', opacity: 0.55 }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const row = payload[0]?.payload as {
+                      fullDate?: string;
+                      workouts?: number;
+                      burn?: number;
+                    };
+                    return (
+                      <div className="rounded-card border border-border bg-card px-3 py-2 shadow-glow font-sans text-xs">
+                        <p className="font-semibold text-tan mb-1.5">
+                          {row.fullDate ?? 'Day'}
+                        </p>
+                        <p className="text-text">
+                          <span className="text-accent">●</span> Workouts:{' '}
+                          <span className="font-mono">{row.workouts ?? 0}</span>
+                        </p>
+                        <p className="text-text mt-0.5">
+                          <span className="text-accent3">●</span> Burn:{' '}
+                          <span className="font-mono">{row.burn ?? 0}</span> cal
+                        </p>
+                      </div>
+                    );
                   }}
                 />
                 <Bar
                   yAxisId="left"
                   dataKey="workouts"
                   name="Workouts"
-                  fill="#C4A35A"
+                  fill="var(--accent)"
                   radius={[4, 4, 0, 0]}
+                  maxBarSize={28}
                 />
                 <Bar
                   yAxisId="right"
                   dataKey="burn"
                   name="Burn (cal)"
-                  fill="#4B5320"
+                  fill="var(--accent3)"
                   radius={[4, 4, 0, 0]}
-                  opacity={0.9}
+                  maxBarSize={28}
+                  opacity={0.95}
                 />
               </BarChart>
             </ResponsiveContainer>
