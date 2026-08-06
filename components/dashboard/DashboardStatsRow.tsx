@@ -97,15 +97,37 @@ export function DashboardStatsRow({
         setStreak(computeWorkoutStreak(dates, plan, planStartedAt));
         setDaysThisWeek(countDaysThisWeek(dates));
 
-        const todaysLog = (workoutData.logs ?? []).find(
-          (log: { planId?: string | null; dayNumber?: number | null; loggedAt?: string | null }) =>
+        const todaysMatchingLog = (workoutData.logs ?? []).find(
+          (log: {
+            planId?: string | null;
+            dayNumber?: number | null;
+            loggedAt?: string | null;
+            isRestDay?: boolean;
+          }) =>
             log.loggedAt &&
             toLocalDateOnly(log.loggedAt) === today &&
             log.planId === activePlanId &&
-            typeof log.dayNumber === 'number'
+            typeof log.dayNumber === 'number' &&
+            !log.isRestDay
         );
-        if (plan && todaysLog && typeof todaysLog.dayNumber === 'number') {
-          const logged = getPlanDayByNumber(plan, todaysLog.dayNumber);
+        const todaysAnyLog = (workoutData.logs ?? []).find(
+          (log: {
+            planId?: string | null;
+            dayNumber?: number | null;
+            loggedAt?: string | null;
+            isRestDay?: boolean;
+          }) =>
+            log.loggedAt &&
+            toLocalDateOnly(log.loggedAt) === today &&
+            !!log.planId &&
+            log.planId !== 'youth-sd' &&
+            typeof log.dayNumber === 'number' &&
+            !log.isRestDay
+        );
+        const todaysLog = todaysMatchingLog ?? todaysAnyLog;
+        if (todaysLog && typeof todaysLog.dayNumber === 'number' && todaysLog.planId) {
+          const logPlan = WORKOUT_PLANS.find((p) => p.id === todaysLog.planId) ?? null;
+          const logged = logPlan ? getPlanDayByNumber(logPlan, todaysLog.dayNumber) : null;
           if (logged) {
             setWorkoutLabel(
               logged.day.isRest

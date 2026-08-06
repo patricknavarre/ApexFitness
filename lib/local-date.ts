@@ -28,6 +28,18 @@ export function addLocalCalendarDays(ymd: string, days: number): string | null {
   return next.toISOString().slice(0, 10);
 }
 
+/**
+ * Plan start date so that `today` falls on `dayNumber` (1-based) in a repeating cycle.
+ * Day 1 → today; Day 2 → yesterday; etc.
+ */
+export function planStartedAtForDayNumber(
+  dayNumber: number,
+  today: string = todayLocal()
+): string {
+  const n = Math.max(1, Math.floor(dayNumber));
+  return addLocalCalendarDays(today, -(n - 1)) ?? today;
+}
+
 /** Parse YYYY-MM-DD into a Date at UTC noon (stable date-only round-trip). */
 export function dateOnlyToUtcNoon(ymd: string): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;

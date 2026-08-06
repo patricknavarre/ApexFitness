@@ -15,6 +15,7 @@ import { ANKLE_PT_EQUIPMENT } from '@/lib/anklePtWorkoutData';
 import { GOLF_EQUIPMENT } from '@/lib/golfWorkoutData';
 import { SOFTBALL_EQUIPMENT } from '@/lib/softballWorkoutData';
 import { todayLocal, toLocalDateOnly } from '@/lib/local-date';
+import { syncActivePlanToDay } from '@/lib/sync-active-plan';
 import { InteractiveWorkout, clearWorkoutSetProgress } from '@/components/workouts/InteractiveWorkout';
 import { ExerciseGuide } from '@/components/workouts/ExerciseGuide';
 import { toast } from 'sonner';
@@ -779,9 +780,33 @@ function WorkoutsPageInner() {
     }
   }
 
+  async function ensureActiveForDay(planId: string, dayNumber: number) {
+    try {
+      const synced = await syncActivePlanToDay(planId, dayNumber, {
+        activePlanId,
+        planStartedAt,
+        activePlanDayNumber,
+        activePlanDaySetOn,
+      });
+      if (!synced) return;
+      if (synced.changed) {
+        setActivePlanId(synced.activePlanId);
+        setPlanStartedAt(synced.planStartedAt);
+        setActivePlanDayNumber(null);
+        setActivePlanDaySetOn(null);
+        toast.success(
+          `Dashboard set to ${synced.planName} — Day ${synced.dayNumber}`
+        );
+      }
+    } catch {
+      toast.error('Could not update active plan for dashboard');
+    }
+  }
+
   async function markDayDone(planId: string, dayNumber: number) {
     setMarkingDone(true);
     try {
+      await ensureActiveForDay(planId, dayNumber);
       const res = await fetch('/api/workout/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -801,7 +826,7 @@ function WorkoutsPageInner() {
     setMarkingDone(false);
   }
 
-  function startWorkoutMode(planId: string, dayNumber: number, dayTitle: string) {
+  async function startWorkoutMode(planId: string, dayNumber: number, dayTitle: string) {
     const workout = getInteractiveWorkout(
       planId,
       dayNumber,
@@ -811,6 +836,7 @@ function WorkoutsPageInner() {
       toast.error('No workout for this day');
       return;
     }
+    await ensureActiveForDay(planId, dayNumber);
     // Always begin with unchecked sets — prior completions must not carry over.
     clearWorkoutSetProgress(planId, dayNumber);
     setWorkoutMode({ planId, dayNumber, dayTitle });

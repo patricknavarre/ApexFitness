@@ -10,6 +10,7 @@ import {
 } from '@/lib/workout-plans';
 import { todayLocal, toLocalDateOnly } from '@/lib/local-date';
 import { useLocalTodayKey } from '@/lib/use-local-today-key';
+import { syncActivePlanToDay } from '@/lib/sync-active-plan';
 import {
   evaluateRestDayMacros,
   type RestMacroStatus,
@@ -30,6 +31,7 @@ type LogRow = {
 };
 
 type DisplayState = {
+  planId: string | null;
   dayNumber: number;
   completed: boolean;
   restCredited: boolean;
@@ -44,6 +46,7 @@ export function TodayWorkoutCard({
 }: Props) {
   const todayKey = useLocalTodayKey();
   const [display, setDisplay] = useState<DisplayState>({
+    planId: null,
     dayNumber: 0,
     completed: false,
     restCredited: false,
@@ -72,11 +75,6 @@ export function TodayWorkoutCard({
   const scheduledDayNumber = scheduledDay?.dayNumber ?? null;
 
   const loadDisplay = useCallback(() => {
-    if (!activePlanId || !plan || scheduledDayNumber == null) {
-      setDisplay({ dayNumber: 0, completed: false, restCredited: false, loaded: true });
-      return () => {};
-    }
-
     let cancelled = false;
     setDisplay((prev) => ({ ...prev, loaded: false }));
 
@@ -89,39 +87,70 @@ export function TodayWorkoutCard({
         );
         const restCredited = todayLogs.some((log) => log.isRestDay);
 
-        const todaysPlanLog = todayLogs.find(
+        const matchingPlanLog = todayLogs.find(
           (log) =>
-            log.planId === activePlanId && typeof log.dayNumber === 'number' && !log.isRestDay
+            log.planId === activePlanId &&
+            typeof log.dayNumber === 'number' &&
+            !log.isRestDay
         );
+        const anyPlanLog = todayLogs.find(
+          (log) =>
+            !!log.planId &&
+            log.planId !== 'youth-sd' &&
+            typeof log.dayNumber === 'number' &&
+            !log.isRestDay
+        );
+        const todaysPlanLog = matchingPlanLog ?? anyPlanLog;
 
-        if (todaysPlanLog && typeof todaysPlanLog.dayNumber === 'number') {
-          const logged = getPlanDayByNumber(plan, todaysPlanLog.dayNumber);
+        if (todaysPlanLog?.planId && typeof todaysPlanLog.dayNumber === 'number') {
+          const logPlan =
+            WORKOUT_PLANS.find((p) => p.id === todaysPlanLog.planId) ?? null;
+          const logged = logPlan
+            ? getPlanDayByNumber(logPlan, todaysPlanLog.dayNumber)
+            : null;
           if (logged && !logged.day.isRest) {
             setDisplay({
+              planId: todaysPlanLog.planId,
               dayNumber: logged.dayNumber,
               completed: true,
               restCredited: false,
               loaded: true,
             });
             if (
-              activePlanDaySetOn === todayKey &&
-              activePlanDayNumber != null &&
-              activePlanDayNumber !== logged.dayNumber
+              todaysPlanLog.planId !== activePlanId ||
+              scheduledDayNumber !== logged.dayNumber
             ) {
-              void fetch('/api/user/me', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  activePlanDayNumber: logged.dayNumber,
-                  activePlanDaySetOn: todayKey,
-                }),
+              void syncActivePlanToDay(
+                todaysPlanLog.planId,
+                logged.dayNumber,
+                {
+                  activePlanId,
+                  planStartedAt,
+                  activePlanDayNumber,
+                  activePlanDaySetOn,
+                },
+                todayKey
+              ).catch(() => {
+                // display already shows the completed log
               });
             }
             return;
           }
         }
 
+        if (scheduledDayNumber == null || !activePlanId) {
+          setDisplay({
+            planId: activePlanId,
+            dayNumber: 0,
+            completed: false,
+            restCredited,
+            loaded: true,
+          });
+          return;
+        }
+
         setDisplay({
+          planId: activePlanId,
           dayNumber: scheduledDayNumber,
           completed: false,
           restCredited,
@@ -131,7 +160,8 @@ export function TodayWorkoutCard({
       .catch(() => {
         if (!cancelled) {
           setDisplay({
-            dayNumber: scheduledDayNumber,
+            planId: activePlanId,
+            dayNumber: scheduledDayNumber ?? 0,
             completed: false,
             restCredited: false,
             loaded: true,
@@ -144,7 +174,7 @@ export function TodayWorkoutCard({
     };
   }, [
     activePlanId,
-    plan,
+    planStartedAt,
     scheduledDayNumber,
     todayKey,
     activePlanDayNumber,
@@ -279,7 +309,7 @@ export function TodayWorkoutCard({
     );
   }
 
-  if (!plan) {
+  if (!plan && !(display.loaded && display.planId)) {
     return (
       <Shell>
         <p className="font-sans text-muted text-sm mb-4">Plan not found.</p>
@@ -293,7 +323,7 @@ export function TodayWorkoutCard({
     );
   }
 
-  if (!scheduledDay && !display.loaded) {
+  if (!display.loaded && !scheduledDay) {
     return (
       <div className="bg-card border border-border rounded-card p-5 sm:p-6 animate-pulse">
         <div className="h-4 w-28 bg-bg3 rounded mb-3" />
@@ -303,7 +333,18 @@ export function TodayWorkoutCard({
     );
   }
 
-  if (!scheduledDay) {
+  const resolvedPlanId = display.planId ?? activePlanId;
+  const resolvedPlan =
+    WORKOUT_PLANS.find((p) => p.id === resolvedPlanId) ?? plan;
+
+  const resolved =
+    display.loaded && display.dayNumber > 0 && resolvedPlan
+      ? getPlanDayByNumber(resolvedPlan, display.dayNumber)
+      : scheduledDay
+        ? { day: scheduledDay.day, dayNumber: scheduledDay.dayNumber }
+        : null;
+
+  if (!resolved || !resolvedPlan) {
     return (
       <Shell>
         <p className="font-sans text-muted text-sm mb-4">Invalid start date.</p>
@@ -317,14 +358,6 @@ export function TodayWorkoutCard({
     );
   }
 
-  const resolved =
-    display.loaded && display.dayNumber > 0
-      ? getPlanDayByNumber(plan, display.dayNumber)
-      : { day: scheduledDay.day, dayNumber: scheduledDay.dayNumber };
-  if (!resolved) {
-    return null;
-  }
-
   const { day } = resolved;
   const completed = display.loaded && display.completed;
 
@@ -333,7 +366,7 @@ export function TodayWorkoutCard({
       return (
         <Shell badge="Rest credited">
           <p className="font-sans font-medium text-text mb-2">
-            {plan.name} — Day {day.dayNumber}
+            {resolvedPlan.name} — Day {day.dayNumber}
           </p>
           <p className="font-sans text-sm text-muted mb-4">
             Recovery day logged. Streak stays strong.
@@ -351,7 +384,7 @@ export function TodayWorkoutCard({
     return (
       <Shell>
         <p className="font-sans font-medium text-text mb-1">
-          {plan.name} — Day {day.dayNumber}
+          {resolvedPlan.name} — Day {day.dayNumber}
         </p>
         <p className="font-sans text-sm text-muted mb-3">
           Rest day. Hit calories &amp; protein to credit it toward your streak.
@@ -381,13 +414,13 @@ export function TodayWorkoutCard({
     );
   }
 
-  const ctaLabel = plan.interactive ? 'Start workout' : 'Mark done / View plan';
+  const ctaLabel = resolvedPlan.interactive ? 'Start workout' : 'Mark done / View plan';
 
   if (completed) {
     return (
       <Shell badge="Completed">
         <p className="font-sans font-medium text-text mb-2">
-          {plan.name} — Day {day.dayNumber}: {day.title}
+          {resolvedPlan.name} — Day {day.dayNumber}: {day.title}
         </p>
         <p className="font-sans text-sm text-muted mb-4">
           Session logged. Next training day unlocks tomorrow.
@@ -405,9 +438,9 @@ export function TodayWorkoutCard({
   return (
     <Shell>
       <p className="font-sans font-medium text-text mb-3">
-        {plan.name} — Day {day.dayNumber}: {day.title}
+        {resolvedPlan.name} — Day {day.dayNumber}: {day.title}
       </p>
-      {plan.interactive ? (
+      {resolvedPlan.interactive ? (
         <p className="font-sans text-sm text-muted mb-4">
           Interactive mode with set tracking and rest timer.
         </p>
@@ -427,7 +460,7 @@ export function TodayWorkoutCard({
         </div>
       )}
       <Link
-        href={plan.interactive ? '/workouts?start=1' : '/workouts'}
+        href={resolvedPlan.interactive ? '/workouts?start=1' : '/workouts'}
         className="od-cta inline-flex w-full min-h-[44px] items-center justify-center bg-accent text-black font-sans font-bold text-sm uppercase px-5 py-2.5 rounded-card hover:shadow-glow"
       >
         {ctaLabel}

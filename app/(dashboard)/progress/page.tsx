@@ -19,6 +19,8 @@ import { WORKOUT_PLANS } from '@/lib/workout-plans';
 import { CARDIO_OPTIONS, getCardioLabel } from '@/lib/cardio';
 import { MomentumCard } from '@/components/progress/MomentumCard';
 import { evaluateRestDayMacros, type RestMacroStatus } from '@/lib/rest-day-macros';
+import { todayLocal } from '@/lib/local-date';
+import { syncActivePlanToDay } from '@/lib/sync-active-plan';
 
 type AnalysisSummary = {
   bodyType?: string;
@@ -295,6 +297,27 @@ export default function ProgressPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to log');
+      if (
+        logMode === 'plan' &&
+        selectedDate === todayLocal() &&
+        logPlanId &&
+        logPlanId !== 'youth-sd'
+      ) {
+        try {
+          const synced = await syncActivePlanToDay(logPlanId, logDayNumber, {
+            activePlanId,
+            planStartedAt,
+            activePlanDayNumber: null,
+            activePlanDaySetOn: null,
+          });
+          if (synced?.changed) {
+            setActivePlanId(synced.activePlanId);
+            setPlanStartedAt(synced.planStartedAt);
+          }
+        } catch {
+          // log succeeded; dashboard may lag until next start
+        }
+      }
       toast.success(logMode === 'cardio' ? 'Cardio logged' : 'Workout logged');
       await refreshDailySummary();
     } catch (e) {
