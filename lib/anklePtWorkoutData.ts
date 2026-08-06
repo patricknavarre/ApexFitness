@@ -1,4 +1,9 @@
-import type { InteractiveWorkoutDay, PhaseColor } from './recoveryWorkoutData';
+import type {
+  InteractiveExercise,
+  InteractiveSection,
+  InteractiveWorkoutDay,
+  PhaseColor,
+} from './recoveryWorkoutData';
 
 export const ANKLE_PT_PHASE_COLOR: Record<string, PhaseColor> = {
   STRENGTH: { bg: '#2A3318', accent: '#C4A35A', label: 'Ankle Strength' },
@@ -21,8 +26,66 @@ export const ANKLE_PT_EQUIPMENT = [
   'Stationary bike or outdoor bike',
   'Resistance bands (light–medium)',
   'Wall or rack for support',
+  'Hand towel',
+  'Balance pad',
   'Foam pad or folded towel (optional)',
 ];
+
+/** PT home program — do every day (from clinic handout). */
+const DAILY_HOME_PT_EXERCISES: InteractiveExercise[] = [
+  {
+    name: 'Toe Crunches with hand towel',
+    sets: 1,
+    reps: '2–3 min',
+    equip: 'Hand towel',
+    note: 'Barefoot if allowed: scrunch the towel toward you with your toes.',
+  },
+  {
+    name: 'Calf Stretching',
+    sets: 1,
+    reps: 'with + without knee bend',
+    equip: 'Bodyweight',
+    note: 'Straight knee and bent knee — both sides. Gentle only; no sharp pinch.',
+  },
+  {
+    name: 'Balance Pad — Tandem Standing',
+    sets: 1,
+    reps: 'one foot in front',
+    equip: 'Balance pad',
+    note: 'Stand on the pad with one foot directly in front of the other. Use a wall if needed.',
+  },
+  {
+    name: 'Balance Pad — Single-Leg Stance',
+    sets: 1,
+    reps: 'each side',
+    equip: 'Balance pad',
+    note: 'One-leg stand on the pad. Soft knee; stay near support.',
+  },
+  {
+    name: 'Walk with Straight Feet',
+    sets: 1,
+    reps: 'along floorboard line',
+    equip: 'Bodyweight',
+    note: 'Toe and heel land on a straight floorboard line. Slow, controlled steps.',
+  },
+  {
+    name: 'Elvis Presley Dance',
+    sets: 1,
+    reps: 'side to side',
+    equip: 'Bodyweight',
+    note: 'Side to side — heel up, then toes up. Smooth weight shift.',
+  },
+];
+
+const DAILY_HOME_PT_SECTION: InteractiveSection = {
+  title: 'Daily Home PT',
+  tag: 'Daily',
+  exercises: DAILY_HOME_PT_EXERCISES,
+};
+
+function withDailyHomePt(sections: InteractiveSection[]): InteractiveSection[] {
+  return [...sections, DAILY_HOME_PT_SECTION];
+}
 
 export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
   STRENGTH: {
@@ -31,7 +94,7 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
       '3–5 min: ankle pumps, ankle circles both directions, gentle towel stretch for calves',
     caution:
       'Post-boot strength day — ankle isolation only, minimal leg loading. Pain ≤3/10 is OK; sharp pain, swelling jump, or next-day limp means scale back. Match both sides.',
-    sections: [
+    sections: withDailyHomePt([
       {
         title: 'Isolated Ankle Strength',
         tag: 'PT',
@@ -85,7 +148,7 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
           },
         ],
       },
-    ],
+    ]),
   },
 
   BALANCE: {
@@ -93,7 +156,7 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
     warmup: '3 min: ankle alphabet (write A–Z with big toe)',
     caution:
       'Proprioception rebuilds what the boot took away. Stay near a wall. Quality over duration — stop before form falls apart. No step-ups or band walks while recovering.',
-    sections: [
+    sections: withDailyHomePt([
       {
         title: 'Static Balance',
         tag: 'PT',
@@ -140,7 +203,7 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
           },
         ],
       },
-    ],
+    ]),
   },
 
   MOBILITY: {
@@ -148,7 +211,7 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
     warmup: '2–3 min easy stationary bike to warm the ankle',
     caution:
       'Mobility + easy bike endurance. PT guidance: bike instead of running. No forcing end-range. Mild stretch is good; pinching or sharp pain is not.',
-    sections: [
+    sections: withDailyHomePt([
       {
         title: 'Ankle Mobility',
         tag: 'PT',
@@ -202,12 +265,19 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
           },
         ],
       },
-    ],
+    ]),
+  },
+
+  REST: {
+    phase: 'REST',
+    warmup: 'None required — this is your daily home PT only',
+    caution:
+      'Clinic home program. Pain ≤3/10 is OK; stop for sharp pain, swelling jump, or next-day limp. Near a wall for balance pad work.',
+    sections: [DAILY_HOME_PT_SECTION],
   },
 };
 
 export function getAnklePtWorkoutForDay(dayNumber: number): InteractiveWorkoutDay | null {
   const phase = ANKLE_PT_SCHEDULE[(dayNumber - 1) % ANKLE_PT_SCHEDULE.length];
-  if (phase === 'REST') return null;
   return anklePtWorkouts[phase] ?? null;
 }

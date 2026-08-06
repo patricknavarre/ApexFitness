@@ -13,6 +13,8 @@ import { WORKOUT_PLANS, getActivePlanDay, getPlanDayByNumber, getTodaysDay } fro
 import { computeWorkoutStreak, countDaysThisWeek } from '@/lib/streak';
 import {
   addLocalCalendarDays,
+  dateOnlyToUtcNoon,
+  planStartedAtForDayNumber,
   serializeDateOnly,
   todayLocal,
   toLocalDateOnly,
@@ -265,33 +267,96 @@ export async function GET(req: Request) {
       }
     }
 
-    const plan = WORKOUT_PLANS.find((p) => p.id === user.activePlanId) ?? null;
-    const planStartedAt = serializeDateOnly(user.planStartedAt as Date | undefined);
-    const activePlanDaySetOn =
+    let plan = WORKOUT_PLANS.find((p) => p.id === user.activePlanId) ?? null;
+    let planStartedAt = serializeDateOnly(user.planStartedAt as Date | undefined);
+    let activePlanDayNumber =
+      typeof user.activePlanDayNumber === 'number' ? user.activePlanDayNumber : null;
+    let activePlanDaySetOn =
       typeof user.activePlanDaySetOn === 'string' ? user.activePlanDaySetOn : null;
+
+    const isTodaySessionLog = (log: {
+      loggedAt?: Date | string | null;
+      planId?: string | null;
+      dayNumber?: number | null;
+      isRestDay?: boolean;
+      exerciseName?: string | null;
+    }) =>
+      !!log.loggedAt &&
+      toLocalDateOnly(new Date(log.loggedAt)) === today &&
+      !!log.planId &&
+      log.planId !== 'youth-sd' &&
+      typeof log.dayNumber === 'number' &&
+      !log.isRestDay &&
+      !(typeof log.exerciseName === 'string' && log.exerciseName.length > 0);
+
+    // Prefer a log for the active plan; otherwise any gym plan logged today.
+    const matchingPlanLog = plan
+      ? workoutLogs.find((log) => isTodaySessionLog(log) && log.planId === plan!.id)
+      : null;
+    const anyPlanLog = workoutLogs.find((log) => isTodaySessionLog(log));
+    const todaysPlanLog = matchingPlanLog ?? anyPlanLog;
+
+    if (
+      todaysPlanLog &&
+      typeof todaysPlanLog.planId === 'string' &&
+      typeof todaysPlanLog.dayNumber === 'number'
+    ) {
+      const logPlan = WORKOUT_PLANS.find((p) => p.id === todaysPlanLog.planId) ?? null;
+      const logged = logPlan
+        ? getPlanDayByNumber(logPlan, todaysPlanLog.dayNumber)
+        : null;
+      if (logPlan && logged && !logged.day.isRest) {
+        const scheduledOnActive =
+          plan && planStartedAt
+            ? getActivePlanDay(
+                plan,
+                planStartedAt,
+                activePlanDayNumber,
+                activePlanDaySetOn,
+                today
+              )
+            : null;
+        const needsHeal =
+          logPlan.id !== plan?.id || scheduledOnActive?.dayNumber !== logged.dayNumber;
+
+        if (needsHeal) {
+          const healedStart = planStartedAtForDayNumber(logged.dayNumber, today);
+          const startedAtDate = dateOnlyToUtcNoon(healedStart);
+          await User.findByIdAndUpdate(session.user.id, {
+            $set: {
+              activePlanId: logPlan.id,
+              ...(startedAtDate ? { planStartedAt: startedAtDate } : {}),
+              activePlanDayNumber: null,
+              activePlanDaySetOn: null,
+            },
+          });
+          plan = logPlan;
+          planStartedAt = healedStart;
+          activePlanDayNumber = null;
+          activePlanDaySetOn = null;
+        } else {
+          plan = logPlan;
+        }
+      }
+    }
+
     const scheduledDay =
       plan && planStartedAt
         ? getActivePlanDay(
             plan,
             planStartedAt,
-            typeof user.activePlanDayNumber === 'number' ? user.activePlanDayNumber : null,
+            activePlanDayNumber,
             activePlanDaySetOn,
             today
           )
         : null;
 
     // Prefer the day actually trained today over a stale "next day" override.
-    const todaysPlanLog = plan
-      ? workoutLogs.find(
-          (log) =>
-            log.loggedAt &&
-            toLocalDateOnly(new Date(log.loggedAt)) === today &&
-            log.planId === plan.id &&
-            typeof log.dayNumber === 'number'
-        )
-      : null;
     const loggedDay =
-      plan && todaysPlanLog && typeof todaysPlanLog.dayNumber === 'number'
+      plan &&
+      todaysPlanLog &&
+      todaysPlanLog.planId === plan.id &&
+      typeof todaysPlanLog.dayNumber === 'number'
         ? getPlanDayByNumber(plan, todaysPlanLog.dayNumber)
         : null;
 
@@ -300,13 +365,13 @@ export async function GET(req: Request) {
         ? { ...loggedDay, isManual: false as const }
         : scheduledDay;
 
-    // Heal stale jump-ahead override so subsequent reads agree.
+    // Heal stale jump-ahead override so subsequent reads agree (same plan).
     if (
       loggedDay &&
       !loggedDay.day.isRest &&
       activePlanDaySetOn === today &&
-      typeof user.activePlanDayNumber === 'number' &&
-      user.activePlanDayNumber !== loggedDay.dayNumber
+      activePlanDayNumber != null &&
+      activePlanDayNumber !== loggedDay.dayNumber
     ) {
       await User.findByIdAndUpdate(session.user.id, {
         $set: {
@@ -314,6 +379,7 @@ export async function GET(req: Request) {
           activePlanDaySetOn: today,
         },
       });
+      activePlanDayNumber = loggedDay.dayNumber;
     }
 
     const tomorrowYmd = addLocalCalendarDays(today, 1);

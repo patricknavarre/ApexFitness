@@ -33,7 +33,7 @@ export async function syncActivePlanToDay(
   const plan = WORKOUT_PLANS.find((p) => p.id === planId);
   if (!plan || !Number.isFinite(dayNumber) || dayNumber < 1) return null;
   const day = plan.days.find((d) => d.dayNumber === dayNumber);
-  if (!day || day.isRest) return null;
+  if (!day) return null;
 
   if (current.activePlanId === planId && current.planStartedAt) {
     const scheduled = getActivePlanDay(

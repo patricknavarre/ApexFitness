@@ -131,22 +131,40 @@ function DayCard({
   }
 
   if (day.isRest) {
+    const restInteractive =
+      !!plan.interactive && !!getInteractiveWorkout(planId, day.dayNumber, day);
     return (
-      <div className="rounded-card border border-border bg-bg2/50 px-4 py-3 flex items-center justify-between gap-2">
-        <span className="font-sans font-medium text-muted">
-          Day {day.dayNumber} — Rest
-          {isToday && (
-            <span className="ml-2 font-mono text-xs text-accent uppercase">Your day</span>
+      <div className="rounded-card border border-border bg-bg2/50 px-4 py-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-sans font-medium text-muted">
+            Day {day.dayNumber} — Rest
+            {isToday && (
+              <span className="ml-2 font-mono text-xs text-accent uppercase">Your day</span>
+            )}
+          </span>
+          {!isToday && onSetAsActiveDay && (
+            <button
+              type="button"
+              onClick={onSetAsActiveDay}
+              className="font-sans text-xs text-accent hover:underline shrink-0"
+            >
+              Do this day
+            </button>
           )}
-        </span>
-        {!isToday && onSetAsActiveDay && (
-          <button
-            type="button"
-            onClick={onSetAsActiveDay}
-            className="font-sans text-xs text-accent hover:underline shrink-0"
-          >
-            Do this day
-          </button>
+        </div>
+        {restInteractive && onStartWorkout && (
+          <div>
+            <button
+              type="button"
+              onClick={onStartWorkout}
+              className="w-full bg-accent text-black font-sans font-bold text-sm uppercase px-3 py-2.5 rounded-card hover:shadow-glow"
+            >
+              {isToday ? "Start today's home PT" : 'Start home PT'}
+            </button>
+            <p className="font-sans text-xs text-muted mt-1.5">
+              Daily clinic home exercises
+            </p>
+          </div>
         )}
       </div>
     );
@@ -428,7 +446,9 @@ function PlanCard({
                 >
                   Switch to this plan
                 </button>
-                {plan.interactive && activeDay && !activeDay.day.isRest && (
+                {plan.interactive &&
+                  activeDay &&
+                  getInteractiveWorkout(plan.id, activeDay.dayNumber, activeDay.day) && (
                   <button
                     type="button"
                     onClick={(e) => {
@@ -501,7 +521,8 @@ function PlanCard({
                 latestSetLogs={latestSetLogs}
                 onSetsLogged={onSetsLogged}
                 onStartWorkout={
-                  !day.isRest
+                  plan.interactive &&
+                  getInteractiveWorkout(plan.id, day.dayNumber, day)
                     ? () => onStartWorkout(plan.id, day.dayNumber, day.title)
                     : undefined
                 }
@@ -650,7 +671,7 @@ function WorkoutsPageInner() {
       activePlanDaySetOn,
       todayLocal()
     );
-    if (!activeDay || activeDay.day.isRest) return;
+    if (!activeDay) return;
 
     const workout = getInteractiveWorkout(
       activePlanId,
@@ -658,7 +679,6 @@ function WorkoutsPageInner() {
       plan.days.find((d) => d.dayNumber === activeDay.dayNumber)
     );
     if (!workout) {
-      toast.error('No workout for this day');
       return;
     }
 
