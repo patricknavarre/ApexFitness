@@ -274,20 +274,30 @@ export async function GET(req: Request) {
     let activePlanDaySetOn =
       typeof user.activePlanDaySetOn === 'string' ? user.activePlanDaySetOn : null;
 
-    const isTodaySessionLog = (log: {
+    type SessionLogFields = {
       loggedAt?: Date | string | null;
       planId?: string | null;
       dayNumber?: number | null;
       isRestDay?: boolean;
       exerciseName?: string | null;
-    }) =>
-      !!log.loggedAt &&
-      toLocalDateOnly(new Date(log.loggedAt)) === today &&
-      !!log.planId &&
-      log.planId !== 'youth-sd' &&
-      typeof log.dayNumber === 'number' &&
-      !log.isRestDay &&
-      !(typeof log.exerciseName === 'string' && log.exerciseName.length > 0);
+    };
+
+    const isTodaySessionLog = (raw: unknown): raw is SessionLogFields & {
+      planId: string;
+      dayNumber: number;
+    } => {
+      const log = raw as SessionLogFields;
+      return (
+        !!log.loggedAt &&
+        toLocalDateOnly(new Date(log.loggedAt)) === today &&
+        typeof log.planId === 'string' &&
+        log.planId.length > 0 &&
+        log.planId !== 'youth-sd' &&
+        typeof log.dayNumber === 'number' &&
+        !log.isRestDay &&
+        !(typeof log.exerciseName === 'string' && log.exerciseName.length > 0)
+      );
+    };
 
     // Prefer a log for the active plan; otherwise any gym plan logged today.
     const matchingPlanLog = plan
