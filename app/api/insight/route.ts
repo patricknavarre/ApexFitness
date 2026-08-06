@@ -17,6 +17,7 @@ import {
   planStartedAtForDayNumber,
   serializeDateOnly,
   todayLocal,
+  toAppDateOnly,
   toLocalDateOnly,
 } from '@/lib/local-date';
 
@@ -235,7 +236,10 @@ export async function GET(req: Request) {
       NutritionLog.find({ userId: session.user.id, logDate: { $gte: start, $lte: end } }).lean(),
       WorkoutLog.find({ userId: session.user.id })
         .sort({ loggedAt: -1 })
-        .limit(30)
+        .limit(100)
+        .select(
+          'planId dayNumber loggedAt caloriesBurned cardioExercise cardioDurationMinutes isRestDay exerciseName'
+        )
         .lean(),
       Analysis.findOne({ userId: session.user.id }).sort({ createdAt: -1 }).lean(),
     ]);
@@ -257,7 +261,7 @@ export async function GET(req: Request) {
     let caloriesBurnedToday = 0;
     for (const log of workoutLogs) {
       if (!log.loggedAt) continue;
-      const local = toLocalDateOnly(new Date(log.loggedAt));
+      const local = toAppDateOnly(new Date(log.loggedAt));
       loggedDates.add(local);
       if (local === today) {
         // Skip per-exercise set-logs (Save loads) — they have no session burn
@@ -274,43 +278,52 @@ export async function GET(req: Request) {
     let activePlanDaySetOn =
       typeof user.activePlanDaySetOn === 'string' ? user.activePlanDaySetOn : null;
 
-    type SessionLogFields = {
-      loggedAt?: Date | string | null;
-      planId?: string | null;
-      dayNumber?: number | null;
-      isRestDay?: boolean;
-      exerciseName?: string | null;
-    };
-
-    const isTodaySessionLog = (raw: unknown): raw is SessionLogFields & {
+    type PlanDayEvidence = {
       planId: string;
       dayNumber: number;
-    } => {
-      const log = raw as SessionLogFields;
-      return (
-        !!log.loggedAt &&
-        toLocalDateOnly(new Date(log.loggedAt)) === today &&
-        typeof log.planId === 'string' &&
-        log.planId.length > 0 &&
-        log.planId !== 'youth-sd' &&
-        typeof log.dayNumber === 'number' &&
-        !log.isRestDay &&
-        !(typeof log.exerciseName === 'string' && log.exerciseName.length > 0)
-      );
+      fromSetsOnly: boolean;
     };
 
-    // Prefer a log for the active plan; otherwise any gym plan logged today.
-    const matchingPlanLog = plan
-      ? workoutLogs.find((log) => isTodaySessionLog(log) && log.planId === plan!.id)
-      : null;
-    const anyPlanLog = workoutLogs.find((log) => isTodaySessionLog(log));
-    const todaysPlanLog = matchingPlanLog ?? anyPlanLog;
+    const asPlanDayEvidence = (raw: unknown): PlanDayEvidence | null => {
+      const log = raw as {
+        loggedAt?: Date | string | null;
+        planId?: string | null;
+        dayNumber?: number | null;
+        isRestDay?: boolean;
+        exerciseName?: string | null;
+      };
+      if (!log.loggedAt) return null;
+      if (toAppDateOnly(new Date(log.loggedAt)) !== today) return null;
+      if (typeof log.planId !== 'string' || !log.planId || log.planId === 'youth-sd') return null;
+      if (typeof log.dayNumber !== 'number') return null;
+      if (log.isRestDay) return null;
+      const fromSetsOnly =
+        typeof log.exerciseName === 'string' && log.exerciseName.length > 0;
+      return { planId: log.planId, dayNumber: log.dayNumber, fromSetsOnly };
+    };
 
-    if (
-      todaysPlanLog &&
-      typeof todaysPlanLog.planId === 'string' &&
-      typeof todaysPlanLog.dayNumber === 'number'
-    ) {
+    // Prefer true session logs; fall back to set-only loads (same as Progress daily-summary).
+    let todaysPlanLog: PlanDayEvidence | null = null;
+    for (const preferSets of [false, true]) {
+      if (todaysPlanLog) break;
+      for (const log of workoutLogs) {
+        const evidence = asPlanDayEvidence(log);
+        if (!evidence || evidence.fromSetsOnly !== preferSets) continue;
+        if (plan && evidence.planId === plan.id) {
+          todaysPlanLog = evidence;
+          break;
+        }
+      }
+      if (todaysPlanLog) break;
+      for (const log of workoutLogs) {
+        const evidence = asPlanDayEvidence(log);
+        if (!evidence || evidence.fromSetsOnly !== preferSets) continue;
+        todaysPlanLog = evidence;
+        break;
+      }
+    }
+
+    if (todaysPlanLog) {
       const logPlan = WORKOUT_PLANS.find((p) => p.id === todaysPlanLog.planId) ?? null;
       const logged = logPlan
         ? getPlanDayByNumber(logPlan, todaysPlanLog.dayNumber)
@@ -363,10 +376,7 @@ export async function GET(req: Request) {
 
     // Prefer the day actually trained today over a stale "next day" override.
     const loggedDay =
-      plan &&
-      todaysPlanLog &&
-      todaysPlanLog.planId === plan.id &&
-      typeof todaysPlanLog.dayNumber === 'number'
+      plan && todaysPlanLog && todaysPlanLog.planId === plan.id
         ? getPlanDayByNumber(plan, todaysPlanLog.dayNumber)
         : null;
 

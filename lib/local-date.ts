@@ -3,6 +3,23 @@ export function todayLocal(d: Date = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** App users are US-based; use Eastern date for server-side "today" bucketing. */
+export const APP_TZ = 'America/New_York';
+
+/** YYYY-MM-DD in the app timezone (default Eastern). Stable on Vercel UTC hosts. */
+export function toAppDateOnly(
+  isoOrDate: string | Date,
+  timeZone: string = APP_TZ
+): string {
+  const d = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
 /** Local calendar date from an ISO timestamp or Date. */
 export function toLocalDateOnly(isoOrDate: string | Date): string {
   const d = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate;
