@@ -28,6 +28,8 @@ export const ANKLE_PT_EQUIPMENT = [
   'Wall or rack for support',
   'Hand towel',
   'Balance pad',
+  'Step or curb (heel raises)',
+  'Floor tape or markers (9-box grid)',
   'Foam pad or folded towel (optional)',
 ];
 
@@ -83,8 +85,103 @@ const DAILY_HOME_PT_SECTION: InteractiveSection = {
   exercises: DAILY_HOME_PT_EXERCISES,
 };
 
-function withDailyHomePt(sections: InteractiveSection[]): InteractiveSection[] {
-  return [...sections, DAILY_HOME_PT_SECTION];
+/** Clinic intermediate drills (handout 1). */
+const INTERMEDIATE_ANKLE_EXERCISES: InteractiveExercise[] = [
+  {
+    name: '1-inch Jumps',
+    sets: 1,
+    reps: '20',
+    equip: 'Bodyweight',
+    note: 'Small hop height (~1 in). Land on both forefeet. Soft knees.',
+  },
+  {
+    name: '9-Box Jump',
+    sets: 1,
+    reps: '5',
+    equip: 'Floor tape',
+    note: 'Tape a 3×3 grid. Start center. Hop to each box with one foot (all nine positions).',
+  },
+  {
+    name: 'Ankle Stretch Wobble',
+    sets: 1,
+    reps: '20/side',
+    equip: 'Bodyweight',
+    note: 'Toes only on opposite foot. Shift weight in a circle around the foot edge — CW then CCW. Both ankles.',
+  },
+  {
+    name: 'Balance Pad Weight Circles',
+    sets: 1,
+    reps: '20/side',
+    equip: 'Balance pad',
+    note: 'Single-leg on pad. Shift weight in a circle clockwise then counter-clockwise. Both sides.',
+  },
+  {
+    name: 'Single-Leg Heel Raises',
+    sets: 1,
+    reps: '20/side',
+    equip: 'Bodyweight',
+    note: 'Slow tempo. Use wall for balance. Match both sides.',
+  },
+];
+
+const INTERMEDIATE_ANKLE_SECTION: InteractiveSection = {
+  title: 'Intermediate Ankle Drills',
+  tag: 'Clinic',
+  exercises: INTERMEDIATE_ANKLE_EXERCISES,
+};
+
+/** Clinic advanced exercises (handout 2). */
+const ADVANCED_ANKLE_EXERCISES: InteractiveExercise[] = [
+  {
+    name: 'Heel Raises at Step',
+    sets: 2,
+    reps: '10',
+    equip: 'Step',
+    note: 'Stand on step edge; full ROM up and controlled lower. Hold rail if needed.',
+  },
+  {
+    name: 'Single-Leg Calf Raise (Eyes Closed)',
+    sets: 2,
+    reps: '10/side',
+    equip: 'Bodyweight',
+    note: 'Wall nearby for safety. Only if eyes-open single-leg raises are solid.',
+  },
+  {
+    name: 'Single-Leg Stand — Leg Swing',
+    sets: 2,
+    reps: '10 forward + 10 back/side',
+    equip: 'Bodyweight',
+    note: 'Stand on one leg; swing free leg forward then backward. Control the swing.',
+  },
+  {
+    name: 'Side Hop with 2 sec Hold',
+    sets: 2,
+    reps: '8/side',
+    equip: 'Bodyweight',
+    note: 'Small lateral hop. Stick the landing and hold 2 seconds before next rep.',
+  },
+  {
+    name: 'Squats with Heel Raises',
+    sets: 2,
+    reps: '10',
+    equip: 'Bodyweight',
+    note: 'Bodyweight squat; rise onto toes at the top of each rep.',
+  },
+];
+
+const ADVANCED_ANKLE_SECTION: InteractiveSection = {
+  title: 'Advanced Ankle Exercises',
+  tag: 'Clinic',
+  exercises: ADVANCED_ANKLE_EXERCISES,
+};
+
+function withClinicSections(sections: InteractiveSection[]): InteractiveSection[] {
+  return [
+    ...sections,
+    INTERMEDIATE_ANKLE_SECTION,
+    ADVANCED_ANKLE_SECTION,
+    DAILY_HOME_PT_SECTION,
+  ];
 }
 
 export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
@@ -93,8 +190,8 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
     warmup:
       '3–5 min: ankle pumps, ankle circles both directions, gentle towel stretch for calves',
     caution:
-      'Post-boot strength day — ankle isolation only, minimal leg loading. Pain ≤3/10 is OK; sharp pain, swelling jump, or next-day limp means scale back. Match both sides.',
-    sections: withDailyHomePt([
+      'Post-boot strength day — ankle isolation only, minimal leg loading. Pain ≤3/10 is OK; sharp pain, swelling jump, or next-day limp means scale back. Match both sides. Jumps/hops only if pain stays ≤3/10 — skip advanced hops if swelling rises.',
+    sections: withClinicSections([
       {
         title: 'Isolated Ankle Strength',
         tag: 'PT',
@@ -155,8 +252,8 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
     phase: 'BALANCE',
     warmup: '3 min: ankle alphabet (write A–Z with big toe)',
     caution:
-      'Proprioception rebuilds what the boot took away. Stay near a wall. Quality over duration — stop before form falls apart. No step-ups or band walks while recovering.',
-    sections: withDailyHomePt([
+      'Proprioception rebuilds what the boot took away. Stay near a wall. Quality over duration — stop before form falls apart. Jumps/hops only if pain ≤3/10 and no next-day limp — skip advanced hops if swelling rises.',
+    sections: withClinicSections([
       {
         title: 'Static Balance',
         tag: 'PT',
@@ -211,7 +308,7 @@ export const anklePtWorkouts: Record<string, InteractiveWorkoutDay> = {
     warmup: '2–3 min easy stationary bike to warm the ankle',
     caution:
       'Mobility + easy bike endurance. PT guidance: bike instead of running. No forcing end-range. Mild stretch is good; pinching or sharp pain is not.',
-    sections: withDailyHomePt([
+    sections: withClinicSections([
       {
         title: 'Ankle Mobility',
         tag: 'PT',
