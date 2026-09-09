@@ -7,9 +7,12 @@ import { useLiveGps } from '@/hooks/useLiveGps';
 import { useMoveLeaveGuard } from '@/hooks/useMoveLeaveGuard';
 import {
   MOVE_MODES,
+  avgSpeedMph,
   downsampleRoute,
   formatElapsed,
   formatMiles,
+  formatMph,
+  formatPaceMinPerMile,
   type GeoPoint,
   type MoveModeId,
 } from '@/lib/geo';
@@ -67,6 +70,7 @@ export function MoveTracker() {
     distanceMiles: number;
     elapsedMs: number;
     calories: number;
+    avgMph: number;
     mode: MoveModeId;
   } | null>(null);
 
@@ -78,6 +82,25 @@ export function MoveTracker() {
     gps.elapsedMs > 0
       ? Math.round((gps.elapsedMs / 60000) * calPerMin)
       : 0;
+
+  const liveAvgMph = avgSpeedMph(gps.distanceMiles, gps.elapsedMs);
+  const displayDistance =
+    active || gps.points.length
+      ? gps.distanceMiles
+      : lastSaved?.distanceMiles ?? 0;
+  const displayElapsed =
+    active || gps.elapsedMs ? gps.elapsedMs : lastSaved?.elapsedMs ?? 0;
+  const displaySpeedMph = active
+    ? gps.status === 'paused'
+      ? 0
+      : gps.speedMph
+    : 0;
+  const displayAvgMph =
+    active || gps.points.length ? liveAvgMph : lastSaved?.avgMph ?? 0;
+  const pace =
+    mode !== 'cycling'
+      ? formatPaceMinPerMile(active ? displaySpeedMph || displayAvgMph : displayAvgMph)
+      : null;
 
   const loadHistory = useCallback(() => {
     let cancelled = false;
@@ -137,6 +160,7 @@ export function MoveTracker() {
         distanceMiles,
         elapsedMs,
         calories,
+        avgMph: avgSpeedMph(distanceMiles, elapsedMs),
         mode,
       });
       toast.success('Activity saved — burn added to today’s balance');
@@ -221,27 +245,33 @@ export function MoveTracker() {
 
       <MoveMap points={mapPoints} current={mapCurrent} height={280} />
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-card border border-border bg-card p-3 text-center">
           <p className="font-mono text-[10px] uppercase tracking-wide text-muted">Distance</p>
-          <p className="font-display text-2xl text-tan mt-1">
-            {formatMiles(active || gps.points.length ? gps.distanceMiles : lastSaved?.distanceMiles ?? 0)}
-          </p>
+          <p className="font-display text-2xl text-tan mt-1">{formatMiles(displayDistance)}</p>
           <p className="font-sans text-xs text-muted">mi</p>
         </div>
         <div className="rounded-card border border-border bg-card p-3 text-center">
           <p className="font-mono text-[10px] uppercase tracking-wide text-muted">Time</p>
-          <p className="font-display text-2xl text-tan mt-1">
-            {formatElapsed(active || gps.elapsedMs ? gps.elapsedMs : lastSaved?.elapsedMs ?? 0)}
-          </p>
+          <p className="font-display text-2xl text-tan mt-1">{formatElapsed(displayElapsed)}</p>
           <p className="font-sans text-xs text-muted">elapsed</p>
+        </div>
+        <div className="rounded-card border border-border bg-card p-3 text-center">
+          <p className="font-mono text-[10px] uppercase tracking-wide text-muted">
+            {active ? 'Speed' : 'Avg speed'}
+          </p>
+          <p className="font-display text-2xl text-tan mt-1">
+            {formatMph(active ? displaySpeedMph : displayAvgMph)}
+          </p>
+          <p className="font-sans text-xs text-muted">
+            {active ? `mph · avg ${formatMph(displayAvgMph)}` : 'mph'}
+            {pace ? ` · ${pace}/mi` : ''}
+          </p>
         </div>
         <div className="rounded-card border border-border bg-card p-3 text-center">
           <p className="font-mono text-[10px] uppercase tracking-wide text-muted">Burn</p>
           <p className="font-display text-2xl text-tan mt-1">
-            {active || gps.elapsedMs
-              ? liveCalories
-              : lastSaved?.calories ?? 0}
+            {active || gps.elapsedMs ? liveCalories : lastSaved?.calories ?? 0}
           </p>
           <p className="font-sans text-xs text-muted">cal</p>
         </div>
@@ -315,7 +345,7 @@ export function MoveTracker() {
           <p className="font-sans text-sm text-muted mt-1">
             {MOVE_MODES.find((m) => m.id === lastSaved.mode)?.label} ·{' '}
             {formatMiles(lastSaved.distanceMiles)} mi · {formatElapsed(lastSaved.elapsedMs)} ·{' '}
-            {lastSaved.calories} cal
+            avg {formatMph(lastSaved.avgMph)} mph · {lastSaved.calories} cal
           </p>
         </div>
       )}
@@ -355,6 +385,14 @@ export function MoveTracker() {
                       : '—'}
                     {item.cardioDurationMinutes != null
                       ? ` · ${item.cardioDurationMinutes} min`
+                      : ''}
+                    {typeof item.distanceMiles === 'number' &&
+                    item.distanceMiles > 0 &&
+                    item.cardioDurationMinutes != null &&
+                    item.cardioDurationMinutes > 0
+                      ? ` · avg ${formatMph(
+                          avgSpeedMph(item.distanceMiles, item.cardioDurationMinutes * 60_000)
+                        )} mph`
                       : ''}
                   </p>
                 </div>

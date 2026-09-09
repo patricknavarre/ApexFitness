@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   haversineMiles,
+  mpsToMph,
   pathDistanceMiles,
   type GeoPoint,
 } from '@/lib/geo';
@@ -10,6 +11,10 @@ import {
 const MAX_ACCURACY_M = 50;
 /** Ignore tiny GPS jitter under ~8 feet. */
 const MIN_MOVE_MILES = 0.0015;
+/** Drop absurd derived speeds (e.g. GPS teleport). */
+const MAX_SPEED_MPH = 80;
+/** Fade current speed to 0 after this many ms without a useful update. */
+const SPEED_STALE_MS = 4000;
 
 export type LiveGpsStatus = 'idle' | 'watching' | 'paused' | 'error';
 
@@ -18,6 +23,8 @@ type UseLiveGpsResult = {
   points: GeoPoint[];
   distanceMiles: number;
   elapsedMs: number;
+  /** Instantaneous speed in mph (0 when paused / idle / stale). */
+  speedMph: number;
   error: string | null;
   current: GeoPoint | null;
   start: () => void;
@@ -32,6 +39,7 @@ export function useLiveGps(): UseLiveGpsResult {
   const [points, setPoints] = useState<GeoPoint[]>([]);
   const [distanceMiles, setDistanceMiles] = useState(0);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [speedMph, setSpeedMph] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [current, setCurrent] = useState<GeoPoint | null>(null);
 
@@ -42,6 +50,7 @@ export function useLiveGps(): UseLiveGpsResult {
   const pausedAccumRef = useRef(0);
   const pauseStartedAtRef = useRef<number | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastSpeedAtRef = useRef<number>(0);
 
   const clearWatch = useCallback(() => {
     if (watchIdRef.current != null && typeof navigator !== 'undefined') {
@@ -70,26 +79,54 @@ export function useLiveGps(): UseLiveGpsResult {
     setElapsedMs(Math.max(0, now - startedAtRef.current - pausedExtra));
   }, []);
 
+  const applySpeed = useCallback((mph: number, at: number) => {
+    if (!Number.isFinite(mph) || mph < 0) return;
+    const clamped = Math.min(mph, MAX_SPEED_MPH);
+    lastSpeedAtRef.current = at;
+    setSpeedMph(clamped);
+  }, []);
+
   const onPosition = useCallback((pos: GeolocationPosition) => {
     if (pausedRef.current) return;
-    const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+    const { latitude: lat, longitude: lng, accuracy, speed } = pos.coords;
     if (typeof accuracy === 'number' && accuracy > MAX_ACCURACY_M) return;
 
-    const point: GeoPoint = { lat, lng, t: pos.timestamp || Date.now() };
+    const now = pos.timestamp || Date.now();
+    const point: GeoPoint = { lat, lng, t: now };
     setCurrent(point);
+
+    // Prefer device-reported speed when present (m/s; null/-1 = unavailable).
+    if (typeof speed === 'number' && speed >= 0) {
+      applySpeed(mpsToMph(speed), now);
+    }
 
     const prev = pointsRef.current;
     if (prev.length > 0) {
       const last = prev[prev.length - 1]!;
       const step = haversineMiles(last, point);
-      if (step < MIN_MOVE_MILES) return;
+      if (step < MIN_MOVE_MILES) {
+        // Still update speed from coords when nearly stationary.
+        if (!(typeof speed === 'number' && speed >= 0)) {
+          applySpeed(0, now);
+        }
+        return;
+      }
+
+      // Derive speed from segment when device speed is missing.
+      if (!(typeof speed === 'number' && speed >= 0)) {
+        const dtMs = Math.max(0, point.t - last.t);
+        if (dtMs >= 500) {
+          const hours = dtMs / 3_600_000;
+          applySpeed(hours > 0 ? step / hours : 0, now);
+        }
+      }
     }
 
     const next = [...prev, point];
     pointsRef.current = next;
     setPoints(next);
     setDistanceMiles(pathDistanceMiles(next));
-  }, []);
+  }, [applySpeed]);
 
   const onError = useCallback((err: GeolocationPositionError) => {
     let message = 'Could not get location';
@@ -125,6 +162,8 @@ export function useLiveGps(): UseLiveGpsResult {
     pointsRef.current = [];
     setPoints([]);
     setDistanceMiles(0);
+    setSpeedMph(0);
+    lastSpeedAtRef.current = 0;
     setCurrent(null);
     pausedRef.current = false;
     pausedAccumRef.current = 0;
@@ -134,13 +173,22 @@ export function useLiveGps(): UseLiveGpsResult {
     setStatus('watching');
     startWatch();
     clearTick();
-    tickRef.current = setInterval(updateElapsed, 1000);
+    tickRef.current = setInterval(() => {
+      updateElapsed();
+      if (
+        lastSpeedAtRef.current > 0 &&
+        Date.now() - lastSpeedAtRef.current > SPEED_STALE_MS
+      ) {
+        setSpeedMph(0);
+      }
+    }, 1000);
   }, [clearTick, startWatch, updateElapsed]);
 
   const pause = useCallback(() => {
     if (pausedRef.current) return;
     pausedRef.current = true;
     pauseStartedAtRef.current = Date.now();
+    setSpeedMph(0);
     setStatus('paused');
     clearWatch();
   }, [clearWatch]);
@@ -164,6 +212,7 @@ export function useLiveGps(): UseLiveGpsResult {
     }
     updateElapsed();
     pausedRef.current = true;
+    setSpeedMph(0);
     clearWatch();
     clearTick();
     setStatus('idle');
@@ -178,9 +227,11 @@ export function useLiveGps(): UseLiveGpsResult {
     startedAtRef.current = null;
     pausedAccumRef.current = 0;
     pauseStartedAtRef.current = null;
+    lastSpeedAtRef.current = 0;
     setPoints([]);
     setDistanceMiles(0);
     setElapsedMs(0);
+    setSpeedMph(0);
     setCurrent(null);
     setError(null);
     setStatus('idle');
@@ -198,6 +249,7 @@ export function useLiveGps(): UseLiveGpsResult {
     points,
     distanceMiles,
     elapsedMs,
+    speedMph,
     error,
     current,
     start,

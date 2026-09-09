@@ -67,6 +67,43 @@ export function formatElapsed(ms: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+const MPS_TO_MPH = 2.23693629;
+
+/** Convert meters/second to mph. */
+export function mpsToMph(mps: number): number {
+  if (!Number.isFinite(mps) || mps < 0) return 0;
+  return mps * MPS_TO_MPH;
+}
+
+/** Average speed from distance and elapsed time. */
+export function avgSpeedMph(distanceMiles: number, elapsedMs: number): number {
+  if (!Number.isFinite(distanceMiles) || !Number.isFinite(elapsedMs) || elapsedMs <= 0) {
+    return 0;
+  }
+  const hours = elapsedMs / 3_600_000;
+  if (hours <= 0) return 0;
+  return distanceMiles / hours;
+}
+
+/** Format mph for live readout (e.g. 0.0 → 6.2 → 18). */
+export function formatMph(mph: number): string {
+  if (!Number.isFinite(mph) || mph <= 0) return '0.0';
+  if (mph < 10) return mph.toFixed(1);
+  return mph.toFixed(0);
+}
+
+/**
+ * Pace as min/mi from mph (walk/run). Returns null when speed is too low.
+ * Example: 6 mph → "10:00"
+ */
+export function formatPaceMinPerMile(mph: number): string | null {
+  if (!Number.isFinite(mph) || mph < 0.5) return null;
+  const totalSec = Math.round(3600 / mph);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export const MOVE_MODES = [
   { id: 'walking', label: 'Walk', cardioId: 'walking' as const },
   { id: 'running', label: 'Run', cardioId: 'running' as const },
