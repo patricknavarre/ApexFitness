@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Bebas_Neue, DM_Sans, Space_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
 import './globals.css';
@@ -33,6 +33,13 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'APEX Fitness',
   },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#12140f',
 };
 
 const themeBootScript = `(function(){try{var t=localStorage.getItem('apex-color-theme');if(t==='od'||t==='neon'||t==='bloom')document.documentElement.dataset.theme=t;}catch(e){}})();`;

@@ -2,32 +2,11 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import {
-  IconHome,
-  IconScan,
-  IconDumbbell,
-  IconLeaf,
-  IconChart,
-  IconSettings,
-  IconLogOut,
-  IconBook,
-  IconShield,
-  IconMove,
-} from '@/components/ui/icons';
-
-const NAV = [
-  { href: '/dashboard', label: 'Dashboard', Icon: IconHome },
-  { href: '/daily-stoic', label: 'Daily Stoic', Icon: IconBook, mobileLabel: 'Stoic' },
-  { href: '/analysis', label: 'AI Analysis', Icon: IconScan },
-  { href: '/workouts', label: 'Workouts', Icon: IconDumbbell },
-  { href: '/move', label: 'Move', Icon: IconMove },
-  { href: '/self-defense', label: 'Self-Defense', Icon: IconShield, mobileLabel: 'Defense' },
-  { href: '/nutrition', label: 'Nutrition', Icon: IconLeaf },
-  { href: '/progress', label: 'Progress', Icon: IconChart },
-  { href: '/settings', label: 'Settings', Icon: IconSettings },
-];
+import { DESKTOP_NAV, isNavActive } from '@/components/dashboard/nav-config';
+import { MobileNav } from '@/components/dashboard/MobileNav';
+import { IconLogOut } from '@/components/ui/icons';
+import { usePathname } from 'next/navigation';
 
 function NavItem({
   href,
@@ -39,7 +18,7 @@ function NavItem({
   Icon: () => JSX.Element;
 }) {
   const pathname = usePathname();
-  const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
+  const active = isNavActive(pathname, href);
   return (
     <Link
       href={href}
@@ -57,7 +36,6 @@ function NavItem({
 
 export function Sidebar() {
   const [expanded, setExpanded] = useState(false);
-  const pathname = usePathname();
   return (
     <>
       {/* Desktop sidebar */}
@@ -73,7 +51,7 @@ export function Sidebar() {
           </Link>
         </div>
         <nav className="flex-1 p-2 space-y-0.5 overflow-hidden">
-          {NAV.map((item) => (
+          {DESKTOP_NAV.map((item) => (
             <NavItem key={item.href} href={item.href} label={item.label} Icon={item.Icon} />
           ))}
         </nav>
@@ -90,26 +68,8 @@ export function Sidebar() {
           </button>
         </div>
       </aside>
-      {/* Mobile bottom tab bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-14 bg-card/95 backdrop-blur-sm border-t border-border z-20 flex items-center justify-around px-2 shadow-[0_-4px_24px_rgba(75,83,32,0.25)]">
-        {NAV.map((item) => {
-          const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors duration-200 ${active ? 'text-accent' : 'text-muted hover:text-tan'}`}
-            >
-              <item.Icon />
-              <span className="font-sans text-[10px] mt-0.5">
-                {'mobileLabel' in item && item.mobileLabel
-                  ? item.mobileLabel
-                  : item.label.split(' ').pop()}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
+
+      <MobileNav />
     </>
   );
 }

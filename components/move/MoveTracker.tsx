@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import { useLiveGps } from '@/hooks/useLiveGps';
+import { useMoveLeaveGuard } from '@/hooks/useMoveLeaveGuard';
 import {
   MOVE_MODES,
   downsampleRoute,
@@ -36,6 +37,24 @@ type HistoryItem = {
 
 function modeToCardio(mode: MoveModeId): string {
   return MOVE_MODES.find((m) => m.id === mode)?.cardioId ?? 'walking';
+}
+
+function IconClose() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M18 6L6 18M6 6l12 12" />
+    </svg>
+  );
 }
 
 export function MoveTracker() {
@@ -83,7 +102,7 @@ export function MoveTracker() {
     return loadHistory();
   }, [loadHistory]);
 
-  async function handleStop() {
+  const persistSession = useCallback(async (): Promise<boolean> => {
     const points = gps.stop();
     const distanceMiles = gps.distanceMiles;
     const elapsedMs = gps.elapsedMs;
@@ -92,7 +111,7 @@ export function MoveTracker() {
     if (points.length < 2 && distanceMiles < 0.01) {
       toast.error('Not enough GPS movement to save. Try again outdoors.');
       gps.reset();
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -123,15 +142,29 @@ export function MoveTracker() {
       toast.success('Activity saved — burn added to today’s balance');
       gps.reset();
       loadHistory();
+      return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save activity');
-      // Keep points so user can retry — restart watching? Leave idle with data lost.
-      // Re-start from idle; user must redo. Better: leave status idle but restore points.
-      // For simplicity toast and reset.
       gps.reset();
+      return false;
     } finally {
       setSaving(false);
     }
+  }, [gps, liveCalories, loadHistory, mode]);
+
+  const discardSession = useCallback(() => {
+    gps.reset();
+    toast.message('Activity discarded');
+  }, [gps]);
+
+  const leaveGuard = useMoveLeaveGuard({
+    active,
+    save: persistSession,
+    discard: discardSession,
+  });
+
+  async function handleStop() {
+    await persistSession();
   }
 
   const mapPoints = useMemo(() => {
@@ -144,12 +177,22 @@ export function MoveTracker() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <div>
-        <h1 className="font-display text-3xl text-tan uppercase tracking-wide">Move</h1>
-        <p className="font-sans text-muted mt-2 text-sm">
-          Live GPS for walk, run, or bike. Keep this tab open while tracking. Distance and
-          calories feed Progress surplus / deficit.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl text-tan uppercase tracking-wide">Move</h1>
+          <p className="font-sans text-muted mt-2 text-sm">
+            Live GPS for walk, run, or bike. Keep this tab open while tracking. Distance and
+            calories feed Progress surplus / deficit.
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-label={active ? 'End activity' : 'Close Move'}
+          onClick={() => leaveGuard.requestLeave('/dashboard')}
+          className="shrink-0 mt-1 rounded-full border border-border p-2 text-muted hover:text-tan hover:border-accent/50 transition-colors"
+        >
+          <IconClose />
+        </button>
       </div>
 
       <div className="grid grid-cols-3 gap-2">

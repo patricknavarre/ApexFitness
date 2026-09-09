@@ -66,11 +66,17 @@
   --atmosphere-mid: #2a1830;
 }
 
+:root {
+  --dock-height: 4.5rem;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 html,
 body {
   background-color: var(--bg) !important;
   color: var(--text);
   min-height: 100vh;
+  overscroll-behavior-y: none;
 }
 
 body {
