@@ -277,6 +277,13 @@ export function MoveTracker() {
         </div>
       </div>
 
+      {active && (
+        <p className="font-sans text-xs text-muted border border-border/80 rounded-card px-3 py-2 bg-card/60">
+          Tracking in progress — closing this tab or window will ask you to confirm. Use Stop &amp;
+          save or the ✕ to keep, save, or discard your route.
+        </p>
+      )}
+
       {gps.error && (
         <p className="font-sans text-sm text-accent2 border border-accent2/40 rounded-card px-3 py-2">
           {gps.error}

@@ -39,12 +39,15 @@ export function MoveSessionGuardProvider({ children }: { children: ReactNode }) 
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const handlersRef = useRef<GuardHandlers | null>(null);
+  /** Sync flag for beforeunload — React state alone can lag a tick. */
+  const guardedRef = useRef(false);
 
   const register = useCallback((handlers: GuardHandlers | null) => {
     handlersRef.current = handlers;
   }, []);
 
   const setActive = useCallback((active: boolean) => {
+    guardedRef.current = active;
     setIsGuarded(active);
     if (!active) {
       setLeaveOpen(false);
@@ -57,25 +60,30 @@ export function MoveSessionGuardProvider({ children }: { children: ReactNode }) 
     setLeaveOpen(true);
   }, []);
 
+  const isSessionActive = useCallback(
+    () => guardedRef.current || handlersRef.current != null || isGuarded,
+    [isGuarded]
+  );
+
   const tryNavigate = useCallback(
     (href: string) => {
-      if (!isGuarded) return true;
+      if (!isSessionActive()) return true;
       openLeave(href);
       return false;
     },
-    [isGuarded, openLeave]
+    [isSessionActive, openLeave]
   );
 
   const requestLeave = useCallback(
     (href?: string) => {
-      if (!isGuarded) {
+      if (!isSessionActive()) {
         if (href) router.push(href);
         else router.push('/dashboard');
         return;
       }
       openLeave(href ?? '/dashboard');
     },
-    [isGuarded, openLeave, router]
+    [isSessionActive, openLeave, router]
   );
 
   const keepTracking = useCallback(() => {
@@ -87,7 +95,9 @@ export function MoveSessionGuardProvider({ children }: { children: ReactNode }) 
     const href = pendingHref ?? '/dashboard';
     setLeaveOpen(false);
     setPendingHref(null);
+    guardedRef.current = false;
     setIsGuarded(false);
+    handlersRef.current = null;
     router.push(href);
   }, [pendingHref, router]);
 
@@ -106,15 +116,19 @@ export function MoveSessionGuardProvider({ children }: { children: ReactNode }) 
     finishLeave();
   }, [finishLeave]);
 
+  // Native browser “Leave site?” when closing the tab/window during an active Move.
+  // Custom React modals cannot run on unload — this is the only allowed prompt.
   useEffect(() => {
-    if (!isGuarded) return;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!guardedRef.current) return;
       e.preventDefault();
-      e.returnValue = '';
+      // Chrome / Safari / Firefox still require a non-empty returnValue to show the dialog.
+      e.returnValue = 'You have an unsaved Move activity. Leave this page?';
+      return e.returnValue;
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [isGuarded]);
+  }, []);
 
   const value = useMemo(
     () => ({
