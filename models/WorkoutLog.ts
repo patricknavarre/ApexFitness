@@ -10,6 +10,14 @@ const WorkoutLogSchema = new Schema({
   caloriesBurned: Number,
   cardioExercise: String,
   cardioDurationMinutes: Number,
+  distanceMiles: Number,
+  route: [
+    {
+      lat: Number,
+      lng: Number,
+      t: Number,
+    },
+  ],
   isRestDay: { type: Boolean, default: false },
   exerciseName: String,
   sets: [

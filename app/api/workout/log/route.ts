@@ -9,6 +9,34 @@ import { dateOnlyToUtcNoon, todayLocal } from '@/lib/local-date';
 import { evaluateRestDayMacros, isFutureDateOnly } from '@/lib/rest-day-macros';
 
 const DEFAULT_CALORIES_BURNED = 270;
+const MAX_ROUTE_POINTS = 2000;
+
+type RoutePointInput = { lat?: unknown; lng?: unknown; t?: unknown };
+
+function parseRoute(raw: unknown): { lat: number; lng: number; t: number }[] | null {
+  if (raw == null) return null;
+  if (!Array.isArray(raw)) return null;
+  const points: { lat: number; lng: number; t: number }[] = [];
+  for (const p of raw as RoutePointInput[]) {
+    const lat = typeof p.lat === 'number' ? p.lat : Number(p.lat);
+    const lng = typeof p.lng === 'number' ? p.lng : Number(p.lng);
+    const t = typeof p.t === 'number' ? p.t : Number(p.t);
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      !Number.isFinite(t) ||
+      lat < -90 ||
+      lat > 90 ||
+      lng < -180 ||
+      lng > 180
+    ) {
+      continue;
+    }
+    points.push({ lat, lng, t });
+    if (points.length >= MAX_ROUTE_POINTS) break;
+  }
+  return points;
+}
 
 function parseLogDate(raw: unknown): { ok: true; date: Date | null } | { ok: false; error: string } {
   if (raw == null || raw === '') return { ok: true, date: null };
@@ -38,14 +66,26 @@ export async function GET(req: Request) {
   }
   const { searchParams } = new URL(req.url);
   const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit')) || 30));
+  const moveOnly = searchParams.get('move') === '1';
+  const includeRoute = searchParams.get('route') === '1';
   try {
     await connectDB();
-    const logs = await WorkoutLog.find({ userId: session.user.id })
+    const filter: Record<string, unknown> = { userId: session.user.id };
+    if (moveOnly) {
+      filter.cardioExercise = { $in: ['walking', 'running', 'cycling'] };
+      filter.distanceMiles = { $exists: true, $gt: 0 };
+    }
+    const selectFields = [
+      'planId dayNumber loggedAt caloriesBurned cardioExercise cardioDurationMinutes isRestDay distanceMiles',
+      includeRoute ? 'route' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const logs = await WorkoutLog.find(filter)
       .sort({ loggedAt: -1 })
       .limit(limit)
-      .select(
-        'planId dayNumber loggedAt caloriesBurned cardioExercise cardioDurationMinutes isRestDay'
-      )
+      .select(selectFields)
       .lean();
     return NextResponse.json({
       logs: logs.map((l) => ({
@@ -60,6 +100,11 @@ export async function GET(req: Request) {
             : DEFAULT_CALORIES_BURNED,
         cardioExercise: l.cardioExercise ?? null,
         cardioDurationMinutes: l.cardioDurationMinutes ?? null,
+        distanceMiles:
+          typeof l.distanceMiles === 'number' && Number.isFinite(l.distanceMiles)
+            ? l.distanceMiles
+            : null,
+        route: includeRoute && Array.isArray(l.route) ? l.route : undefined,
         isRestDay: !!l.isRestDay,
       })),
     });
@@ -85,6 +130,8 @@ export async function POST(req: Request) {
       cardioDurationMinutes,
       restDay,
       logDate: rawLogDate,
+      distanceMiles: rawDistance,
+      route: rawRoute,
     } = body as {
       planId?: string;
       dayNumber?: number;
@@ -94,6 +141,8 @@ export async function POST(req: Request) {
       cardioDurationMinutes?: number;
       restDay?: boolean;
       logDate?: string;
+      distanceMiles?: number;
+      route?: unknown;
     };
 
     const parsedDate = parseLogDate(rawLogDate);
@@ -162,6 +211,7 @@ export async function POST(req: Request) {
         caloriesBurned: 0,
         cardioExercise: null,
         cardioDurationMinutes: null,
+        distanceMiles: null,
         isRestDay: true,
       });
     }
@@ -178,11 +228,18 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Invalid cardio exercise' }, { status: 400 });
       }
       const caloriesBurned = Math.round(cardioDurationMinutes * option.calPerMin);
+      const distanceMiles =
+        typeof rawDistance === 'number' && Number.isFinite(rawDistance) && rawDistance >= 0
+          ? Math.round(rawDistance * 1000) / 1000
+          : undefined;
+      const route = parseRoute(rawRoute);
       const doc = await WorkoutLog.create({
         userId: session.user.id,
         cardioExercise: option.id,
         cardioDurationMinutes,
         caloriesBurned,
+        ...(distanceMiles != null ? { distanceMiles } : {}),
+        ...(route && route.length > 0 ? { route } : {}),
         ...(loggedAtOverride ? { loggedAt: loggedAtOverride } : {}),
       });
       return NextResponse.json({
@@ -193,6 +250,8 @@ export async function POST(req: Request) {
         caloriesBurned: doc.caloriesBurned ?? caloriesBurned,
         cardioExercise: doc.cardioExercise ?? option.id,
         cardioDurationMinutes: doc.cardioDurationMinutes ?? cardioDurationMinutes,
+        distanceMiles:
+          typeof doc.distanceMiles === 'number' ? doc.distanceMiles : distanceMiles ?? null,
         isRestDay: false,
       });
     }
@@ -229,6 +288,7 @@ export async function POST(req: Request) {
       caloriesBurned: doc.caloriesBurned ?? DEFAULT_CALORIES_BURNED,
       cardioExercise: null,
       cardioDurationMinutes: null,
+      distanceMiles: null,
       isRestDay: false,
     });
   } catch (e) {

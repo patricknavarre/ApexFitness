@@ -41,6 +41,7 @@ type SessionWorkout = {
   caloriesBurned: number;
   cardioExercise: string | null;
   cardioDurationMinutes: number | null;
+  distanceMiles: number | null;
   isRestDay: boolean;
 };
 
@@ -83,7 +84,7 @@ export async function GET(req: Request) {
         loggedAt: { $gte: rangeStart, $lte: rangeEnd },
       })
         .select(
-          'planId dayNumber caloriesBurned cardioExercise cardioDurationMinutes isRestDay exerciseName loggedAt'
+          'planId dayNumber caloriesBurned cardioExercise cardioDurationMinutes distanceMiles isRestDay exerciseName loggedAt'
         )
         .lean(),
     ]);
@@ -120,6 +121,10 @@ export async function GET(req: Request) {
             : DEFAULT_CALORIES_BURNED,
         cardioExercise: l.cardioExercise ?? null,
         cardioDurationMinutes: l.cardioDurationMinutes ?? null,
+        distanceMiles:
+          typeof l.distanceMiles === 'number' && Number.isFinite(l.distanceMiles)
+            ? Number(l.distanceMiles)
+            : null,
         isRestDay: !!l.isRestDay,
       }));
 
@@ -138,6 +143,7 @@ export async function GET(req: Request) {
             caloriesBurned: DEFAULT_CALORIES_BURNED,
             cardioExercise: null,
             cardioDurationMinutes: null,
+            distanceMiles: null,
             isRestDay: false,
           });
         }

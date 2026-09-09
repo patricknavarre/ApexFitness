@@ -43,6 +43,7 @@ type WorkoutItem = {
   caloriesBurned: number;
   cardioExercise?: string | null;
   cardioDurationMinutes?: number | null;
+  distanceMiles?: number | null;
   isRestDay?: boolean;
 };
 
@@ -63,8 +64,19 @@ function getPlanDayLabel(planId: string | null, dayNumber: number | null): strin
 
 function getWorkoutLabel(w: WorkoutItem): string {
   if (w.isRestDay) return 'Rest';
-  if (w.cardioExercise && w.cardioDurationMinutes != null) {
-    return `${getCardioLabel(w.cardioExercise)} ${w.cardioDurationMinutes} min`;
+  if (w.cardioExercise) {
+    const label = getCardioLabel(w.cardioExercise);
+    if (typeof w.distanceMiles === 'number' && w.distanceMiles > 0) {
+      const mi =
+        w.distanceMiles >= 10
+          ? String(Math.round(w.distanceMiles))
+          : w.distanceMiles.toFixed(1).replace(/\.0$/, '');
+      return `${label} ${mi} mi`;
+    }
+    if (w.cardioDurationMinutes != null) {
+      return `${label} ${w.cardioDurationMinutes} min`;
+    }
+    return label;
   }
   return getPlanDayLabel(w.planId, w.dayNumber);
 }
