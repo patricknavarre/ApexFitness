@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   WORKOUT_PLANS,
@@ -940,6 +941,12 @@ function WorkoutsPageInner() {
         <p className="font-sans text-muted mt-2">
           No photo or analysis required—pick a plan and start training. Click a plan to expand
           and see each day and exercise.
+        </p>
+        <p className="font-sans text-sm mt-3">
+          <Link href="/cycling" className="text-accent hover:underline">
+            Virtual ride →
+          </Link>
+          <span className="text-muted"> Connect a smart trainer and log indoor cycling.</span>
         </p>
       </div>
 

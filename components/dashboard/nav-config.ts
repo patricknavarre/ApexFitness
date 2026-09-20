@@ -8,6 +8,7 @@ import {
   IconBook,
   IconShield,
   IconMove,
+  IconBike,
 } from '@/components/ui/icons';
 
 export type NavIcon = () => JSX.Element;
@@ -26,6 +27,7 @@ export const DESKTOP_NAV: NavItemConfig[] = [
   { href: '/analysis', label: 'AI Analysis', Icon: IconScan },
   { href: '/workouts', label: 'Workouts', Icon: IconDumbbell },
   { href: '/move', label: 'Move', Icon: IconMove },
+  { href: '/cycling', label: 'Virtual Ride', Icon: IconBike, mobileLabel: 'Ride' },
   { href: '/self-defense', label: 'Self-Defense', Icon: IconShield, mobileLabel: 'Defense' },
   { href: '/nutrition', label: 'Nutrition', Icon: IconLeaf },
   { href: '/progress', label: 'Progress', Icon: IconChart },
@@ -44,6 +46,7 @@ export const PRIMARY_MOBILE_NAV: NavItemConfig[] = [
 export const MORE_NAV: NavItemConfig[] = [
   { href: '/daily-stoic', label: 'Daily Stoic', Icon: IconBook, mobileLabel: 'Stoic' },
   { href: '/analysis', label: 'AI Analysis', Icon: IconScan },
+  { href: '/cycling', label: 'Virtual Ride', Icon: IconBike, mobileLabel: 'Ride' },
   { href: '/self-defense', label: 'Self-Defense', Icon: IconShield, mobileLabel: 'Defense' },
   { href: '/progress', label: 'Progress', Icon: IconChart },
   { href: '/settings', label: 'Settings', Icon: IconSettings },

@@ -1,0 +1,10 @@
+/** Bluetooth SIG 16-bit UUIDs as full 128-bit strings for Web Bluetooth. */
+
+export const FTMS_SERVICE = '00001826-0000-1000-8000-00805f9b34fb';
+export const INDOOR_BIKE_DATA = '00002ad2-0000-1000-8000-00805f9b34fb';
+
+export const CPS_SERVICE = '00001818-0000-1000-8000-00805f9b34fb';
+export const CYCLING_POWER_MEASUREMENT = '00002a63-0000-1000-8000-00805f9b34fb';
+
+export const HR_SERVICE = '0000180d-0000-1000-8000-00805f9b34fb';
+export const HR_MEASUREMENT = '00002a37-0000-1000-8000-00805f9b34fb';

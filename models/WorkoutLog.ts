@@ -19,6 +19,14 @@ const WorkoutLogSchema = new Schema({
     },
   ],
   isRestDay: { type: Boolean, default: false },
+  /** Virtual / trainer ride summary (Phase 1 indoor cycling). */
+  rideSource: String,
+  deviceName: String,
+  avgPowerWatts: Number,
+  maxPowerWatts: Number,
+  avgCadenceRpm: Number,
+  distanceMeters: Number,
+  energyKcal: Number,
   exerciseName: String,
   sets: [
     {
