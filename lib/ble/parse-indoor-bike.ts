@@ -13,6 +13,7 @@ export type IndoorBikeSample = {
   heartRateBpm?: number;
   energyKcal?: number;
   elapsedTimeSec?: number;
+  resistanceLevel?: number;
 };
 
 export function parseIndoorBikeData(data: DataView): IndoorBikeSample {
@@ -56,9 +57,10 @@ export function parseIndoorBikeData(data: DataView): IndoorBikeSample {
     o += 3;
   }
 
-  // Bit 5 Resistance Level
+  // Bit 5 Resistance Level (sint16)
   if (flags & 0x0020) {
     if (o + 2 > data.byteLength) return out;
+    out.resistanceLevel = data.getInt16(o, true);
     o += 2;
   }
 

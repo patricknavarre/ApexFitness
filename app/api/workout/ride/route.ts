@@ -6,6 +6,19 @@ import { getCardioOption } from '@/lib/cardio';
 
 const RIDE_CARDIO_ID = 'indoor-cycling';
 
+type LapBody = {
+  index?: number;
+  elapsedSec?: number;
+  durationSec?: number;
+  distanceMeters?: number;
+  avgPowerWatts?: number;
+  avgHeartRateBpm?: number;
+};
+
+function numOrUndef(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -23,7 +36,7 @@ export async function GET(req: Request) {
       .sort({ loggedAt: -1 })
       .limit(limit)
       .select(
-        'loggedAt cardioDurationMinutes caloriesBurned avgPowerWatts maxPowerWatts avgCadenceRpm distanceMeters energyKcal deviceName rideSource'
+        'loggedAt cardioDurationMinutes caloriesBurned avgPowerWatts maxPowerWatts normalizedPowerWatts trainingStressScore workKj avgCadenceRpm maxCadenceRpm distanceMeters energyKcal avgHeartRateBpm maxHeartRateBpm deviceName hrDeviceName rideSource laps'
       )
       .lean();
     return NextResponse.json({
@@ -34,11 +47,19 @@ export async function GET(req: Request) {
         caloriesBurned: l.caloriesBurned ?? null,
         avgPowerWatts: l.avgPowerWatts ?? null,
         maxPowerWatts: l.maxPowerWatts ?? null,
+        normalizedPowerWatts: l.normalizedPowerWatts ?? null,
+        trainingStressScore: l.trainingStressScore ?? null,
+        workKj: l.workKj ?? null,
         avgCadenceRpm: l.avgCadenceRpm ?? null,
+        maxCadenceRpm: l.maxCadenceRpm ?? null,
         distanceMeters: l.distanceMeters ?? null,
         energyKcal: l.energyKcal ?? null,
+        avgHeartRateBpm: l.avgHeartRateBpm ?? null,
+        maxHeartRateBpm: l.maxHeartRateBpm ?? null,
         deviceName: l.deviceName ?? null,
+        hrDeviceName: l.hrDeviceName ?? null,
         rideSource: l.rideSource ?? null,
+        lapCount: Array.isArray(l.laps) ? l.laps.length : 0,
       })),
     });
   } catch (e) {
@@ -58,20 +79,42 @@ export async function POST(req: Request) {
       durationSeconds,
       avgPowerWatts,
       maxPowerWatts,
+      normalizedPowerWatts,
+      intensityFactor,
+      trainingStressScore,
+      workKj,
       avgCadenceRpm,
+      maxCadenceRpm,
       distanceMeters,
       energyKcal,
+      avgHeartRateBpm,
+      maxHeartRateBpm,
       deviceName,
+      hrDeviceName,
       rideSource,
+      ftpUsed,
+      maxHrUsed,
+      laps,
     } = body as {
       durationSeconds?: number;
       avgPowerWatts?: number;
       maxPowerWatts?: number;
+      normalizedPowerWatts?: number;
+      intensityFactor?: number;
+      trainingStressScore?: number;
+      workKj?: number;
       avgCadenceRpm?: number;
+      maxCadenceRpm?: number;
       distanceMeters?: number;
       energyKcal?: number;
+      avgHeartRateBpm?: number;
+      maxHeartRateBpm?: number;
       deviceName?: string;
+      hrDeviceName?: string;
       rideSource?: string;
+      ftpUsed?: number;
+      maxHrUsed?: number;
+      laps?: LapBody[];
     };
 
     if (typeof durationSeconds !== 'number' || durationSeconds < 15) {
@@ -97,6 +140,19 @@ export async function POST(req: Request) {
     const caloriesBurned =
       fromEnergy ?? fromPower ?? Math.round(durationMinutes * option.calPerMin);
 
+    const lapDocs = Array.isArray(laps)
+      ? laps
+          .slice(0, 100)
+          .map((lap, i) => ({
+            index: typeof lap.index === 'number' ? lap.index : i + 1,
+            elapsedSec: numOrUndef(lap.elapsedSec),
+            durationSec: numOrUndef(lap.durationSec),
+            distanceMeters: numOrUndef(lap.distanceMeters),
+            avgPowerWatts: numOrUndef(lap.avgPowerWatts),
+            avgHeartRateBpm: numOrUndef(lap.avgHeartRateBpm),
+          }))
+      : [];
+
     await connectDB();
     const doc = await WorkoutLog.create({
       userId: session.user.id,
@@ -109,15 +165,39 @@ export async function POST(req: Request) {
         typeof deviceName === 'string' && deviceName.trim()
           ? deviceName.trim().slice(0, 80)
           : undefined,
-      avgPowerWatts:
-        typeof avgPowerWatts === 'number' ? Math.round(avgPowerWatts) : undefined,
-      maxPowerWatts:
-        typeof maxPowerWatts === 'number' ? Math.round(maxPowerWatts) : undefined,
+      hrDeviceName:
+        typeof hrDeviceName === 'string' && hrDeviceName.trim()
+          ? hrDeviceName.trim().slice(0, 80)
+          : undefined,
+      avgPowerWatts: numOrUndef(avgPowerWatts) != null ? Math.round(avgPowerWatts!) : undefined,
+      maxPowerWatts: numOrUndef(maxPowerWatts) != null ? Math.round(maxPowerWatts!) : undefined,
+      normalizedPowerWatts:
+        numOrUndef(normalizedPowerWatts) != null
+          ? Math.round(normalizedPowerWatts!)
+          : undefined,
+      intensityFactor:
+        numOrUndef(intensityFactor) != null
+          ? Math.round(intensityFactor! * 100) / 100
+          : undefined,
+      trainingStressScore:
+        numOrUndef(trainingStressScore) != null
+          ? Math.round(trainingStressScore!)
+          : undefined,
+      workKj: numOrUndef(workKj) != null ? Math.round(workKj! * 10) / 10 : undefined,
       avgCadenceRpm:
-        typeof avgCadenceRpm === 'number' ? Math.round(avgCadenceRpm) : undefined,
+        numOrUndef(avgCadenceRpm) != null ? Math.round(avgCadenceRpm!) : undefined,
+      maxCadenceRpm:
+        numOrUndef(maxCadenceRpm) != null ? Math.round(maxCadenceRpm!) : undefined,
       distanceMeters:
-        typeof distanceMeters === 'number' ? Math.round(distanceMeters) : undefined,
+        numOrUndef(distanceMeters) != null ? Math.round(distanceMeters!) : undefined,
       energyKcal: fromEnergy ?? undefined,
+      avgHeartRateBpm:
+        numOrUndef(avgHeartRateBpm) != null ? Math.round(avgHeartRateBpm!) : undefined,
+      maxHeartRateBpm:
+        numOrUndef(maxHeartRateBpm) != null ? Math.round(maxHeartRateBpm!) : undefined,
+      ftpUsed: numOrUndef(ftpUsed) != null ? Math.round(ftpUsed!) : undefined,
+      maxHrUsed: numOrUndef(maxHrUsed) != null ? Math.round(maxHrUsed!) : undefined,
+      laps: lapDocs,
     });
 
     return NextResponse.json({
@@ -127,10 +207,18 @@ export async function POST(req: Request) {
       caloriesBurned: doc.caloriesBurned,
       avgPowerWatts: doc.avgPowerWatts ?? null,
       maxPowerWatts: doc.maxPowerWatts ?? null,
+      normalizedPowerWatts: doc.normalizedPowerWatts ?? null,
+      trainingStressScore: doc.trainingStressScore ?? null,
+      workKj: doc.workKj ?? null,
       avgCadenceRpm: doc.avgCadenceRpm ?? null,
+      maxCadenceRpm: doc.maxCadenceRpm ?? null,
       distanceMeters: doc.distanceMeters ?? null,
+      avgHeartRateBpm: doc.avgHeartRateBpm ?? null,
+      maxHeartRateBpm: doc.maxHeartRateBpm ?? null,
       deviceName: doc.deviceName ?? null,
+      hrDeviceName: doc.hrDeviceName ?? null,
       rideSource: doc.rideSource ?? null,
+      lapCount: lapDocs.length,
     });
   } catch (e) {
     console.error('Ride POST error:', e);

@@ -3,11 +3,35 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { isWebBluetoothSupported, connectTrainer } from '@/lib/ble/trainer-client';
-import { startMockTrainer } from '@/lib/ble/mock-trainer';
+import { startMockHeartRate, startMockTrainer } from '@/lib/ble/mock-trainer';
+import { connectHeartRateMonitor, type HrConnection } from '@/lib/ble/hr-client';
 import type { IndoorBikeSample } from '@/lib/ble/parse-indoor-bike';
 import type { TrainerConnection } from '@/lib/ble/trainer-client';
+import { PowerSparkline } from '@/components/cycling/PowerSparkline';
+import {
+  defaultMaxHrFromAge,
+  hrZone,
+  hrZoneLabel,
+  intensityFactor,
+  loadRidePrefs,
+  normalizedPower,
+  saveRidePrefs,
+  trainingStressScore,
+  workKj,
+  type HrZone,
+} from '@/lib/ride/stats';
 
 type Phase = 'idle' | 'connected' | 'riding' | 'saving';
+type ControlMode = 'free' | 'erg' | 'sim';
+
+type LapRecord = {
+  index: number;
+  elapsedSec: number;
+  durationSec: number;
+  distanceMeters: number;
+  avgPowerWatts?: number;
+  avgHeartRateBpm?: number;
+};
 
 type RideSummary = {
   id: string;
@@ -15,8 +39,15 @@ type RideSummary = {
   caloriesBurned: number | null;
   avgPowerWatts: number | null;
   maxPowerWatts: number | null;
+  normalizedPowerWatts: number | null;
+  trainingStressScore: number | null;
+  workKj: number | null;
   avgCadenceRpm: number | null;
+  maxCadenceRpm: number | null;
   distanceMeters: number | null;
+  avgHeartRateBpm: number | null;
+  maxHeartRateBpm: number | null;
+  lapCount?: number;
 };
 
 function formatDuration(sec: number): string {
@@ -34,53 +65,103 @@ export function RideSession() {
   const [bleOk, setBleOk] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
   const [deviceName, setDeviceName] = useState<string | null>(null);
+  const [hrDeviceName, setHrDeviceName] = useState<string | null>(null);
   const [rideSource, setRideSource] = useState<'ftms' | 'cps' | 'mock' | null>(null);
+  const [canControl, setCanControl] = useState(false);
   const [live, setLive] = useState<IndoorBikeSample>({});
+  const [hrBpm, setHrBpm] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [distanceM, setDistanceM] = useState(0);
+  const [powerSeries, setPowerSeries] = useState<{ t: number; w: number }[]>([]);
+  const [laps, setLaps] = useState<LapRecord[]>([]);
+  const [liveStats, setLiveStats] = useState({
+    avgPower: 0,
+    maxPower: 0,
+    np: null as number | null,
+    tss: null as number | null,
+    work: 0,
+    avgCadence: 0,
+    maxCadence: 0,
+    avgHr: 0,
+    maxHr: 0,
+  });
+  const [ftp, setFtp] = useState(200);
+  const [maxHrSetting, setMaxHrSetting] = useState(184);
+  const [controlMode, setControlMode] = useState<ControlMode>('free');
+  const [ergTarget, setErgTarget] = useState(180);
+  const [simGrade, setSimGrade] = useState(0);
   const [lastSaved, setLastSaved] = useState<RideSummary | null>(null);
   const [recent, setRecent] = useState<RideSummary[]>([]);
 
   const connectionRef = useRef<TrainerConnection | null>(null);
+  const hrConnectionRef = useRef<HrConnection | { disconnect: () => void } | null>(null);
   const powerSumRef = useRef(0);
   const powerCountRef = useRef(0);
   const maxPowerRef = useRef(0);
   const cadenceSumRef = useRef(0);
   const cadenceCountRef = useRef(0);
+  const maxCadenceRef = useRef(0);
+  const hrSumRef = useRef(0);
+  const hrCountRef = useRef(0);
+  const maxHrRef = useRef(0);
   const energyRef = useRef<number | null>(null);
   const distanceRef = useRef(0);
   const lastTickRef = useRef<number | null>(null);
-  const lastSpeedRef = useRef(0);
   const rideStartRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
+  const powerSamplesRef = useRef<number[]>([]);
+  const lastPowerChartSecRef = useRef(-1);
+  const lapStartSecRef = useRef(0);
+  const lapPowerSumRef = useRef(0);
+  const lapPowerCountRef = useRef(0);
+  const lapHrSumRef = useRef(0);
+  const lapHrCountRef = useRef(0);
+  const lapStartDistRef = useRef(0);
+  const ridingRef = useRef(false);
+  const ftpRef = useRef(200);
+  const maxHrSettingRef = useRef(184);
 
   useEffect(() => {
     setBleOk(isWebBluetoothSupported());
+    const prefs = loadRidePrefs();
+    setFtp(prefs.ftp);
+    setMaxHrSetting(prefs.maxHr);
+    ftpRef.current = prefs.ftp;
+    maxHrSettingRef.current = prefs.maxHr;
     void loadRecent();
+    void fetch('/api/user/me')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((u) => {
+        if (!u) return;
+        if (!window.localStorage.getItem('apex.ride.maxHr') && u.age) {
+          const mh = defaultMaxHrFromAge(u.age);
+          setMaxHrSetting(mh);
+          maxHrSettingRef.current = mh;
+        }
+      })
+      .catch(() => undefined);
+
     return () => {
       stopTimer();
       connectionRef.current?.disconnect();
       connectionRef.current = null;
+      hrConnectionRef.current?.disconnect();
+      hrConnectionRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    ftpRef.current = ftp;
+    maxHrSettingRef.current = maxHrSetting;
+  }, [ftp, maxHrSetting]);
 
   async function loadRecent() {
     try {
       const res = await fetch('/api/workout/ride?limit=5');
       if (!res.ok) return;
       const data = await res.json();
-      setRecent(
-        (data.rides ?? []).map((r: RideSummary & { id: string }) => ({
-          id: r.id,
-          durationMinutes: r.durationMinutes,
-          caloriesBurned: r.caloriesBurned,
-          avgPowerWatts: r.avgPowerWatts,
-          maxPowerWatts: r.maxPowerWatts,
-          avgCadenceRpm: r.avgCadenceRpm,
-          distanceMeters: r.distanceMeters,
-        }))
-      );
+      setRecent(data.rides ?? []);
     } catch {
       /* ignore */
     }
@@ -93,24 +174,90 @@ export function RideSession() {
     }
   }
 
+  function recomputeLiveStats(elapsed: number) {
+    const avgPower =
+      powerCountRef.current > 0 ? powerSumRef.current / powerCountRef.current : 0;
+    const np = normalizedPower(powerSamplesRef.current);
+    const tss =
+      np != null
+        ? trainingStressScore(elapsed, np, ftpRef.current)
+        : null;
+    setLiveStats({
+      avgPower,
+      maxPower: maxPowerRef.current,
+      np,
+      tss,
+      work: workKj(avgPower, elapsed),
+      avgCadence:
+        cadenceCountRef.current > 0
+          ? cadenceSumRef.current / cadenceCountRef.current
+          : 0,
+      maxCadence: maxCadenceRef.current,
+      avgHr: hrCountRef.current > 0 ? hrSumRef.current / hrCountRef.current : 0,
+      maxHr: maxHrRef.current,
+    });
+  }
+
   function resetAccumulators() {
     powerSumRef.current = 0;
     powerCountRef.current = 0;
     maxPowerRef.current = 0;
     cadenceSumRef.current = 0;
     cadenceCountRef.current = 0;
+    maxCadenceRef.current = 0;
+    hrSumRef.current = 0;
+    hrCountRef.current = 0;
+    maxHrRef.current = 0;
     energyRef.current = null;
     distanceRef.current = 0;
     lastTickRef.current = null;
-    lastSpeedRef.current = 0;
     rideStartRef.current = null;
+    powerSamplesRef.current = [];
+    lastPowerChartSecRef.current = -1;
+    lapStartSecRef.current = 0;
+    lapPowerSumRef.current = 0;
+    lapPowerCountRef.current = 0;
+    lapHrSumRef.current = 0;
+    lapHrCountRef.current = 0;
+    lapStartDistRef.current = 0;
+    ridingRef.current = false;
     setElapsedSec(0);
     setDistanceM(0);
-    setLive({});
+    setPowerSeries([]);
+    setLaps([]);
+    setLiveStats({
+      avgPower: 0,
+      maxPower: 0,
+      np: null,
+      tss: null,
+      work: 0,
+      avgCadence: 0,
+      maxCadence: 0,
+      avgHr: 0,
+      maxHr: 0,
+    });
   }
+
+  const onHr = useCallback((bpm: number) => {
+    setHrBpm(bpm);
+    setLive((prev) => ({ ...prev, heartRateBpm: bpm }));
+    if (!ridingRef.current) return;
+    hrSumRef.current += bpm;
+    hrCountRef.current += 1;
+    if (bpm > maxHrRef.current) maxHrRef.current = bpm;
+    lapHrSumRef.current += bpm;
+    lapHrCountRef.current += 1;
+  }, []);
 
   const onMetrics = useCallback((sample: IndoorBikeSample) => {
     setLive((prev) => ({ ...prev, ...sample }));
+
+    if (!ridingRef.current) return;
+
+    const elapsed =
+      rideStartRef.current != null
+        ? Math.floor((Date.now() - rideStartRef.current) / 1000)
+        : 0;
 
     if (typeof sample.powerWatts === 'number' && sample.powerWatts >= 0) {
       powerSumRef.current += sample.powerWatts;
@@ -118,10 +265,29 @@ export function RideSession() {
       if (sample.powerWatts > maxPowerRef.current) {
         maxPowerRef.current = sample.powerWatts;
       }
+      powerSamplesRef.current.push(sample.powerWatts);
+      if (powerSamplesRef.current.length > 7200) {
+        powerSamplesRef.current = powerSamplesRef.current.slice(-7200);
+      }
+      lapPowerSumRef.current += sample.powerWatts;
+      lapPowerCountRef.current += 1;
+      if (elapsed !== lastPowerChartSecRef.current) {
+        lastPowerChartSecRef.current = elapsed;
+        setPowerSeries((prev) => {
+          const next = [...prev, { t: elapsed, w: sample.powerWatts! }];
+          return next.length > 240 ? next.slice(-240) : next;
+        });
+      }
     }
     if (typeof sample.cadenceRpm === 'number' && sample.cadenceRpm >= 0) {
       cadenceSumRef.current += sample.cadenceRpm;
       cadenceCountRef.current += 1;
+      if (sample.cadenceRpm > maxCadenceRef.current) {
+        maxCadenceRef.current = sample.cadenceRpm;
+      }
+    }
+    if (typeof sample.heartRateBpm === 'number' && sample.heartRateBpm > 0) {
+      onHr(sample.heartRateBpm);
     }
     if (typeof sample.energyKcal === 'number') {
       energyRef.current = sample.energyKcal;
@@ -140,58 +306,124 @@ export function RideSession() {
           setDistanceM(distanceRef.current);
         }
       }
-      lastSpeedRef.current = speedMs;
     }
     lastTickRef.current = now;
-  }, []);
+    recomputeLiveStats(elapsed);
+  }, [onHr]);
 
-  async function attachConnection(conn: TrainerConnection) {
+  async function attachTrainer(conn: TrainerConnection) {
     connectionRef.current?.disconnect();
     connectionRef.current = conn;
     setDeviceName(conn.deviceName);
     setRideSource(conn.source);
+    setCanControl(conn.canControl);
     setPhase('connected');
+    setControlMode('free');
     resetAccumulators();
-    toast.success(`Connected to ${conn.deviceName}`);
+    toast.success(`Trainer: ${conn.deviceName}`);
   }
 
-  async function handleConnect() {
+  async function handleConnectTrainer() {
     try {
       const conn = await connectTrainer(onMetrics, () => {
         toast.error('Trainer disconnected');
         stopTimer();
+        ridingRef.current = false;
         setPhase('idle');
         setDeviceName(null);
+        setCanControl(false);
         connectionRef.current = null;
       });
-      await attachConnection(conn);
+      await attachTrainer(conn);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not connect';
-      if (!/cancel|chooser/i.test(msg)) {
-        toast.error(msg);
-      }
+      if (!/cancel|chooser/i.test(msg)) toast.error(msg);
     }
   }
 
-  function handleMock() {
-    const conn = startMockTrainer(onMetrics);
-    void attachConnection(conn);
+  function handleMockTrainer() {
+    void attachTrainer(startMockTrainer(onMetrics));
+  }
+
+  async function handleConnectHr() {
+    try {
+      hrConnectionRef.current?.disconnect();
+      const conn = await connectHeartRateMonitor(onHr, () => {
+        toast.error('Heart rate disconnected');
+        setHrDeviceName(null);
+        hrConnectionRef.current = null;
+      });
+      hrConnectionRef.current = conn;
+      setHrDeviceName(conn.deviceName);
+      toast.success(`HR: ${conn.deviceName}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not connect HR';
+      if (!/cancel|chooser/i.test(msg)) toast.error(msg);
+    }
+  }
+
+  function handleMockHr() {
+    hrConnectionRef.current?.disconnect();
+    const conn = startMockHeartRate(onHr);
+    hrConnectionRef.current = conn;
+    setHrDeviceName(conn.deviceName);
+    toast.success('Mock HR connected');
+  }
+
+  function handleDisconnectHr() {
+    hrConnectionRef.current?.disconnect();
+    hrConnectionRef.current = null;
+    setHrDeviceName(null);
+    setHrBpm(null);
   }
 
   function handleStartRide() {
     if (!connectionRef.current) return;
     resetAccumulators();
     rideStartRef.current = Date.now();
+    ridingRef.current = true;
     setPhase('riding');
     stopTimer();
     timerRef.current = window.setInterval(() => {
       if (rideStartRef.current == null) return;
-      setElapsedSec(Math.floor((Date.now() - rideStartRef.current) / 1000));
+      const e = Math.floor((Date.now() - rideStartRef.current) / 1000);
+      setElapsedSec(e);
+      recomputeLiveStats(e);
     }, 250);
+  }
+
+  function handleLap() {
+    if (phase !== 'riding' || rideStartRef.current == null) return;
+    const elapsed = Math.floor((Date.now() - rideStartRef.current) / 1000);
+    const durationSec = Math.max(1, elapsed - lapStartSecRef.current);
+    const dist = Math.max(0, distanceRef.current - lapStartDistRef.current);
+    const lap: LapRecord = {
+      index: laps.length + 1,
+      elapsedSec: elapsed,
+      durationSec,
+      distanceMeters: dist,
+      avgPowerWatts:
+        lapPowerCountRef.current > 0
+          ? Math.round(lapPowerSumRef.current / lapPowerCountRef.current)
+          : undefined,
+      avgHeartRateBpm:
+        lapHrCountRef.current > 0
+          ? Math.round(lapHrSumRef.current / lapHrCountRef.current)
+          : undefined,
+    };
+    setLaps((prev) => [...prev, lap]);
+    lapStartSecRef.current = elapsed;
+    lapStartDistRef.current = distanceRef.current;
+    lapPowerSumRef.current = 0;
+    lapPowerCountRef.current = 0;
+    lapHrSumRef.current = 0;
+    lapHrCountRef.current = 0;
+    toast.message(`Lap ${lap.index} · ${formatDuration(durationSec)}`);
   }
 
   async function handleEndRide() {
     stopTimer();
+    ridingRef.current = false;
     const durationSeconds = Math.max(
       0,
       rideStartRef.current != null
@@ -205,6 +437,25 @@ export function RideSession() {
       return;
     }
 
+    // Close open lap into records for save
+    const finalLaps = [...laps];
+    if (durationSeconds > lapStartSecRef.current) {
+      finalLaps.push({
+        index: finalLaps.length + 1,
+        elapsedSec: durationSeconds,
+        durationSec: durationSeconds - lapStartSecRef.current,
+        distanceMeters: Math.max(0, distanceRef.current - lapStartDistRef.current),
+        avgPowerWatts:
+          lapPowerCountRef.current > 0
+            ? Math.round(lapPowerSumRef.current / lapPowerCountRef.current)
+            : undefined,
+        avgHeartRateBpm:
+          lapHrCountRef.current > 0
+            ? Math.round(lapHrSumRef.current / lapHrCountRef.current)
+            : undefined,
+      });
+    }
+
     setPhase('saving');
     const avgPower =
       powerCountRef.current > 0
@@ -214,8 +465,23 @@ export function RideSession() {
       cadenceCountRef.current > 0
         ? cadenceSumRef.current / cadenceCountRef.current
         : undefined;
+    const avgHr =
+      hrCountRef.current > 0 ? hrSumRef.current / hrCountRef.current : undefined;
+    const np = normalizedPower(powerSamplesRef.current);
+    const iff = np != null ? intensityFactor(np, ftpRef.current) : null;
+    const tss =
+      np != null
+        ? trainingStressScore(durationSeconds, np, ftpRef.current)
+        : null;
 
     try {
+      if (connectionRef.current?.canControl) {
+        try {
+          await connectionRef.current.resetControl();
+        } catch {
+          /* ignore */
+        }
+      }
       const res = await fetch('/api/workout/ride', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -223,11 +489,22 @@ export function RideSession() {
           durationSeconds,
           avgPowerWatts: avgPower,
           maxPowerWatts: maxPowerRef.current || undefined,
+          normalizedPowerWatts: np ?? undefined,
+          intensityFactor: iff ?? undefined,
+          trainingStressScore: tss ?? undefined,
+          workKj: avgPower != null ? workKj(avgPower, durationSeconds) : undefined,
           avgCadenceRpm: avgCadence,
+          maxCadenceRpm: maxCadenceRef.current || undefined,
           distanceMeters: distanceRef.current || undefined,
           energyKcal: energyRef.current ?? undefined,
+          avgHeartRateBpm: avgHr,
+          maxHeartRateBpm: maxHrRef.current || undefined,
           deviceName: deviceName ?? undefined,
+          hrDeviceName: hrDeviceName ?? undefined,
           rideSource: rideSource ?? 'ftms',
+          ftpUsed: ftpRef.current,
+          maxHrUsed: maxHrSettingRef.current,
+          laps: finalLaps,
         }),
       });
       if (!res.ok) {
@@ -235,44 +512,88 @@ export function RideSession() {
         throw new Error(err.error || 'Failed to save');
       }
       const data = await res.json();
-      setLastSaved({
-        id: data.id,
-        durationMinutes: data.durationMinutes,
-        caloriesBurned: data.caloriesBurned,
-        avgPowerWatts: data.avgPowerWatts,
-        maxPowerWatts: data.maxPowerWatts,
-        avgCadenceRpm: data.avgCadenceRpm,
-        distanceMeters: data.distanceMeters,
-      });
+      setLastSaved(data);
       toast.success('Ride saved');
       await loadRecent();
       setPhase('connected');
+      setControlMode('free');
       resetAccumulators();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save ride');
       setPhase('riding');
+      ridingRef.current = true;
       rideStartRef.current = Date.now() - durationSeconds * 1000;
       timerRef.current = window.setInterval(() => {
         if (rideStartRef.current == null) return;
-        setElapsedSec(Math.floor((Date.now() - rideStartRef.current) / 1000));
+        const e2 = Math.floor((Date.now() - rideStartRef.current) / 1000);
+        setElapsedSec(e2);
+        recomputeLiveStats(e2);
       }, 250);
     }
   }
 
-  function handleDisconnect() {
+  function handleDisconnectTrainer() {
     stopTimer();
+    ridingRef.current = false;
     connectionRef.current?.disconnect();
     connectionRef.current = null;
     setDeviceName(null);
     setRideSource(null);
+    setCanControl(false);
     setPhase('idle');
+    setControlMode('free');
     resetAccumulators();
+  }
+
+  async function applyErg() {
+    const conn = connectionRef.current;
+    if (!conn?.canControl) return;
+    try {
+      await conn.requestControl();
+      await conn.setTargetPower(ergTarget);
+      setControlMode('erg');
+      toast.success(`ERG ${ergTarget} W`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'ERG failed');
+    }
+  }
+
+  async function applySim() {
+    const conn = connectionRef.current;
+    if (!conn?.canControl) return;
+    try {
+      await conn.requestControl();
+      await conn.setSimulationGrade(simGrade);
+      setControlMode('sim');
+      toast.success(`Grade ${simGrade.toFixed(1)}%`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'SIM failed');
+    }
+  }
+
+  async function applyFree() {
+    const conn = connectionRef.current;
+    if (!conn?.canControl) return;
+    try {
+      await conn.resetControl();
+      setControlMode('free');
+      toast.message('Free ride');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Reset failed');
+    }
+  }
+
+  function persistPrefs() {
+    saveRidePrefs(ftp, maxHrSetting);
+    toast.success('FTP / max HR saved on this device');
   }
 
   const power = live.powerWatts ?? 0;
   const cadence = live.cadenceRpm ?? 0;
   const speed = live.speedKmh ?? 0;
-  const hr = live.heartRateBpm;
+  const displayHr = hrBpm ?? live.heartRateBpm ?? null;
+  const zone: HrZone | null =
+    displayHr != null ? hrZone(displayHr, maxHrSetting) : null;
 
   return (
     <div className="max-w-3xl space-y-8">
@@ -281,76 +602,163 @@ export function RideSession() {
           Virtual ride
         </h1>
         <p className="font-sans text-sm text-muted mt-1">
-          Connect a smart trainer over Bluetooth, ride live, and save to your Apex log.
+          Trainer + Amazfit/HR strap, live zones, ERG/SIM, laps — save into your Apex log.
         </p>
       </div>
 
       {!bleOk && (
         <div className="rounded-card border border-border bg-bg2 px-4 py-3 font-sans text-sm text-muted">
-          Web Bluetooth is not available here (Safari / iOS cannot pair trainers in the
-          browser). Use Chrome or Edge on desktop or Android — or try the mock trainer to
-          preview the ride HUD.
+          Web Bluetooth needs Chrome or Edge (desktop/Android). Safari/iOS cannot pair
+          devices in the browser — use mock trainer / mock HR to preview the HUD.
         </div>
       )}
 
-      <section className="rounded-card border border-border bg-card p-4 md:p-6 space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          {phase === 'idle' && (
+      <section className="rounded-card border border-border bg-card p-4 md:p-6 space-y-3">
+        <h2 className="font-display text-lg text-accent uppercase tracking-wide">
+          Devices
+        </h2>
+        <div className="flex flex-wrap items-center gap-2">
+          {!deviceName ? (
             <>
               <button
                 type="button"
-                onClick={handleConnect}
+                onClick={handleConnectTrainer}
                 disabled={!bleOk}
-                className="font-sans text-sm px-4 py-2 rounded-card bg-accent text-bg font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
+                className="font-sans text-sm px-4 py-2 rounded-card bg-accent text-bg font-medium disabled:opacity-40 hover:opacity-90"
               >
                 Connect trainer
               </button>
               <button
                 type="button"
-                onClick={handleMock}
-                className="font-sans text-sm px-4 py-2 rounded-card border border-border text-text hover:bg-bg2 transition-colors"
+                onClick={handleMockTrainer}
+                className="font-sans text-sm px-4 py-2 rounded-card border border-border text-text hover:bg-bg2"
               >
-                Use mock trainer
+                Mock trainer
+              </button>
+            </>
+          ) : (
+            <span className="font-sans text-sm text-muted">
+              Trainer: {deviceName}
+              {rideSource ? ` · ${rideSource.toUpperCase()}` : ''}
+              {canControl ? ' · control OK' : ' · read-only'}
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {!hrDeviceName ? (
+            <>
+              <button
+                type="button"
+                onClick={handleConnectHr}
+                disabled={!bleOk}
+                className="font-sans text-sm px-4 py-2 rounded-card border border-accent text-accent hover:bg-bg2 disabled:opacity-40"
+              >
+                Connect HR (Amazfit / strap)
+              </button>
+              <button
+                type="button"
+                onClick={handleMockHr}
+                className="font-sans text-sm px-4 py-2 rounded-card border border-border text-text hover:bg-bg2"
+              >
+                Mock HR
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="font-sans text-sm text-muted">HR: {hrDeviceName}</span>
+              <button
+                type="button"
+                onClick={handleDisconnectHr}
+                className="font-sans text-xs px-3 py-1.5 rounded-card border border-border text-muted hover:text-text"
+              >
+                Disconnect HR
               </button>
             </>
           )}
-          {(phase === 'connected' || phase === 'riding' || phase === 'saving') && (
+        </div>
+        <p className="font-sans text-xs text-muted">
+          Amazfit: enable Heart Rate Push (or start a broadcast workout) so the watch
+          appears as a Bluetooth heart-rate monitor, then Connect HR.
+        </p>
+      </section>
+
+      <section className="rounded-card border border-border bg-card p-4 md:p-6 space-y-3">
+        <h2 className="font-display text-lg text-accent uppercase tracking-wide">
+          FTP &amp; max HR
+        </h2>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="font-sans text-sm text-muted">
+            FTP (W)
+            <input
+              type="number"
+              min={50}
+              max={600}
+              value={ftp}
+              onChange={(e) => setFtp(Number(e.target.value) || 200)}
+              className="ml-2 w-20 bg-bg3 border border-border text-text font-sans text-sm px-2 py-1.5 rounded-card"
+            />
+          </label>
+          <label className="font-sans text-sm text-muted">
+            Max HR
+            <input
+              type="number"
+              min={100}
+              max={230}
+              value={maxHrSetting}
+              onChange={(e) => setMaxHrSetting(Number(e.target.value) || 184)}
+              className="ml-2 w-20 bg-bg3 border border-border text-text font-sans text-sm px-2 py-1.5 rounded-card"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={persistPrefs}
+            className="font-sans text-sm px-3 py-1.5 rounded-card border border-border hover:bg-bg2"
+          >
+            Save locally
+          </button>
+        </div>
+      </section>
+
+      <section className="rounded-card border border-border bg-card p-4 md:p-6 space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {phase === 'connected' && (
+            <button
+              type="button"
+              onClick={handleStartRide}
+              className="font-sans text-sm px-4 py-2 rounded-card bg-accent text-bg font-medium hover:opacity-90"
+            >
+              Start ride
+            </button>
+          )}
+          {phase === 'riding' && (
             <>
-              <span className="font-sans text-sm text-muted">
-                {deviceName}
-                {rideSource ? ` · ${rideSource.toUpperCase()}` : ''}
-              </span>
-              {phase === 'connected' && (
-                <button
-                  type="button"
-                  onClick={handleStartRide}
-                  className="font-sans text-sm px-4 py-2 rounded-card bg-accent text-bg font-medium hover:opacity-90 transition-opacity"
-                >
-                  Start ride
-                </button>
-              )}
-              {phase === 'riding' && (
-                <button
-                  type="button"
-                  onClick={handleEndRide}
-                  className="font-sans text-sm px-4 py-2 rounded-card bg-accent text-bg font-medium hover:opacity-90 transition-opacity"
-                >
-                  End & save
-                </button>
-              )}
-              {phase === 'saving' && (
-                <span className="font-sans text-sm text-muted">Saving…</span>
-              )}
-              {phase !== 'saving' && (
-                <button
-                  type="button"
-                  onClick={handleDisconnect}
-                  className="font-sans text-sm px-4 py-2 rounded-card border border-border text-muted hover:text-text hover:bg-bg2 transition-colors"
-                >
-                  Disconnect
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleLap}
+                className="font-sans text-sm px-4 py-2 rounded-card border border-border text-text hover:bg-bg2"
+              >
+                Lap
+              </button>
+              <button
+                type="button"
+                onClick={handleEndRide}
+                className="font-sans text-sm px-4 py-2 rounded-card bg-accent text-bg font-medium hover:opacity-90"
+              >
+                End &amp; save
+              </button>
             </>
+          )}
+          {phase === 'saving' && (
+            <span className="font-sans text-sm text-muted">Saving…</span>
+          )}
+          {deviceName && phase !== 'saving' && (
+            <button
+              type="button"
+              onClick={handleDisconnectTrainer}
+              className="font-sans text-sm px-4 py-2 rounded-card border border-border text-muted hover:text-text hover:bg-bg2"
+            >
+              Disconnect trainer
+            </button>
           )}
         </div>
 
@@ -358,32 +766,173 @@ export function RideSession() {
           <Metric label="Power" value={`${Math.round(power)}`} unit="W" large />
           <Metric label="Cadence" value={`${Math.round(cadence)}`} unit="rpm" large />
           <Metric label="Speed" value={speed.toFixed(1)} unit="km/h" large />
+          <Metric label="Time" value={formatDuration(elapsedSec)} unit="" large />
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Metric
-            label="Time"
-            value={formatDuration(elapsedSec)}
-            unit={hr != null ? `HR ${hr}` : ''}
+            label="Heart rate"
+            value={displayHr != null ? String(Math.round(displayHr)) : '—'}
+            unit={displayHr != null ? 'bpm' : ''}
             large
+          />
+          <Metric
+            label="HR zone"
+            value={zone != null ? `Z${zone}` : '—'}
+            unit={zone != null ? hrZoneLabel(zone).replace(/^Z\d\s/, '') : ''}
+          />
+          <Metric label="Distance" value={formatDistance(distanceM)} unit="" />
+          <Metric
+            label="Resistance"
+            value={
+              live.resistanceLevel != null ? String(live.resistanceLevel) : '—'
+            }
+            unit=""
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Metric label="Distance" value={formatDistance(distanceM)} unit="" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Metric label="Avg power" value={`${Math.round(liveStats.avgPower)}`} unit="W" />
+          <Metric
+            label="NP"
+            value={liveStats.np != null ? `${Math.round(liveStats.np)}` : '—'}
+            unit="W"
+          />
+          <Metric
+            label="TSS"
+            value={liveStats.tss != null ? `${Math.round(liveStats.tss)}` : '—'}
+            unit=""
+          />
+          <Metric label="Work" value={liveStats.work.toFixed(1)} unit="kJ" />
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Metric
+            label="Max power"
+            value={`${Math.round(liveStats.maxPower)}`}
+            unit="W"
+          />
+          <Metric
+            label="Avg / max cad"
+            value={`${Math.round(liveStats.avgCadence)}/${Math.round(liveStats.maxCadence)}`}
+            unit="rpm"
+          />
+          <Metric
+            label="Avg / max HR"
+            value={
+              liveStats.maxHr > 0
+                ? `${Math.round(liveStats.avgHr)}/${Math.round(liveStats.maxHr)}`
+                : '—'
+            }
+            unit="bpm"
+          />
           <Metric
             label="Energy"
             value={live.energyKcal != null ? String(live.energyKcal) : '—'}
             unit={live.energyKcal != null ? 'kcal' : ''}
           />
         </div>
+
+        <PowerSparkline samples={powerSeries} />
       </section>
+
+      {canControl && deviceName && (
+        <section className="rounded-card border border-border bg-card p-4 md:p-6 space-y-4">
+          <h2 className="font-display text-lg text-accent uppercase tracking-wide">
+            Trainer control
+          </h2>
+          <p className="font-sans text-xs text-muted">
+            Mode: <span className="text-text">{controlMode.toUpperCase()}</span>
+            {controlMode === 'erg' ? ` · target ${ergTarget} W` : ''}
+            {controlMode === 'sim' ? ` · grade ${simGrade.toFixed(1)}%` : ''}
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="font-sans text-sm text-muted">
+              ERG target (W)
+              <input
+                type="number"
+                min={50}
+                max={600}
+                value={ergTarget}
+                onChange={(e) => setErgTarget(Number(e.target.value) || 0)}
+                className="ml-2 w-24 bg-bg3 border border-border text-text font-sans text-sm px-2 py-1.5 rounded-card"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={applyErg}
+              className="font-sans text-sm px-3 py-1.5 rounded-card bg-accent text-bg font-medium"
+            >
+              Apply ERG
+            </button>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="font-sans text-sm text-muted w-full sm:w-auto">
+              SIM grade ({simGrade.toFixed(1)}%)
+              <input
+                type="range"
+                min={-5}
+                max={15}
+                step={0.5}
+                value={simGrade}
+                onChange={(e) => setSimGrade(Number(e.target.value))}
+                className="block w-full sm:w-56 mt-2"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={applySim}
+              className="font-sans text-sm px-3 py-1.5 rounded-card border border-border hover:bg-bg2"
+            >
+              Apply grade
+            </button>
+            <button
+              type="button"
+              onClick={applyFree}
+              className="font-sans text-sm px-3 py-1.5 rounded-card border border-border hover:bg-bg2"
+            >
+              Free ride
+            </button>
+          </div>
+        </section>
+      )}
+
+      {laps.length > 0 && (
+        <section>
+          <h2 className="font-display text-xl text-accent uppercase tracking-wide mb-3">
+            Laps
+          </h2>
+          <ul className="space-y-2">
+            {laps.map((lap) => (
+              <li
+                key={lap.index}
+                className="rounded-card border border-border bg-card px-4 py-3 font-sans text-sm text-muted flex flex-wrap gap-x-3"
+              >
+                <span className="text-text">Lap {lap.index}</span>
+                <span>{formatDuration(lap.durationSec)}</span>
+                <span>{formatDistance(lap.distanceMeters)}</span>
+                {lap.avgPowerWatts != null && <span>avg {lap.avgPowerWatts} W</span>}
+                {lap.avgHeartRateBpm != null && <span>avg {lap.avgHeartRateBpm} bpm</span>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {lastSaved && (
         <section className="rounded-card border border-border bg-bg2 px-4 py-3 font-sans text-sm text-muted">
           Last saved: {lastSaved.durationMinutes} min
           {lastSaved.avgPowerWatts != null ? ` · avg ${lastSaved.avgPowerWatts} W` : ''}
-          {lastSaved.caloriesBurned != null ? ` · ${lastSaved.caloriesBurned} kcal` : ''}
-          {lastSaved.distanceMeters != null
-            ? ` · ${formatDistance(lastSaved.distanceMeters)}`
+          {lastSaved.normalizedPowerWatts != null
+            ? ` · NP ${lastSaved.normalizedPowerWatts}`
             : ''}
+          {lastSaved.trainingStressScore != null
+            ? ` · TSS ${lastSaved.trainingStressScore}`
+            : ''}
+          {lastSaved.avgHeartRateBpm != null
+            ? ` · avg HR ${lastSaved.avgHeartRateBpm}`
+            : ''}
+          {lastSaved.caloriesBurned != null ? ` · ${lastSaved.caloriesBurned} kcal` : ''}
         </section>
       )}
 
@@ -400,11 +949,11 @@ export function RideSession() {
               >
                 <span>{r.durationMinutes ?? '—'} min</span>
                 {r.avgPowerWatts != null && <span>avg {r.avgPowerWatts} W</span>}
-                {r.maxPowerWatts != null && <span>max {r.maxPowerWatts} W</span>}
-                {r.avgCadenceRpm != null && <span>{r.avgCadenceRpm} rpm</span>}
-                {r.distanceMeters != null && (
-                  <span>{formatDistance(r.distanceMeters)}</span>
-                )}
+                {r.normalizedPowerWatts != null && <span>NP {r.normalizedPowerWatts}</span>}
+                {r.trainingStressScore != null && <span>TSS {r.trainingStressScore}</span>}
+                {r.avgHeartRateBpm != null && <span>HR {r.avgHeartRateBpm}</span>}
+                {r.workKj != null && <span>{r.workKj} kJ</span>}
+                {r.lapCount != null && r.lapCount > 0 && <span>{r.lapCount} laps</span>}
                 {r.caloriesBurned != null && <span>{r.caloriesBurned} kcal</span>}
               </li>
             ))}

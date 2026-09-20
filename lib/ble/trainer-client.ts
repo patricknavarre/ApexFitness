@@ -1,9 +1,8 @@
+import { createFtmsController, type FtmsController } from './ftms-control';
 import {
   CPS_SERVICE,
   CYCLING_POWER_MEASUREMENT,
   FTMS_SERVICE,
-  HR_MEASUREMENT,
-  HR_SERVICE,
   INDOOR_BIKE_DATA,
 } from './uuids';
 import {
@@ -15,7 +14,12 @@ import {
 export type TrainerConnection = {
   deviceId: string;
   deviceName: string;
-  source: 'ftms' | 'cps';
+  source: 'ftms' | 'cps' | 'mock';
+  canControl: boolean;
+  requestControl: () => Promise<void>;
+  setTargetPower: (watts: number) => Promise<void>;
+  setSimulationGrade: (gradePct: number) => Promise<void>;
+  resetControl: () => Promise<void>;
   disconnect: () => void;
 };
 
@@ -26,26 +30,53 @@ export function isWebBluetoothSupported(): boolean {
   return typeof navigator !== 'undefined' && !!navigator.bluetooth;
 }
 
+function noopControl(): Pick<
+  TrainerConnection,
+  'requestControl' | 'setTargetPower' | 'setSimulationGrade' | 'resetControl'
+> {
+  const unsupported = async () => {
+    throw new Error('This trainer does not support resistance control');
+  };
+  return {
+    requestControl: unsupported,
+    setTargetPower: unsupported,
+    setSimulationGrade: unsupported,
+    resetControl: unsupported,
+  };
+}
+
+function wrapController(ctrl: FtmsController | null) {
+  if (!ctrl) return { canControl: false as const, ...noopControl() };
+  return {
+    canControl: true as const,
+    requestControl: () => ctrl.requestControl(),
+    setTargetPower: (w: number) => ctrl.setTargetPower(w),
+    setSimulationGrade: (g: number) => ctrl.setSimulationGrade(g),
+    resetControl: () => ctrl.reset(),
+  };
+}
+
 export async function connectTrainer(
   onMetrics: MetricsHandler,
   onDisconnect?: DisconnectHandler
 ): Promise<TrainerConnection> {
   if (!isWebBluetoothSupported()) {
-    throw new Error('Web Bluetooth is not supported in this browser. Use Chrome or Edge on desktop or Android.');
+    throw new Error(
+      'Web Bluetooth is not supported in this browser. Use Chrome or Edge on desktop or Android.'
+    );
   }
 
   let device: BluetoothDevice;
   try {
     device = await navigator.bluetooth!.requestDevice({
       filters: [{ services: [FTMS_SERVICE] }, { services: [CPS_SERVICE] }],
-      optionalServices: [FTMS_SERVICE, CPS_SERVICE, HR_SERVICE],
+      optionalServices: [FTMS_SERVICE, CPS_SERVICE],
     });
   } catch (first) {
-    // Some trainers omit FTMS/CPS in advertising; fall back to any device picker
     try {
       device = await navigator.bluetooth!.requestDevice({
         acceptAllDevices: true,
-        optionalServices: [FTMS_SERVICE, CPS_SERVICE, HR_SERVICE],
+        optionalServices: [FTMS_SERVICE, CPS_SERVICE],
       });
     } catch {
       throw first;
@@ -55,11 +86,14 @@ export async function connectTrainer(
   const server = await device.gatt!.connect();
   let source: 'ftms' | 'cps' = 'ftms';
   let characteristic: BluetoothRemoteGATTCharacteristic;
+  let controlBits = wrapController(null);
 
   try {
     const ftms = await server.getPrimaryService(FTMS_SERVICE);
     characteristic = await ftms.getCharacteristic(INDOOR_BIKE_DATA);
     source = 'ftms';
+    const ctrl = await createFtmsController(ftms);
+    controlBits = wrapController(ctrl);
   } catch {
     const cps = await server.getPrimaryService(CPS_SERVICE);
     characteristic = await cps.getCharacteristic(CYCLING_POWER_MEASUREMENT);
@@ -79,34 +113,14 @@ export async function connectTrainer(
   characteristic.addEventListener('characteristicvaluechanged', onValue);
   await characteristic.startNotifications();
 
-  // Optional HR if present
-  let hrChar: BluetoothRemoteGATTCharacteristic | null = null;
-  try {
-    const hrService = await server.getPrimaryService(HR_SERVICE);
-    hrChar = await hrService.getCharacteristic(HR_MEASUREMENT);
-    const onHr = () => {
-      const value = hrChar?.value;
-      if (!value || value.byteLength < 2) return;
-      const flags = value.getUint8(0);
-      const hr =
-        flags & 0x01 ? value.getUint16(1, true) : value.getUint8(1);
-      onMetrics({ heartRateBpm: hr });
-    };
-    hrChar.addEventListener('characteristicvaluechanged', onHr);
-    await hrChar.startNotifications();
-  } catch {
-    // HR optional
-  }
-
-  const handleDisconnect = () => {
-    onDisconnect?.();
-  };
+  const handleDisconnect = () => onDisconnect?.();
   device.addEventListener('gattserverdisconnected', handleDisconnect);
 
   return {
     deviceId: device.id,
     deviceName: device.name?.trim() || 'Smart trainer',
     source,
+    ...controlBits,
     disconnect: () => {
       try {
         characteristic.removeEventListener('characteristicvaluechanged', onValue);
@@ -114,9 +128,7 @@ export async function connectTrainer(
         /* ignore */
       }
       device.removeEventListener('gattserverdisconnected', handleDisconnect);
-      if (device.gatt?.connected) {
-        device.gatt.disconnect();
-      }
+      if (device.gatt?.connected) device.gatt.disconnect();
     },
   };
 }
