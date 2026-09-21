@@ -37,6 +37,8 @@ const WorkoutLogSchema = new Schema({
   hrDeviceName: String,
   ftpUsed: Number,
   maxHrUsed: Number,
+  rideXp: Number,
+  rideUsedErg: { type: Boolean, default: false },
   laps: [
     {
       index: Number,

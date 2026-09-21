@@ -26,6 +26,13 @@ export type MomentumInput = {
   /** Body weight change in lbs (latest − first). Negative = lost weight. */
   weightDeltaLbs?: number | null;
   weekGoal?: number;
+  /** Virtual ride badge inputs */
+  totalRides?: number;
+  longestRideMinutes?: number;
+  bestRideTss?: number;
+  ridesWithHr?: number;
+  ridesWithErg?: number;
+  totalRideXp?: number;
 };
 
 const WEEKDAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -55,6 +62,11 @@ export function buildMilestones(input: MomentumInput): Milestone[] {
     photoCount,
     weightDeltaLbs,
     weekGoal = 5,
+    totalRides = 0,
+    longestRideMinutes = 0,
+    bestRideTss = 0,
+    ridesWithHr = 0,
+    ridesWithErg = 0,
   } = input;
 
   const milestones: Milestone[] = [
@@ -64,6 +76,54 @@ export function buildMilestones(input: MomentumInput): Milestone[] {
       description: 'Log your first training session',
       earned: totalWorkouts >= 1,
       progress: Math.min(totalWorkouts, 1),
+      target: 1,
+    },
+    {
+      id: 'first-ride',
+      label: 'First virtual ride',
+      description: 'Finish and save a smart-trainer ride',
+      earned: totalRides >= 1,
+      progress: Math.min(totalRides, 1),
+      target: 1,
+    },
+    {
+      id: 'rides-5',
+      label: '5 virtual rides',
+      description: 'Build the indoor habit',
+      earned: totalRides >= 5,
+      progress: Math.min(totalRides, 5),
+      target: 5,
+    },
+    {
+      id: 'ride-30min',
+      label: '30-minute ride',
+      description: 'Hold a single virtual ride for 30+ minutes',
+      earned: longestRideMinutes >= 30,
+      progress: Math.min(longestRideMinutes, 30),
+      target: 30,
+    },
+    {
+      id: 'ride-tss-50',
+      label: 'TSS 50 ride',
+      description: 'Hit 50+ Training Stress Score in one ride',
+      earned: bestRideTss >= 50,
+      progress: Math.min(Math.round(bestRideTss), 50),
+      target: 50,
+    },
+    {
+      id: 'ride-hr',
+      label: 'Heart-rate linked',
+      description: 'Save a ride with Amazfit / HR strap data',
+      earned: ridesWithHr >= 1,
+      progress: Math.min(ridesWithHr, 1),
+      target: 1,
+    },
+    {
+      id: 'ride-erg',
+      label: 'ERG warrior',
+      description: 'Complete a ride using ERG target power',
+      earned: ridesWithErg >= 1,
+      progress: Math.min(ridesWithErg, 1),
       target: 1,
     },
     {
@@ -115,7 +175,7 @@ export function buildMilestones(input: MomentumInput): Milestone[] {
   return milestones;
 }
 
-/** Prefer weekly goal, then next streak milestone, then first photo. */
+/** Prefer weekly goal, then ride goals, then streak, then photo. */
 export function getNextGoal(milestones: Milestone[], streak: number, daysThisWeek: number, weekGoal = 5): NextGoal | null {
   const weekMs = milestones.find((m) => m.id === 'week-5');
   if (weekMs && !weekMs.earned) {
@@ -125,6 +185,19 @@ export function getNextGoal(milestones: Milestone[], streak: number, daysThisWee
       target: weekGoal,
       remaining: weekGoal - daysThisWeek,
     };
+  }
+
+  const ridePriority = ['first-ride', 'rides-5', 'ride-30min', 'ride-hr', 'ride-erg', 'ride-tss-50'];
+  for (const id of ridePriority) {
+    const m = milestones.find((x) => x.id === id);
+    if (m && !m.earned) {
+      return {
+        label: m.description,
+        progress: m.progress,
+        target: m.target,
+        remaining: Math.max(0, m.target - m.progress),
+      };
+    }
   }
 
   const streakTargets = [3, 7, 14, 30];

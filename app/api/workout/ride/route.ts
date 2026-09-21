@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/mongodb';
 import WorkoutLog from '@/models/WorkoutLog';
 import { getCardioOption } from '@/lib/cardio';
+import { xpFromRide } from '@/lib/ride/xp';
 
 const RIDE_CARDIO_ID = 'indoor-cycling';
 
@@ -36,7 +37,7 @@ export async function GET(req: Request) {
       .sort({ loggedAt: -1 })
       .limit(limit)
       .select(
-        'loggedAt cardioDurationMinutes caloriesBurned avgPowerWatts maxPowerWatts normalizedPowerWatts trainingStressScore workKj avgCadenceRpm maxCadenceRpm distanceMeters energyKcal avgHeartRateBpm maxHeartRateBpm deviceName hrDeviceName rideSource laps'
+        'loggedAt cardioDurationMinutes caloriesBurned avgPowerWatts maxPowerWatts normalizedPowerWatts trainingStressScore workKj avgCadenceRpm maxCadenceRpm distanceMeters energyKcal avgHeartRateBpm maxHeartRateBpm deviceName hrDeviceName rideSource laps rideXp rideUsedErg'
       )
       .lean();
     return NextResponse.json({
@@ -60,6 +61,8 @@ export async function GET(req: Request) {
         hrDeviceName: l.hrDeviceName ?? null,
         rideSource: l.rideSource ?? null,
         lapCount: Array.isArray(l.laps) ? l.laps.length : 0,
+        rideXp: l.rideXp ?? null,
+        rideUsedErg: Boolean(l.rideUsedErg),
       })),
     });
   } catch (e) {
@@ -95,6 +98,7 @@ export async function POST(req: Request) {
       ftpUsed,
       maxHrUsed,
       laps,
+      rideUsedErg,
     } = body as {
       durationSeconds?: number;
       avgPowerWatts?: number;
@@ -115,6 +119,7 @@ export async function POST(req: Request) {
       ftpUsed?: number;
       maxHrUsed?: number;
       laps?: LapBody[];
+      rideUsedErg?: boolean;
     };
 
     if (typeof durationSeconds !== 'number' || durationSeconds < 15) {
@@ -154,6 +159,23 @@ export async function POST(req: Request) {
       : [];
 
     await connectDB();
+    const priorCount = await WorkoutLog.countDocuments({
+      userId: session.user.id,
+      cardioExercise: RIDE_CARDIO_ID,
+      rideSource: { $in: ['ftms', 'cps', 'mock'] },
+    });
+    const usedErg = Boolean(rideUsedErg);
+    const rideXp = xpFromRide({
+      durationSeconds,
+      trainingStressScore:
+        typeof trainingStressScore === 'number' ? trainingStressScore : null,
+      workKj: typeof workKj === 'number' ? workKj : null,
+      avgHeartRateBpm:
+        typeof avgHeartRateBpm === 'number' ? avgHeartRateBpm : null,
+      usedErg,
+      isFirstRideEver: priorCount === 0,
+    });
+
     const doc = await WorkoutLog.create({
       userId: session.user.id,
       cardioExercise: RIDE_CARDIO_ID,
@@ -197,8 +219,22 @@ export async function POST(req: Request) {
         numOrUndef(maxHeartRateBpm) != null ? Math.round(maxHeartRateBpm!) : undefined,
       ftpUsed: numOrUndef(ftpUsed) != null ? Math.round(ftpUsed!) : undefined,
       maxHrUsed: numOrUndef(maxHrUsed) != null ? Math.round(maxHrUsed!) : undefined,
+      rideXp,
+      rideUsedErg: usedErg,
       laps: lapDocs,
     });
+
+    const xpAgg = await WorkoutLog.aggregate([
+      {
+        $match: {
+          userId: doc.userId,
+          cardioExercise: RIDE_CARDIO_ID,
+          rideSource: { $in: ['ftms', 'cps', 'mock'] },
+        },
+      },
+      { $group: { _id: null, total: { $sum: { $ifNull: ['$rideXp', 0] } } } },
+    ]);
+    const totalRideXp = Number(xpAgg[0]?.total ?? rideXp);
 
     return NextResponse.json({
       id: String(doc._id),
@@ -219,6 +255,9 @@ export async function POST(req: Request) {
       hrDeviceName: doc.hrDeviceName ?? null,
       rideSource: doc.rideSource ?? null,
       lapCount: lapDocs.length,
+      rideXp,
+      totalRideXp,
+      rideUsedErg: usedErg,
     });
   } catch (e) {
     console.error('Ride POST error:', e);

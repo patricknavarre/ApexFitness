@@ -131,3 +131,191 @@ body::before {
 .od-cta:active:not(:disabled) {
   transform: scale(0.97);
 }
+
+/* —— Virtual ride arcade world —— */
+.ride-world {
+  height: 220px;
+  background: linear-gradient(180deg, var(--bg3) 0%, var(--bg2) 55%, var(--bg) 100%);
+  color: var(--tan);
+  transform: perspective(600px) rotateX(2deg);
+}
+
+.ride-world--surge {
+  box-shadow: 0 0 0 1px var(--accent), 0 0 28px var(--glow-accent);
+}
+
+.ride-world__sky {
+  position: absolute;
+  inset: 0 0 42% 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 70% 20%, var(--glow-accent) 0%, transparent 55%),
+    linear-gradient(180deg, var(--atmosphere-a), transparent);
+}
+
+.ride-world__hills {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  height: 40%;
+  bottom: 38%;
+  opacity: 0.55;
+  background-repeat: repeat-x;
+  background-size: 240px 100%;
+}
+
+.ride-world__hills--far {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 80' preserveAspectRatio='none'%3E%3Cpath d='M0 80 L0 50 L40 28 L80 48 L120 20 L160 44 L200 30 L240 52 L240 80 Z' fill='%234b532055'/%3E%3C/svg%3E");
+  animation: ride-hills 40s linear infinite;
+  opacity: 0.35;
+}
+
+.ride-world__hills--near {
+  bottom: 34%;
+  height: 36%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 80' preserveAspectRatio='none'%3E%3Cpath d='M0 80 L0 55 L35 35 L70 55 L110 25 L150 50 L190 32 L240 58 L240 80 Z' fill='%234b532088'/%3E%3C/svg%3E");
+  animation: ride-hills 22s linear infinite;
+}
+
+.ride-world__road {
+  position: absolute;
+  left: -5%;
+  right: -5%;
+  bottom: 0;
+  height: 42%;
+  background:
+    linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.25) 12%, #2a2a22 12%, #1c1c18 100%);
+  transform-origin: 50% 0%;
+  transform: rotateX(58deg) rotateZ(var(--ride-lean, 0deg));
+  transition: transform 0.4s ease;
+}
+
+.ride-world__lane {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  bottom: 0;
+  width: 10px;
+  margin-left: -5px;
+  background: repeating-linear-gradient(
+    180deg,
+    var(--accent) 0 18px,
+    transparent 18px 36px
+  );
+  opacity: 0.85;
+}
+
+.ride-world__road--moving .ride-world__lane {
+  animation: ride-lane var(--road-duration, 2s) linear infinite;
+}
+
+.ride-world__rider-wrap {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  transform: translateX(-50%) rotate(var(--ride-lean, 0deg));
+  transition: transform 0.35s ease;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ride-world__rider {
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+  color: var(--tan);
+}
+
+.ride-world__crank {
+  transform-origin: 60px 68px;
+  animation: ride-crank var(--pedal-duration, 0.8s) linear infinite;
+}
+
+.ride-world__legs {
+  transform-origin: 60px 52px;
+  animation: ride-legs var(--pedal-duration, 0.8s) ease-in-out infinite;
+}
+
+.ride-world__effort-tag {
+  margin-top: -6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+}
+
+.ride-world__zone {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--zone-tint, transparent);
+  transition: background 0.5s ease;
+  z-index: 1;
+}
+
+.ride-world__particle {
+  position: absolute;
+  bottom: 28%;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: ride-particle 0.65s ease-out forwards;
+  z-index: 3;
+}
+
+@keyframes ride-lane {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 72px;
+  }
+}
+
+@keyframes ride-hills {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: -240px 0;
+  }
+}
+
+@keyframes ride-crank {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ride-legs {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+}
+
+@keyframes ride-particle {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-70px) scale(0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ride-world__road--moving .ride-world__lane,
+  .ride-world__hills--far,
+  .ride-world__hills--near,
+  .ride-world__crank,
+  .ride-world__legs,
+  .ride-world__particle {
+    animation: none !important;
+  }
+}
+

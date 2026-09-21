@@ -8,6 +8,12 @@ import { connectHeartRateMonitor, type HrConnection } from '@/lib/ble/hr-client'
 import type { IndoorBikeSample } from '@/lib/ble/parse-indoor-bike';
 import type { TrainerConnection } from '@/lib/ble/trainer-client';
 import { PowerSparkline } from '@/components/cycling/PowerSparkline';
+import { RideWorld } from '@/components/cycling/RideWorld';
+import {
+  RideEventToasts,
+  RideXpCelebration,
+  type RideHudEvent,
+} from '@/components/cycling/RideEvents';
 import {
   defaultMaxHrFromAge,
   hrZone,
@@ -20,6 +26,8 @@ import {
   workKj,
   type HrZone,
 } from '@/lib/ride/stats';
+import { levelFromXp } from '@/lib/ride/xp';
+import { buildMilestones } from '@/lib/milestones';
 
 type Phase = 'idle' | 'connected' | 'riding' | 'saving';
 type ControlMode = 'free' | 'erg' | 'sim';
@@ -61,6 +69,44 @@ function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(2)} km`;
 }
 
+function leveledDetail(level: ReturnType<typeof levelFromXp>): string {
+  return `L${level.level} ${level.title}`;
+}
+
+function rideBadgeSnapshot(rides: {
+  durationMinutes?: number | null;
+  trainingStressScore?: number | null;
+  avgHeartRateBpm?: number | null;
+  rideUsedErg?: boolean;
+}[]) {
+  let longestRideMinutes = 0;
+  let bestRideTss = 0;
+  let ridesWithHr = 0;
+  let ridesWithErg = 0;
+  for (const r of rides) {
+    longestRideMinutes = Math.max(longestRideMinutes, Number(r.durationMinutes) || 0);
+    bestRideTss = Math.max(bestRideTss, Number(r.trainingStressScore) || 0);
+    if (r.avgHeartRateBpm) ridesWithHr += 1;
+    if (r.rideUsedErg) ridesWithErg += 1;
+  }
+  return buildMilestones({
+    loggedDates: new Set(),
+    streak: 0,
+    daysThisWeek: 0,
+    totalWorkouts: 0,
+    photoCount: 0,
+    totalRides: rides.length,
+    longestRideMinutes,
+    bestRideTss,
+    ridesWithHr,
+    ridesWithErg,
+  }).filter((m) =>
+    ['first-ride', 'rides-5', 'ride-30min', 'ride-tss-50', 'ride-hr', 'ride-erg'].includes(
+      m.id
+    )
+  );
+}
+
 export function RideSession() {
   const [bleOk, setBleOk] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
@@ -92,9 +138,36 @@ export function RideSession() {
   const [simGrade, setSimGrade] = useState(0);
   const [lastSaved, setLastSaved] = useState<RideSummary | null>(null);
   const [recent, setRecent] = useState<RideSummary[]>([]);
+  const [hudEvents, setHudEvents] = useState<RideHudEvent[]>([]);
+  const [surge, setSurge] = useState(false);
+  const [bestPowerEver, setBestPowerEver] = useState(0);
+  const [totalRideXp, setTotalRideXp] = useState(0);
+  const [rideCount, setRideCount] = useState(0);
+  const [celebration, setCelebration] = useState<{
+    xpGained: number;
+    levelBefore: ReturnType<typeof levelFromXp>;
+    levelAfter: ReturnType<typeof levelFromXp>;
+    newBadges: string[];
+  } | null>(null);
+
+  const ridesCacheRef = useRef<
+    {
+      durationMinutes?: number | null;
+      trainingStressScore?: number | null;
+      avgHeartRateBpm?: number | null;
+      rideUsedErg?: boolean;
+      maxPowerWatts?: number | null;
+      rideXp?: number | null;
+    }[]
+  >([]);
 
   const connectionRef = useRef<TrainerConnection | null>(null);
   const hrConnectionRef = useRef<HrConnection | { disconnect: () => void } | null>(null);
+  const usedErgRef = useRef(false);
+  const lastZoneRef = useRef<HrZone | null>(null);
+  const prAnnouncedRef = useRef(false);
+  const surgeUntilRef = useRef(0);
+  const bestPowerEverRef = useRef(0);
   const powerSumRef = useRef(0);
   const powerCountRef = useRef(0);
   const maxPowerRef = useRef(0);
@@ -158,13 +231,40 @@ export function RideSession() {
 
   async function loadRecent() {
     try {
-      const res = await fetch('/api/workout/ride?limit=5');
+      const res = await fetch('/api/workout/ride?limit=50');
       if (!res.ok) return;
       const data = await res.json();
-      setRecent(data.rides ?? []);
+      const rides = (data.rides ?? []) as (RideSummary & {
+        maxPowerWatts?: number | null;
+        rideXp?: number | null;
+        trainingStressScore?: number | null;
+        avgHeartRateBpm?: number | null;
+        rideUsedErg?: boolean;
+      })[];
+      ridesCacheRef.current = rides;
+      setRecent(rides.slice(0, 5));
+      setRideCount(rides.length);
+      let xp = 0;
+      let best = 0;
+      for (const r of rides) {
+        xp += Number(r.rideXp) || 0;
+        best = Math.max(best, Number(r.maxPowerWatts) || 0);
+      }
+      setTotalRideXp(xp);
+      setBestPowerEver(best);
+      bestPowerEverRef.current = best;
     } catch {
       /* ignore */
     }
+  }
+
+  function pushEvent(ev: Omit<RideHudEvent, 'id'>) {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setHudEvents((prev) => [...prev, { ...ev, id }].slice(-5));
+  }
+
+  function dismissEvent(id: string) {
+    setHudEvents((prev) => prev.filter((e) => e.id !== id));
   }
 
   function stopTimer() {
@@ -225,6 +325,10 @@ export function RideSession() {
     setDistanceM(0);
     setPowerSeries([]);
     setLaps([]);
+    setSurge(false);
+    prAnnouncedRef.current = false;
+    lastZoneRef.current = null;
+    usedErgRef.current = false;
     setLiveStats({
       avgPower: 0,
       maxPower: 0,
@@ -247,6 +351,16 @@ export function RideSession() {
     if (bpm > maxHrRef.current) maxHrRef.current = bpm;
     lapHrSumRef.current += bpm;
     lapHrCountRef.current += 1;
+
+    const z = hrZone(bpm, maxHrSettingRef.current);
+    if (lastZoneRef.current != null && z > lastZoneRef.current) {
+      pushEvent({
+        kind: 'zone',
+        title: hrZoneLabel(z),
+        detail: `${Math.round(bpm)} bpm`,
+      });
+    }
+    lastZoneRef.current = z;
   }, []);
 
   const onMetrics = useCallback((sample: IndoorBikeSample) => {
@@ -264,6 +378,30 @@ export function RideSession() {
       powerCountRef.current += 1;
       if (sample.powerWatts > maxPowerRef.current) {
         maxPowerRef.current = sample.powerWatts;
+      }
+      if (
+        sample.powerWatts > bestPowerEverRef.current &&
+        sample.powerWatts > 50 &&
+        !prAnnouncedRef.current
+      ) {
+        prAnnouncedRef.current = true;
+        bestPowerEverRef.current = sample.powerWatts;
+        setBestPowerEver(sample.powerWatts);
+        pushEvent({
+          kind: 'pr',
+          title: 'New power PR!',
+          detail: `${Math.round(sample.powerWatts)} W`,
+        });
+      }
+      const ftpNow = ftpRef.current;
+      if (ftpNow > 0 && sample.powerWatts >= ftpNow * 1.05) {
+        const nowMs = Date.now();
+        if (nowMs > surgeUntilRef.current) {
+          surgeUntilRef.current = nowMs + 1800;
+          setSurge(true);
+          window.setTimeout(() => setSurge(false), 700);
+          pushEvent({ kind: 'surge', title: 'Power surge', detail: 'Above FTP' });
+        }
       }
       powerSamplesRef.current.push(sample.powerWatts);
       if (powerSamplesRef.current.length > 7200) {
@@ -419,6 +557,11 @@ export function RideSession() {
     lapHrSumRef.current = 0;
     lapHrCountRef.current = 0;
     toast.message(`Lap ${lap.index} · ${formatDuration(durationSec)}`);
+    pushEvent({
+      kind: 'lap',
+      title: `Lap ${lap.index}`,
+      detail: formatDuration(durationSec),
+    });
   }
 
   async function handleEndRide() {
@@ -505,6 +648,7 @@ export function RideSession() {
           ftpUsed: ftpRef.current,
           maxHrUsed: maxHrSettingRef.current,
           laps: finalLaps,
+          rideUsedErg: usedErgRef.current,
         }),
       });
       if (!res.ok) {
@@ -513,8 +657,31 @@ export function RideSession() {
       }
       const data = await res.json();
       setLastSaved(data);
-      toast.success('Ride saved');
+
+      const xpGained = Number(data.rideXp) || 0;
+      const totalAfter = Number(data.totalRideXp) || totalRideXp + xpGained;
+      const levelBefore = levelFromXp(Math.max(0, totalAfter - xpGained));
+      const levelAfter = levelFromXp(totalAfter);
+
+      const beforeBadges = rideBadgeSnapshot(ridesCacheRef.current);
       await loadRecent();
+      const afterBadges = rideBadgeSnapshot(ridesCacheRef.current);
+      const newly = afterBadges
+        .filter((m) => m.earned && !beforeBadges.find((b) => b.id === m.id)?.earned)
+        .map((m) => m.label);
+
+      setCelebration({
+        xpGained,
+        levelBefore,
+        levelAfter,
+        newBadges: newly,
+      });
+      pushEvent({
+        kind: 'xp',
+        title: `+${xpGained} XP`,
+        detail: leveledDetail(levelAfter),
+      });
+      toast.success('Ride saved');
       setPhase('connected');
       setControlMode('free');
       resetAccumulators();
@@ -552,7 +719,11 @@ export function RideSession() {
       await conn.requestControl();
       await conn.setTargetPower(ergTarget);
       setControlMode('erg');
+      usedErgRef.current = true;
       toast.success(`ERG ${ergTarget} W`);
+      if (ridingRef.current) {
+        pushEvent({ kind: 'surge', title: 'ERG locked', detail: `${ergTarget} W` });
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'ERG failed');
     }
@@ -602,8 +773,14 @@ export function RideSession() {
           Virtual ride
         </h1>
         <p className="font-sans text-sm text-muted mt-1">
-          Trainer + Amazfit/HR strap, live zones, ERG/SIM, laps — save into your Apex log.
+          Trainer + Amazfit/HR strap, live zones, ERG/SIM, laps — earn XP and badges as you ride.
         </p>
+        {totalRideXp > 0 || rideCount > 0 ? (
+          <p className="font-mono text-[11px] uppercase tracking-widest text-accent mt-2">
+            {leveledDetail(levelFromXp(totalRideXp))} · {totalRideXp} XP · {rideCount} rides
+            {bestPowerEver > 0 ? ` · PR ${bestPowerEver} W` : ''}
+          </p>
+        ) : null}
       </div>
 
       {!bleOk && (
@@ -719,7 +896,21 @@ export function RideSession() {
         </div>
       </section>
 
-      <section className="rounded-card border border-border bg-card p-4 md:p-6 space-y-4">
+      <section className="rounded-card border border-border bg-card p-4 md:p-6 space-y-4 relative">
+        <div className="relative">
+          <RideWorld
+            active={phase === 'riding'}
+            speedKmh={speed}
+            cadenceRpm={cadence}
+            powerWatts={power}
+            ftp={ftp}
+            gradePct={controlMode === 'sim' ? simGrade : 0}
+            hrZone={zone}
+            surge={surge}
+          />
+          <RideEventToasts events={hudEvents} onDismiss={dismissEvent} />
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
           {phase === 'connected' && (
             <button
@@ -959,6 +1150,17 @@ export function RideSession() {
             ))}
           </ul>
         </section>
+      )}
+
+      {celebration && (
+        <RideXpCelebration
+          open
+          xpGained={celebration.xpGained}
+          levelBefore={celebration.levelBefore}
+          levelAfter={celebration.levelAfter}
+          newBadges={celebration.newBadges}
+          onClose={() => setCelebration(null)}
+        />
       )}
     </div>
   );

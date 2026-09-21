@@ -44,8 +44,11 @@ export function MomentumCard({ activePlanId, planStartedAt, variant = 'card' }: 
       fetch('/api/progress').then((r) =>
         r.ok ? r.json() : Promise.resolve({ photos: [] })
       ),
+      fetch('/api/workout/ride?limit=50').then((r) =>
+        r.ok ? r.json() : Promise.resolve({ rides: [] })
+      ),
     ])
-      .then(([workoutData, progressData]) => {
+      .then(([workoutData, progressData, rideData]) => {
         if (cancelled) return;
         const logs = (workoutData.logs ?? []) as {
           loggedAt?: string | null;
@@ -86,6 +89,29 @@ export function MomentumCard({ activePlanId, planStartedAt, variant = 'card' }: 
           }
         }
 
+        const rides = (rideData.rides ?? []) as {
+          durationMinutes?: number | null;
+          trainingStressScore?: number | null;
+          avgHeartRateBpm?: number | null;
+          rideUsedErg?: boolean;
+          rideXp?: number | null;
+        }[];
+        let longestRideMinutes = 0;
+        let bestRideTss = 0;
+        let ridesWithHr = 0;
+        let ridesWithErg = 0;
+        let totalRideXp = 0;
+        for (const ride of rides) {
+          longestRideMinutes = Math.max(
+            longestRideMinutes,
+            Number(ride.durationMinutes) || 0
+          );
+          bestRideTss = Math.max(bestRideTss, Number(ride.trainingStressScore) || 0);
+          if (ride.avgHeartRateBpm != null && ride.avgHeartRateBpm > 0) ridesWithHr += 1;
+          if (ride.rideUsedErg) ridesWithErg += 1;
+          totalRideXp += Number(ride.rideXp) || 0;
+        }
+
         const ms = buildMilestones({
           loggedDates: dates,
           streak: streakVal,
@@ -93,6 +119,12 @@ export function MomentumCard({ activePlanId, planStartedAt, variant = 'card' }: 
           totalWorkouts: workoutCount,
           photoCount: photos.length,
           weightDeltaLbs: delta,
+          totalRides: rides.length,
+          longestRideMinutes,
+          bestRideTss,
+          ridesWithHr,
+          ridesWithErg,
+          totalRideXp,
         });
 
         setLoggedDates(dates);
