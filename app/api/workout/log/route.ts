@@ -76,7 +76,7 @@ export async function GET(req: Request) {
       filter.distanceMiles = { $exists: true, $gt: 0 };
     }
     const selectFields = [
-      'planId dayNumber loggedAt caloriesBurned cardioExercise cardioDurationMinutes isRestDay distanceMiles',
+      'planId dayNumber loggedAt caloriesBurned cardioExercise cardioDurationMinutes isRestDay distanceMiles avgHeartRateBpm maxHeartRateBpm hrDeviceName',
       includeRoute ? 'route' : '',
     ]
       .filter(Boolean)
@@ -104,6 +104,11 @@ export async function GET(req: Request) {
           typeof l.distanceMiles === 'number' && Number.isFinite(l.distanceMiles)
             ? l.distanceMiles
             : null,
+        avgHeartRateBpm:
+          typeof l.avgHeartRateBpm === 'number' ? l.avgHeartRateBpm : null,
+        maxHeartRateBpm:
+          typeof l.maxHeartRateBpm === 'number' ? l.maxHeartRateBpm : null,
+        hrDeviceName: typeof l.hrDeviceName === 'string' ? l.hrDeviceName : null,
         route: includeRoute && Array.isArray(l.route) ? l.route : undefined,
         isRestDay: !!l.isRestDay,
       })),
@@ -132,6 +137,9 @@ export async function POST(req: Request) {
       logDate: rawLogDate,
       distanceMiles: rawDistance,
       route: rawRoute,
+      avgHeartRateBpm: rawAvgHr,
+      maxHeartRateBpm: rawMaxHr,
+      hrDeviceName: rawHrDevice,
     } = body as {
       planId?: string;
       dayNumber?: number;
@@ -143,6 +151,9 @@ export async function POST(req: Request) {
       logDate?: string;
       distanceMiles?: number;
       route?: unknown;
+      avgHeartRateBpm?: number;
+      maxHeartRateBpm?: number;
+      hrDeviceName?: string;
     };
 
     const parsedDate = parseLogDate(rawLogDate);
@@ -233,6 +244,18 @@ export async function POST(req: Request) {
           ? Math.round(rawDistance * 1000) / 1000
           : undefined;
       const route = parseRoute(rawRoute);
+      const avgHeartRateBpm =
+        typeof rawAvgHr === 'number' && Number.isFinite(rawAvgHr) && rawAvgHr > 0
+          ? Math.round(rawAvgHr)
+          : undefined;
+      const maxHeartRateBpm =
+        typeof rawMaxHr === 'number' && Number.isFinite(rawMaxHr) && rawMaxHr > 0
+          ? Math.round(rawMaxHr)
+          : undefined;
+      const hrDeviceName =
+        typeof rawHrDevice === 'string' && rawHrDevice.trim()
+          ? rawHrDevice.trim().slice(0, 80)
+          : undefined;
       const doc = await WorkoutLog.create({
         userId: session.user.id,
         cardioExercise: option.id,
@@ -240,6 +263,9 @@ export async function POST(req: Request) {
         caloriesBurned,
         ...(distanceMiles != null ? { distanceMiles } : {}),
         ...(route && route.length > 0 ? { route } : {}),
+        ...(avgHeartRateBpm != null ? { avgHeartRateBpm } : {}),
+        ...(maxHeartRateBpm != null ? { maxHeartRateBpm } : {}),
+        ...(hrDeviceName ? { hrDeviceName } : {}),
         ...(loggedAtOverride ? { loggedAt: loggedAtOverride } : {}),
       });
       return NextResponse.json({
@@ -252,6 +278,9 @@ export async function POST(req: Request) {
         cardioDurationMinutes: doc.cardioDurationMinutes ?? cardioDurationMinutes,
         distanceMiles:
           typeof doc.distanceMiles === 'number' ? doc.distanceMiles : distanceMiles ?? null,
+        avgHeartRateBpm: doc.avgHeartRateBpm ?? avgHeartRateBpm ?? null,
+        maxHeartRateBpm: doc.maxHeartRateBpm ?? maxHeartRateBpm ?? null,
+        hrDeviceName: doc.hrDeviceName ?? hrDeviceName ?? null,
         isRestDay: false,
       });
     }

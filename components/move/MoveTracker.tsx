@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import { useLiveGps } from '@/hooks/useLiveGps';
@@ -17,7 +17,12 @@ import {
   type MoveModeId,
 } from '@/lib/geo';
 import { getCardioOption, getCardioLabel } from '@/lib/cardio';
-
+import {
+  connectHeartRateMonitor,
+  isWebBluetoothSupported,
+  type HrConnection,
+} from '@/lib/ble/hr-client';
+import { startMockHeartRate } from '@/lib/ble/mock-trainer';
 const MoveMap = dynamic(
   () => import('./MoveMap').then((m) => m.MoveMap),
   {
@@ -35,6 +40,9 @@ type HistoryItem = {
   cardioDurationMinutes: number | null;
   caloriesBurned: number;
   distanceMiles: number | null;
+  avgHeartRateBpm?: number | null;
+  maxHeartRateBpm?: number | null;
+  hrDeviceName?: string | null;
   route?: GeoPoint[];
 };
 
@@ -65,6 +73,11 @@ export function MoveTracker() {
   const [saving, setSaving] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [bleOk, setBleOk] = useState(false);
+  const [hrBpm, setHrBpm] = useState<number | null>(null);
+  const [hrDeviceName, setHrDeviceName] = useState<string | null>(null);
+  const [hrAvg, setHrAvg] = useState(0);
+  const [hrMax, setHrMax] = useState(0);
   const [lastSaved, setLastSaved] = useState<{
     points: GeoPoint[];
     distanceMiles: number;
@@ -72,11 +85,77 @@ export function MoveTracker() {
     calories: number;
     avgMph: number;
     mode: MoveModeId;
+    avgHeartRateBpm?: number;
+    maxHeartRateBpm?: number;
   } | null>(null);
+
+  const hrConnectionRef = useRef<HrConnection | { disconnect: () => void } | null>(null);
+  const hrSumRef = useRef(0);
+  const hrCountRef = useRef(0);
+  const hrMaxRef = useRef(0);
+  const sessionActiveRef = useRef(false);
 
   const gps = useLiveGps();
   const active = gps.status === 'watching' || gps.status === 'paused';
+  sessionActiveRef.current = active;
 
+  useEffect(() => {
+    setBleOk(isWebBluetoothSupported());
+    return () => {
+      hrConnectionRef.current?.disconnect();
+      hrConnectionRef.current = null;
+    };
+  }, []);
+
+  const onHrSample = useCallback((bpm: number) => {
+    setHrBpm(bpm);
+    if (!sessionActiveRef.current) return;
+    hrSumRef.current += bpm;
+    hrCountRef.current += 1;
+    if (bpm > hrMaxRef.current) hrMaxRef.current = bpm;
+    setHrAvg(hrSumRef.current / hrCountRef.current);
+    setHrMax(hrMaxRef.current);
+  }, []);
+
+  function resetHrAccumulators() {
+    hrSumRef.current = 0;
+    hrCountRef.current = 0;
+    hrMaxRef.current = 0;
+    setHrAvg(0);
+    setHrMax(0);
+  }
+
+  async function handleConnectHr() {
+    try {
+      hrConnectionRef.current?.disconnect();
+      const conn = await connectHeartRateMonitor(onHrSample, () => {
+        toast.error('Heart rate disconnected');
+        setHrDeviceName(null);
+        hrConnectionRef.current = null;
+      });
+      hrConnectionRef.current = conn;
+      setHrDeviceName(conn.deviceName);
+      toast.success(`HR: ${conn.deviceName}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not connect HR';
+      if (!/cancel|chooser/i.test(msg)) toast.error(msg);
+    }
+  }
+
+  function handleMockHr() {
+    hrConnectionRef.current?.disconnect();
+    const conn = startMockHeartRate(onHrSample);
+    hrConnectionRef.current = conn;
+    setHrDeviceName(conn.deviceName);
+    toast.success('Mock HR connected');
+  }
+
+  function handleDisconnectHr() {
+    hrConnectionRef.current?.disconnect();
+    hrConnectionRef.current = null;
+    setHrDeviceName(null);
+    setHrBpm(null);
+  }
   const calPerMin = getCardioOption(modeToCardio(mode))?.calPerMin ?? 4;
   const liveCalories =
     gps.elapsedMs > 0
@@ -130,10 +209,14 @@ export function MoveTracker() {
     const distanceMiles = gps.distanceMiles;
     const elapsedMs = gps.elapsedMs;
     const durationMinutes = Math.max(1, Math.round(elapsedMs / 60000));
+    const avgHeartRateBpm =
+      hrCountRef.current > 0 ? Math.round(hrSumRef.current / hrCountRef.current) : undefined;
+    const maxHeartRateBpm = hrMaxRef.current > 0 ? Math.round(hrMaxRef.current) : undefined;
 
     if (points.length < 2 && distanceMiles < 0.01) {
       toast.error('Not enough GPS movement to save. Try again outdoors.');
       gps.reset();
+      resetHrAccumulators();
       return false;
     }
 
@@ -148,6 +231,9 @@ export function MoveTracker() {
           cardioDurationMinutes: durationMinutes,
           distanceMiles: Math.round(distanceMiles * 1000) / 1000,
           route,
+          ...(avgHeartRateBpm != null ? { avgHeartRateBpm } : {}),
+          ...(maxHeartRateBpm != null ? { maxHeartRateBpm } : {}),
+          ...(hrDeviceName ? { hrDeviceName } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -162,22 +248,33 @@ export function MoveTracker() {
         calories,
         avgMph: avgSpeedMph(distanceMiles, elapsedMs),
         mode,
+        avgHeartRateBpm:
+          typeof data.avgHeartRateBpm === 'number'
+            ? data.avgHeartRateBpm
+            : avgHeartRateBpm,
+        maxHeartRateBpm:
+          typeof data.maxHeartRateBpm === 'number'
+            ? data.maxHeartRateBpm
+            : maxHeartRateBpm,
       });
       toast.success('Activity saved — burn added to today’s balance');
       gps.reset();
+      resetHrAccumulators();
       loadHistory();
       return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save activity');
       gps.reset();
+      resetHrAccumulators();
       return false;
     } finally {
       setSaving(false);
     }
-  }, [gps, liveCalories, loadHistory, mode]);
+  }, [gps, hrDeviceName, liveCalories, loadHistory, mode]);
 
   const discardSession = useCallback(() => {
     gps.reset();
+    resetHrAccumulators();
     toast.message('Activity discarded');
   }, [gps]);
 
@@ -205,8 +302,8 @@ export function MoveTracker() {
         <div>
           <h1 className="font-display text-3xl text-tan uppercase tracking-wide">Move</h1>
           <p className="font-sans text-muted mt-2 text-sm">
-            Live GPS for walk, run, or bike. Keep this tab open while tracking. Distance and
-            calories feed Progress surplus / deficit.
+            Live GPS for walk, run, or bike. Connect an Amazfit / HR strap before you start —
+            heart rate saves with the activity.
           </p>
         </div>
         <button
@@ -218,6 +315,55 @@ export function MoveTracker() {
           <IconClose />
         </button>
       </div>
+
+      <section className="rounded-card border border-border bg-card p-4 space-y-3">
+        <h2 className="font-display text-lg text-tan uppercase tracking-wide">Heart rate</h2>
+        {!bleOk && (
+          <p className="font-sans text-xs text-muted">
+            Web Bluetooth needs Chrome or Edge (desktop/Android). Safari/iOS can’t pair HR in
+            the browser — use Mock HR to preview, or track without it.
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {!hrDeviceName ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void handleConnectHr()}
+                disabled={!bleOk || saving}
+                className="font-sans text-sm px-4 py-2 rounded-card border border-accent text-accent hover:bg-bg2 disabled:opacity-40"
+              >
+                Connect HR
+              </button>
+              <button
+                type="button"
+                onClick={handleMockHr}
+                disabled={saving}
+                className="font-sans text-sm px-4 py-2 rounded-card border border-border text-tan hover:bg-bg2"
+              >
+                Mock HR
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="font-sans text-sm text-muted">
+                {hrDeviceName}
+                {hrBpm != null ? ` · ${Math.round(hrBpm)} bpm` : ' · waiting…'}
+              </span>
+              <button
+                type="button"
+                onClick={handleDisconnectHr}
+                className="font-sans text-xs px-3 py-1.5 rounded-card border border-border text-muted hover:text-tan"
+              >
+                Disconnect
+              </button>
+            </>
+          )}
+        </div>
+        <p className="font-sans text-xs text-muted">
+          Amazfit: enable Heart Rate Push, then Connect HR before starting your walk/run/bike.
+        </p>
+      </section>
 
       <div className="grid grid-cols-3 gap-2">
         {MOVE_MODES.map((m) => {
@@ -245,7 +391,7 @@ export function MoveTracker() {
 
       <MoveMap points={mapPoints} current={mapCurrent} height={280} />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div className="rounded-card border border-border bg-card p-3 text-center">
           <p className="font-mono text-[10px] uppercase tracking-wide text-muted">Distance</p>
           <p className="font-display text-2xl text-tan mt-1">{formatMiles(displayDistance)}</p>
@@ -266,6 +412,27 @@ export function MoveTracker() {
           <p className="font-sans text-xs text-muted">
             {active ? `mph · avg ${formatMph(displayAvgMph)}` : 'mph'}
             {pace ? ` · ${pace}/mi` : ''}
+          </p>
+        </div>
+        <div className="rounded-card border border-border bg-card p-3 text-center">
+          <p className="font-mono text-[10px] uppercase tracking-wide text-muted">Heart rate</p>
+          <p className="font-display text-2xl text-tan mt-1">
+            {active
+              ? hrBpm != null
+                ? Math.round(hrBpm)
+                : '—'
+              : lastSaved?.avgHeartRateBpm != null
+                ? Math.round(lastSaved.avgHeartRateBpm)
+                : hrBpm != null
+                  ? Math.round(hrBpm)
+                  : '—'}
+          </p>
+          <p className="font-sans text-xs text-muted">
+            {active && hrMax > 0
+              ? `bpm · avg ${Math.round(hrAvg)} · max ${Math.round(hrMax)}`
+              : lastSaved?.maxHeartRateBpm != null
+                ? `avg · max ${Math.round(lastSaved.maxHeartRateBpm)}`
+                : 'bpm'}
           </p>
         </div>
         <div className="rounded-card border border-border bg-card p-3 text-center">
@@ -297,6 +464,7 @@ export function MoveTracker() {
             disabled={saving}
             onClick={() => {
               setLastSaved(null);
+              resetHrAccumulators();
               gps.start();
             }}
             className="od-cta flex-1 min-h-[48px] rounded-card bg-accent px-4 py-3 font-sans text-sm font-bold uppercase text-black hover:shadow-glow disabled:opacity-50"
@@ -353,6 +521,13 @@ export function MoveTracker() {
             {MOVE_MODES.find((m) => m.id === lastSaved.mode)?.label} ·{' '}
             {formatMiles(lastSaved.distanceMiles)} mi · {formatElapsed(lastSaved.elapsedMs)} ·{' '}
             avg {formatMph(lastSaved.avgMph)} mph · {lastSaved.calories} cal
+            {lastSaved.avgHeartRateBpm != null
+              ? ` · avg HR ${lastSaved.avgHeartRateBpm}${
+                  lastSaved.maxHeartRateBpm != null
+                    ? ` / max ${lastSaved.maxHeartRateBpm}`
+                    : ''
+                }`
+              : ''}
           </p>
         </div>
       )}
@@ -400,6 +575,11 @@ export function MoveTracker() {
                       ? ` · avg ${formatMph(
                           avgSpeedMph(item.distanceMiles, item.cardioDurationMinutes * 60_000)
                         )} mph`
+                      : ''}
+                    {item.avgHeartRateBpm != null
+                      ? ` · HR ${item.avgHeartRateBpm}${
+                          item.maxHeartRateBpm != null ? `/${item.maxHeartRateBpm}` : ''
+                        }`
                       : ''}
                   </p>
                 </div>
