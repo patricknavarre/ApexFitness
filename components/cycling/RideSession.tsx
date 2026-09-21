@@ -20,11 +20,17 @@ import {
   hrZoneLabel,
   intensityFactor,
   loadRidePrefs,
+  loadSpeedUnit,
   normalizedPower,
   saveRidePrefs,
+  saveSpeedUnit,
+  speedInUnit,
+  speedUnitLabel,
+  toggleSpeedUnit,
   trainingStressScore,
   workKj,
   type HrZone,
+  type SpeedUnit,
 } from '@/lib/ride/stats';
 import { levelFromXp } from '@/lib/ride/xp';
 import { buildMilestones } from '@/lib/milestones';
@@ -147,6 +153,7 @@ export function RideSession() {
   });
   const [ftp, setFtp] = useState(200);
   const [maxHrSetting, setMaxHrSetting] = useState(184);
+  const [speedUnit, setSpeedUnit] = useState<SpeedUnit>('kmh');
   const [controlMode, setControlMode] = useState<ControlMode>('free');
   const [ergTarget, setErgTarget] = useState(180);
   const [simGrade, setSimGrade] = useState(0);
@@ -240,6 +247,7 @@ export function RideSession() {
     const prefs = loadRidePrefs();
     setFtp(prefs.ftp);
     setMaxHrSetting(prefs.maxHr);
+    setSpeedUnit(loadSpeedUnit());
     ftpRef.current = prefs.ftp;
     maxHrSettingRef.current = prefs.maxHr;
     void loadRecent();
@@ -998,6 +1006,14 @@ export function RideSession() {
     toast.success('FTP / max HR saved on this device');
   }
 
+  function handleToggleSpeedUnit() {
+    setSpeedUnit((prev) => {
+      const next = toggleSpeedUnit(prev);
+      saveSpeedUnit(next);
+      return next;
+    });
+  }
+
   const power = live.powerWatts ?? 0;
   const cadence = live.cadenceRpm ?? 0;
   const speed = live.speedKmh ?? 0;
@@ -1173,6 +1189,8 @@ export function RideSession() {
             }
             hrZone={zone}
             surge={surge}
+            speedUnit={speedUnit}
+            onToggleSpeedUnit={handleToggleSpeedUnit}
           />
           <RideEventToasts events={hudEvents} onDismiss={dismissEvent} />
         </div>
@@ -1243,7 +1261,14 @@ export function RideSession() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Metric label="Power" value={`${Math.round(power)}`} unit="W" large />
           <Metric label="Cadence" value={`${Math.round(cadence)}`} unit="rpm" large />
-          <Metric label="Speed" value={speed.toFixed(1)} unit="km/h" large />
+          <Metric
+            label="Speed"
+            value={speedInUnit(speed, speedUnit).toFixed(1)}
+            unit={speedUnitLabel(speedUnit)}
+            large
+            onClick={handleToggleSpeedUnit}
+            title="Toggle km/h ↔ mph"
+          />
           <Metric label="Time" value={formatDuration(elapsedSec)} unit="" large />
         </div>
 
@@ -1475,14 +1500,25 @@ function Metric({
   value,
   unit,
   large,
+  onClick,
+  title,
 }: {
   label: string;
   value: string;
   unit: string;
   large?: boolean;
+  onClick?: () => void;
+  title?: string;
 }) {
-  return (
-    <div className="rounded-card bg-bg2 border border-border px-3 py-3">
+  const interactive = typeof onClick === 'function';
+  const className = `rounded-card bg-bg2 border border-border px-3 py-3 text-left w-full ${
+    interactive
+      ? 'cursor-pointer hover:border-accent/50 transition-colors'
+      : ''
+  }`;
+
+  const body = (
+    <>
       <p className="font-sans text-[10px] uppercase tracking-wider text-muted">{label}</p>
       <p
         className={`font-mono text-text mt-1 ${large ? 'text-2xl md:text-3xl' : 'text-lg'}`}
@@ -1492,6 +1528,16 @@ function Metric({
           <span className="font-sans text-xs text-muted ml-1">{unit}</span>
         ) : null}
       </p>
-    </div>
+    </>
   );
+
+  if (interactive) {
+    return (
+      <button type="button" className={className} onClick={onClick} title={title}>
+        {body}
+      </button>
+    );
+  }
+
+  return <div className={className}>{body}</div>;
 }

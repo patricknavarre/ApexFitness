@@ -1,7 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import type { HrZone } from '@/lib/ride/stats';
+import { useEffect, useRef, useState } from 'react';
+import {
+  formatSpeed,
+  type HrZone,
+  type SpeedUnit,
+} from '@/lib/ride/stats';
 
 type Props = {
   active: boolean;
@@ -12,6 +16,8 @@ type Props = {
   gradePct: number;
   hrZone: HrZone | null;
   surge: boolean;
+  speedUnit: SpeedUnit;
+  onToggleSpeedUnit: () => void;
 };
 
 const ZONE_TINT: Record<HrZone, string> = {
@@ -22,6 +28,27 @@ const ZONE_TINT: Record<HrZone, string> = {
   5: 'rgba(220, 60, 70, 0.32)',
 };
 
+/** px of road texture advanced per km/h per second */
+const ROAD_PX_PER_KMH = 9;
+/** Floor so a crawl still moves when above the stop gate */
+const SCROLL_FLOOR_KMH = 1.2;
+const STOP_SPEED_KMH = 2;
+const STOP_CADENCE_RPM = 25;
+const HILLS_FAR_RATIO = 0.07;
+const HILLS_NEAR_RATIO = 0.16;
+/** Ease rate toward target scroll velocity (higher = snappier) */
+const EASE_IN = 10;
+const EASE_OUT = 7;
+
+function shouldFreeze(
+  active: boolean,
+  speedKmh: number,
+  cadenceRpm: number
+): boolean {
+  if (!active) return true;
+  return speedKmh < STOP_SPEED_KMH && cadenceRpm < STOP_CADENCE_RPM;
+}
+
 export function RideWorld({
   active,
   speedKmh,
@@ -31,23 +58,74 @@ export function RideWorld({
   gradePct,
   hrZone,
   surge,
+  speedUnit,
+  onToggleSpeedUnit,
 }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const offsetRef = useRef(0);
+  const velocityRef = useRef(0);
+  const metricsRef = useRef({ active, speedKmh, cadenceRpm });
+  const reducedMotionRef = useRef(false);
   const [particles, setParticles] = useState<{ id: number; x: number }[]>([]);
 
-  const roadDuration = useMemo(() => {
-    const s = Math.max(0, speedKmh);
-    if (!active || s < 1) return 12;
-    return Math.max(0.35, 8 / (s / 20));
-  }, [active, speedKmh]);
-
-  const pedalDuration = useMemo(() => {
-    const c = Math.max(0, cadenceRpm);
-    if (!active || c < 20) return 1.4;
-    return Math.max(0.22, 60 / c);
-  }, [active, cadenceRpm]);
+  metricsRef.current = { active, speedKmh, cadenceRpm };
 
   const lean = Math.max(-12, Math.min(14, gradePct * 0.9));
   const effort = ftp > 0 ? powerWatts / ftp : 0;
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => {
+      reducedMotionRef.current = mq.matches;
+    };
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  useEffect(() => {
+    let raf = 0;
+    let last = performance.now();
+
+    const tick = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+
+      const { active: isActive, speedKmh: spd, cadenceRpm: cad } =
+        metricsRef.current;
+      const freeze =
+        reducedMotionRef.current || shouldFreeze(isActive, spd, cad);
+      const target = freeze
+        ? 0
+        : Math.max(SCROLL_FLOOR_KMH, Math.max(0, spd)) * ROAD_PX_PER_KMH;
+
+      const ease = freeze ? EASE_OUT : EASE_IN;
+      let vel = velocityRef.current;
+      vel += (target - vel) * Math.min(1, ease * dt);
+      if (Math.abs(vel) < 0.05) vel = 0;
+      velocityRef.current = vel;
+
+      offsetRef.current += vel * dt;
+      const offset = offsetRef.current;
+      const el = rootRef.current;
+      if (el) {
+        el.style.setProperty('--road-offset', `${offset}px`);
+        el.style.setProperty(
+          '--hills-far-offset',
+          `${offset * HILLS_FAR_RATIO}px`
+        );
+        el.style.setProperty(
+          '--hills-near-offset',
+          `${offset * HILLS_NEAR_RATIO}px`
+        );
+      }
+
+      raf = window.requestAnimationFrame(tick);
+    };
+
+    raf = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
 
   useEffect(() => {
     if (!surge) return;
@@ -62,12 +140,11 @@ export function RideWorld({
 
   return (
     <div
+      ref={rootRef}
       className={`ride-world relative overflow-hidden rounded-card border border-border ${
         surge ? 'ride-world--surge' : ''
       }`}
       style={{
-        ['--road-duration' as string]: `${roadDuration}s`,
-        ['--pedal-duration' as string]: `${pedalDuration}s`,
         ['--ride-lean' as string]: `${lean}deg`,
         ['--zone-tint' as string]:
           hrZone != null ? ZONE_TINT[hrZone] : 'transparent',
@@ -76,78 +153,34 @@ export function RideWorld({
       <div className="ride-world__sky" />
       <div className="ride-world__hills ride-world__hills--far" />
       <div className="ride-world__hills ride-world__hills--near" />
-      <div className={`ride-world__road ${active ? 'ride-world__road--moving' : ''}`}>
-        <div className="ride-world__lane" />
+
+      <div className="ride-world__lean">
+        <div className="ride-world__horizon-line" />
+        <div className="ride-world__ground">
+          <div className="ride-world__road">
+            <div className="ride-world__asphalt" />
+            <div className="ride-world__edge ride-world__edge--left" />
+            <div className="ride-world__edge ride-world__edge--right" />
+            <div className="ride-world__lane" />
+            <div className="ride-world__markers ride-world__markers--left" />
+            <div className="ride-world__markers ride-world__markers--right" />
+          </div>
+        </div>
       </div>
 
-      <div className="ride-world__rider-wrap">
-        <svg
-          className="ride-world__rider"
-          viewBox="0 0 120 90"
-          width="140"
-          height="105"
-          aria-hidden
-        >
-          <ellipse
-            cx="60"
-            cy="82"
-            rx="28"
-            ry="4"
-            fill="currentColor"
-            opacity="0.25"
-          />
-          <g className="ride-world__bike">
-            <circle cx="38" cy="68" r="12" fill="none" stroke="currentColor" strokeWidth="3" />
-            <circle cx="82" cy="68" r="12" fill="none" stroke="currentColor" strokeWidth="3" />
-            <path
-              d="M38 68 L55 48 L78 48 L82 68 M55 48 L48 68 M78 48 L60 68"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinejoin="round"
-            />
-            <g className={active ? 'ride-world__crank' : undefined}>
-              <line
-                x1="60"
-                y1="68"
-                x2="60"
-                y2="56"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
-            </g>
-          </g>
-          <g className="ride-world__body">
-            <circle cx="72" cy="28" r="7" fill="currentColor" />
-            <path
-              d="M68 34 L58 48 L52 62 M58 48 L70 52 L78 44"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d={
-                active
-                  ? 'M52 62 L48 74 M70 52 L74 70'
-                  : 'M52 62 L50 74 M70 52 L72 70'
-              }
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-              className={active ? 'ride-world__legs' : undefined}
-            />
-          </g>
-        </svg>
-        {effort >= 1 && (
-          <span className="ride-world__effort-tag font-mono text-[10px] uppercase tracking-widest text-accent">
-            {effort >= 1.2 ? 'On another level' : 'Above FTP'}
-          </span>
-        )}
+      <div className="ride-world__cockpit" aria-hidden>
+        <div className="ride-world__stem" />
+        <div className="ride-world__bar">
+          <span className="ride-world__hood ride-world__hood--left" />
+          <span className="ride-world__hood ride-world__hood--right" />
+        </div>
       </div>
+
+      {effort >= 1 && (
+        <span className="ride-world__effort-tag font-mono text-[10px] uppercase tracking-widest text-accent">
+          {effort >= 1.2 ? 'On another level' : 'Above FTP'}
+        </span>
+      )}
 
       <div className="ride-world__zone" />
 
@@ -159,9 +192,17 @@ export function RideWorld({
         />
       ))}
 
-      <div className="absolute bottom-2 left-3 right-3 flex justify-between font-mono text-[10px] uppercase tracking-wider text-muted/80">
-        <span>{Math.round(speedKmh)} km/h</span>
-        <span>{gradePct >= 0 ? '+' : ''}
+      <div className="ride-world__hud absolute bottom-2 left-3 right-3 flex justify-between font-mono text-[10px] uppercase tracking-wider text-muted/80">
+        <button
+          type="button"
+          onClick={onToggleSpeedUnit}
+          className="ride-world__speed-btn hover:text-text transition-colors"
+          title="Toggle km/h ↔ mph"
+        >
+          {formatSpeed(speedKmh, speedUnit, 0)}
+        </button>
+        <span>
+          {gradePct >= 0 ? '+' : ''}
           {gradePct.toFixed(1)}%
         </span>
         <span>{Math.round(cadenceRpm)} rpm</span>

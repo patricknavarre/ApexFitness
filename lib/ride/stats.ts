@@ -80,6 +80,11 @@ export function defaultMaxHrFromAge(age: number | null | undefined): number {
 
 export const FTP_STORAGE_KEY = 'apex.ride.ftp';
 export const MAX_HR_STORAGE_KEY = 'apex.ride.maxHr';
+export const SPEED_UNIT_STORAGE_KEY = 'apex.ride.speedUnit';
+
+export type SpeedUnit = 'kmh' | 'mph';
+
+const KMH_TO_MPH = 0.621371;
 
 export function loadRidePrefs(): { ftp: number; maxHr: number } {
   if (typeof window === 'undefined') return { ftp: 200, maxHr: 184 };
@@ -98,4 +103,40 @@ export function saveRidePrefs(ftp: number, maxHr: number) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(FTP_STORAGE_KEY, String(Math.round(ftp)));
   window.localStorage.setItem(MAX_HR_STORAGE_KEY, String(Math.round(maxHr)));
+}
+
+export function loadSpeedUnit(): SpeedUnit {
+  if (typeof window === 'undefined') return 'kmh';
+  return window.localStorage.getItem(SPEED_UNIT_STORAGE_KEY) === 'mph'
+    ? 'mph'
+    : 'kmh';
+}
+
+export function saveSpeedUnit(unit: SpeedUnit) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(SPEED_UNIT_STORAGE_KEY, unit);
+}
+
+export function toggleSpeedUnit(unit: SpeedUnit): SpeedUnit {
+  return unit === 'kmh' ? 'mph' : 'kmh';
+}
+
+export function speedUnitLabel(unit: SpeedUnit): string {
+  return unit === 'mph' ? 'mph' : 'km/h';
+}
+
+/** Display-only conversion; trainer data stays in km/h. */
+export function speedInUnit(speedKmh: number, unit: SpeedUnit): number {
+  const v = Math.max(0, speedKmh);
+  return unit === 'mph' ? v * KMH_TO_MPH : v;
+}
+
+export function formatSpeed(
+  speedKmh: number,
+  unit: SpeedUnit,
+  digits = 0
+): string {
+  const v = speedInUnit(speedKmh, unit);
+  const n = digits <= 0 ? String(Math.round(v)) : v.toFixed(digits);
+  return `${n} ${speedUnitLabel(unit)}`;
 }
