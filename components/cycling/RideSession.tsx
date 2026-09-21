@@ -28,9 +28,23 @@ import {
 } from '@/lib/ride/stats';
 import { levelFromXp } from '@/lib/ride/xp';
 import { buildMilestones } from '@/lib/milestones';
+import {
+  elevationGainTo,
+  getRideCourse,
+  gradeAtDistance,
+  upcomingSegment,
+} from '@/lib/ride/courses';
+import {
+  getRideWorkout,
+  workoutProgressAt,
+  type WorkoutProgress,
+} from '@/lib/ride/workouts';
+import { CoursePicker } from '@/components/cycling/CoursePicker';
+import { WorkoutPicker } from '@/components/cycling/WorkoutPicker';
+import { CourseClimbHud, WorkoutIntervalHud } from '@/components/cycling/SessionHuds';
 
 type Phase = 'idle' | 'connected' | 'riding' | 'saving';
-type ControlMode = 'free' | 'erg' | 'sim';
+type ControlMode = 'free' | 'erg' | 'sim' | 'course' | 'workout';
 
 type LapRecord = {
   index: number;
@@ -149,6 +163,13 @@ export function RideSession() {
     levelAfter: ReturnType<typeof levelFromXp>;
     newBadges: string[];
   } | null>(null);
+  const [courseId, setCourseId] = useState<string | null>(null);
+  const [workoutId, setWorkoutId] = useState<string | null>(null);
+  const [courseGrade, setCourseGrade] = useState(0);
+  const [elevationGainM, setElevationGainM] = useState(0);
+  const [workoutHud, setWorkoutHud] = useState<WorkoutProgress | null>(null);
+  const [courseFinished, setCourseFinished] = useState(false);
+  const [workoutFinished, setWorkoutFinished] = useState(false);
 
   const ridesCacheRef = useRef<
     {
@@ -193,6 +214,23 @@ export function RideSession() {
   const ridingRef = useRef(false);
   const ftpRef = useRef(200);
   const maxHrSettingRef = useRef(184);
+  const lastSentGradeRef = useRef<number | null>(null);
+  const lastWorkoutSegRef = useRef(-1);
+  const courseFinishedRef = useRef(false);
+  const workoutFinishedRef = useRef(false);
+  const courseIdRef = useRef<string | null>(null);
+  const workoutIdRef = useRef<string | null>(null);
+  const canControlRef = useRef(false);
+
+  useEffect(() => {
+    courseIdRef.current = courseId;
+  }, [courseId]);
+  useEffect(() => {
+    workoutIdRef.current = workoutId;
+  }, [workoutId]);
+  useEffect(() => {
+    canControlRef.current = canControl;
+  }, [canControl]);
 
   useEffect(() => {
     setBleOk(isWebBluetoothSupported());
@@ -267,6 +305,99 @@ export function RideSession() {
     setHudEvents((prev) => prev.filter((e) => e.id !== id));
   }
 
+  async function sendCourseGrade(grade: number) {
+    const conn = connectionRef.current;
+    if (!conn?.canControl) {
+      setSimGrade(grade);
+      setCourseGrade(grade);
+      return;
+    }
+    const prev = lastSentGradeRef.current;
+    if (prev != null && Math.abs(prev - grade) < 0.4) {
+      setCourseGrade(grade);
+      return;
+    }
+    try {
+      await conn.requestControl();
+      await conn.setSimulationGrade(grade);
+      lastSentGradeRef.current = grade;
+      setSimGrade(grade);
+      setCourseGrade(grade);
+      setControlMode('course');
+    } catch {
+      setCourseGrade(grade);
+      setSimGrade(grade);
+    }
+  }
+
+  async function sendWorkoutErg(watts: number, segIndex: number, segName: string) {
+    const conn = connectionRef.current;
+    usedErgRef.current = true;
+    setErgTarget(watts);
+    if (lastWorkoutSegRef.current !== segIndex) {
+      lastWorkoutSegRef.current = segIndex;
+      pushEvent({
+        kind: 'surge',
+        title: segName,
+        detail: `${watts} W`,
+      });
+    }
+    if (!conn?.canControl) return;
+    try {
+      await conn.requestControl();
+      await conn.setTargetPower(watts);
+      setControlMode('workout');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function syncSessionFromElapsed(elapsed: number, distance: number) {
+    if (!ridingRef.current) return;
+
+    const wId = workoutIdRef.current;
+    const cId = courseIdRef.current;
+    const workout = getRideWorkout(wId);
+
+    if (workout) {
+      const progress = workoutProgressAt(workout, elapsed, ftpRef.current);
+      setWorkoutHud(progress);
+      void sendWorkoutErg(
+        progress.targetWatts,
+        progress.segmentIndex,
+        progress.segment.name
+      );
+      if (progress.done && !workoutFinishedRef.current) {
+        workoutFinishedRef.current = true;
+        setWorkoutFinished(true);
+        pushEvent({
+          kind: 'badge',
+          title: 'Workout complete!',
+          detail: workout.name,
+        });
+      }
+      return;
+    }
+
+    const course = getRideCourse(cId);
+    if (!course) return;
+
+    const grade = gradeAtDistance(course, distance);
+    const elev = elevationGainTo(course, distance);
+    setElevationGainM(elev);
+    void sendCourseGrade(grade);
+
+    if (distance >= course.lengthMeters && !courseFinishedRef.current) {
+      courseFinishedRef.current = true;
+      setCourseFinished(true);
+      pushEvent({
+        kind: 'badge',
+        title: 'Course complete!',
+        detail: course.name,
+      });
+    }
+  }
+
   function stopTimer() {
     if (timerRef.current != null) {
       window.clearInterval(timerRef.current);
@@ -329,6 +460,15 @@ export function RideSession() {
     prAnnouncedRef.current = false;
     lastZoneRef.current = null;
     usedErgRef.current = false;
+    lastSentGradeRef.current = null;
+    lastWorkoutSegRef.current = -1;
+    courseFinishedRef.current = false;
+    workoutFinishedRef.current = false;
+    setCourseFinished(false);
+    setWorkoutFinished(false);
+    setCourseGrade(0);
+    setElevationGainM(0);
+    setWorkoutHud(null);
     setLiveStats({
       avgPower: 0,
       maxPower: 0,
@@ -447,6 +587,7 @@ export function RideSession() {
     }
     lastTickRef.current = now;
     recomputeLiveStats(elapsed);
+    syncSessionFromElapsed(elapsed, distanceRef.current);
   }, [onHr]);
 
   async function attachTrainer(conn: TrainerConnection) {
@@ -521,13 +662,25 @@ export function RideSession() {
     rideStartRef.current = Date.now();
     ridingRef.current = true;
     setPhase('riding');
+    if (workoutId) {
+      setControlMode('workout');
+      setCourseId(null);
+      courseIdRef.current = null;
+    } else if (courseId) {
+      setControlMode('course');
+    } else {
+      setControlMode('free');
+    }
     stopTimer();
     timerRef.current = window.setInterval(() => {
       if (rideStartRef.current == null) return;
       const e = Math.floor((Date.now() - rideStartRef.current) / 1000);
       setElapsedSec(e);
       recomputeLiveStats(e);
+      syncSessionFromElapsed(e, distanceRef.current);
     }, 250);
+    // Kick first target immediately
+    syncSessionFromElapsed(0, 0);
   }
 
   function handleLap() {
@@ -648,7 +801,15 @@ export function RideSession() {
           ftpUsed: ftpRef.current,
           maxHrUsed: maxHrSettingRef.current,
           laps: finalLaps,
-          rideUsedErg: usedErgRef.current,
+          rideUsedErg: usedErgRef.current || Boolean(workoutId),
+          courseId: courseId ?? undefined,
+          courseCompleted: courseFinishedRef.current,
+          elevationGainMeters:
+            courseId && getRideCourse(courseId)
+              ? Math.round(elevationGainTo(getRideCourse(courseId)!, distanceRef.current))
+              : undefined,
+          workoutId: workoutId ?? undefined,
+          workoutCompleted: workoutFinishedRef.current,
         }),
       });
       if (!res.ok) {
@@ -896,6 +1057,25 @@ export function RideSession() {
         </div>
       </section>
 
+      <CoursePicker
+        selectedId={courseId}
+        disabled={phase === 'riding' || phase === 'saving'}
+        onSelect={(id) => {
+          setCourseId(id);
+          if (id) setWorkoutId(null);
+        }}
+      />
+
+      <WorkoutPicker
+        selectedId={workoutId}
+        ftp={ftp}
+        disabled={phase === 'riding' || phase === 'saving'}
+        onSelect={(id) => {
+          setWorkoutId(id);
+          if (id) setCourseId(null);
+        }}
+      />
+
       <section className="rounded-card border border-border bg-card p-4 md:p-6 space-y-4 relative">
         <div className="relative">
           <RideWorld
@@ -904,12 +1084,36 @@ export function RideSession() {
             cadenceRpm={cadence}
             powerWatts={power}
             ftp={ftp}
-            gradePct={controlMode === 'sim' ? simGrade : 0}
+            gradePct={
+              controlMode === 'course'
+                ? courseGrade
+                : controlMode === 'sim'
+                  ? simGrade
+                  : courseGrade !== 0 && courseId
+                    ? courseGrade
+                    : 0
+            }
             hrZone={zone}
             surge={surge}
           />
           <RideEventToasts events={hudEvents} onDismiss={dismissEvent} />
         </div>
+
+        {workoutHud && workoutId && (
+          <WorkoutIntervalHud progress={workoutHud} />
+        )}
+
+        {courseId && getRideCourse(courseId) && !workoutId && (
+          <CourseClimbHud
+            courseName={getRideCourse(courseId)!.name}
+            distanceM={distanceM}
+            courseLengthM={getRideCourse(courseId)!.lengthMeters}
+            grade={courseGrade}
+            elevationGainM={elevationGainM}
+            hint={upcomingSegment(getRideCourse(courseId)!, distanceM)}
+            finished={courseFinished}
+          />
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           {phase === 'connected' && (
@@ -919,6 +1123,11 @@ export function RideSession() {
               className="font-sans text-sm px-4 py-2 rounded-card bg-accent text-bg font-medium hover:opacity-90"
             >
               Start ride
+              {workoutId
+                ? ' · workout'
+                : courseId
+                  ? ' · course'
+                  : ''}
             </button>
           )}
           {phase === 'riding' && (
@@ -1034,8 +1243,14 @@ export function RideSession() {
           </h2>
           <p className="font-sans text-xs text-muted">
             Mode: <span className="text-text">{controlMode.toUpperCase()}</span>
-            {controlMode === 'erg' ? ` · target ${ergTarget} W` : ''}
-            {controlMode === 'sim' ? ` · grade ${simGrade.toFixed(1)}%` : ''}
+            {controlMode === 'erg' || controlMode === 'workout'
+              ? ` · target ${ergTarget} W`
+              : ''}
+            {controlMode === 'sim' || controlMode === 'course'
+              ? ` · grade ${simGrade.toFixed(1)}%`
+              : ''}
+            {workoutFinished ? ' · workout done' : ''}
+            {courseFinished ? ' · course done' : ''}
           </p>
           <div className="flex flex-wrap items-end gap-3">
             <label className="font-sans text-sm text-muted">

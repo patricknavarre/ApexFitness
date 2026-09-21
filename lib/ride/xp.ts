@@ -7,6 +7,10 @@ export type RideXpInput = {
   avgHeartRateBpm?: number | null;
   usedErg?: boolean;
   isFirstRideEver?: boolean;
+  /** Finished a built-in hill course (distance ≥ course length). */
+  completedCourse?: boolean;
+  /** Finished a structured ERG workout. */
+  completedWorkout?: boolean;
 };
 
 export type RideLevel = {
@@ -49,6 +53,8 @@ export function xpFromRide(input: RideXpInput): number {
   }
   if (input.usedErg) xp += 20;
   if (input.isFirstRideEver) xp += 50;
+  if (input.completedCourse) xp += 40;
+  if (input.completedWorkout) xp += 35;
   return Math.max(1, xp);
 }
 

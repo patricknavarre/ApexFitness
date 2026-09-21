@@ -39,6 +39,11 @@ const WorkoutLogSchema = new Schema({
   maxHrUsed: Number,
   rideXp: Number,
   rideUsedErg: { type: Boolean, default: false },
+  courseId: String,
+  courseCompleted: { type: Boolean, default: false },
+  elevationGainMeters: Number,
+  workoutId: String,
+  workoutCompleted: { type: Boolean, default: false },
   laps: [
     {
       index: Number,

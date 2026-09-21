@@ -37,7 +37,7 @@ export async function GET(req: Request) {
       .sort({ loggedAt: -1 })
       .limit(limit)
       .select(
-        'loggedAt cardioDurationMinutes caloriesBurned avgPowerWatts maxPowerWatts normalizedPowerWatts trainingStressScore workKj avgCadenceRpm maxCadenceRpm distanceMeters energyKcal avgHeartRateBpm maxHeartRateBpm deviceName hrDeviceName rideSource laps rideXp rideUsedErg'
+        'loggedAt cardioDurationMinutes caloriesBurned avgPowerWatts maxPowerWatts normalizedPowerWatts trainingStressScore workKj avgCadenceRpm maxCadenceRpm distanceMeters energyKcal avgHeartRateBpm maxHeartRateBpm deviceName hrDeviceName rideSource laps rideXp rideUsedErg courseId courseCompleted elevationGainMeters workoutId workoutCompleted'
       )
       .lean();
     return NextResponse.json({
@@ -63,6 +63,11 @@ export async function GET(req: Request) {
         lapCount: Array.isArray(l.laps) ? l.laps.length : 0,
         rideXp: l.rideXp ?? null,
         rideUsedErg: Boolean(l.rideUsedErg),
+        courseId: l.courseId ?? null,
+        courseCompleted: Boolean(l.courseCompleted),
+        elevationGainMeters: l.elevationGainMeters ?? null,
+        workoutId: l.workoutId ?? null,
+        workoutCompleted: Boolean(l.workoutCompleted),
       })),
     });
   } catch (e) {
@@ -99,6 +104,11 @@ export async function POST(req: Request) {
       maxHrUsed,
       laps,
       rideUsedErg,
+      courseId,
+      courseCompleted,
+      elevationGainMeters,
+      workoutId,
+      workoutCompleted,
     } = body as {
       durationSeconds?: number;
       avgPowerWatts?: number;
@@ -120,6 +130,11 @@ export async function POST(req: Request) {
       maxHrUsed?: number;
       laps?: LapBody[];
       rideUsedErg?: boolean;
+      courseId?: string;
+      courseCompleted?: boolean;
+      elevationGainMeters?: number;
+      workoutId?: string;
+      workoutCompleted?: boolean;
     };
 
     if (typeof durationSeconds !== 'number' || durationSeconds < 15) {
@@ -165,6 +180,8 @@ export async function POST(req: Request) {
       rideSource: { $in: ['ftms', 'cps', 'mock'] },
     });
     const usedErg = Boolean(rideUsedErg);
+    const finishedCourse = Boolean(courseCompleted);
+    const finishedWorkout = Boolean(workoutCompleted);
     const rideXp = xpFromRide({
       durationSeconds,
       trainingStressScore:
@@ -174,6 +191,8 @@ export async function POST(req: Request) {
         typeof avgHeartRateBpm === 'number' ? avgHeartRateBpm : null,
       usedErg,
       isFirstRideEver: priorCount === 0,
+      completedCourse: finishedCourse,
+      completedWorkout: finishedWorkout,
     });
 
     const doc = await WorkoutLog.create({
@@ -221,6 +240,20 @@ export async function POST(req: Request) {
       maxHrUsed: numOrUndef(maxHrUsed) != null ? Math.round(maxHrUsed!) : undefined,
       rideXp,
       rideUsedErg: usedErg,
+      courseId:
+        typeof courseId === 'string' && courseId.trim()
+          ? courseId.trim().slice(0, 64)
+          : undefined,
+      courseCompleted: finishedCourse,
+      elevationGainMeters:
+        numOrUndef(elevationGainMeters) != null
+          ? Math.round(elevationGainMeters!)
+          : undefined,
+      workoutId:
+        typeof workoutId === 'string' && workoutId.trim()
+          ? workoutId.trim().slice(0, 64)
+          : undefined,
+      workoutCompleted: finishedWorkout,
       laps: lapDocs,
     });
 
@@ -258,6 +291,10 @@ export async function POST(req: Request) {
       rideXp,
       totalRideXp,
       rideUsedErg: usedErg,
+      courseId: doc.courseId ?? null,
+      courseCompleted: Boolean(doc.courseCompleted),
+      workoutId: doc.workoutId ?? null,
+      workoutCompleted: Boolean(doc.workoutCompleted),
     });
   } catch (e) {
     console.error('Ride POST error:', e);
