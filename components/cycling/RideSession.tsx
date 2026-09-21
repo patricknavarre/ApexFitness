@@ -202,6 +202,9 @@ export function RideSession() {
   const distanceRef = useRef(0);
   const lastTickRef = useRef<number | null>(null);
   const rideStartRef = useRef<number | null>(null);
+  /** Monotonic ride clock — ignores laptop sleep / tab freeze wall-clock jumps. */
+  const rideElapsedMsRef = useRef(0);
+  const lastPerfTickRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
   const powerSamplesRef = useRef<number[]>([]);
   const lastPowerChartSecRef = useRef(-1);
@@ -398,6 +401,19 @@ export function RideSession() {
     }
   }
 
+  function readRideElapsedSec(): number {
+    const now = performance.now();
+    if (lastPerfTickRef.current != null) {
+      const dt = now - lastPerfTickRef.current;
+      // Skip gaps from sleep / background freeze (would otherwise inflate duration).
+      if (dt > 0 && dt < 2000) {
+        rideElapsedMsRef.current += dt;
+      }
+    }
+    lastPerfTickRef.current = now;
+    return Math.floor(rideElapsedMsRef.current / 1000);
+  }
+
   function stopTimer() {
     if (timerRef.current != null) {
       window.clearInterval(timerRef.current);
@@ -443,6 +459,8 @@ export function RideSession() {
     distanceRef.current = 0;
     lastTickRef.current = null;
     rideStartRef.current = null;
+    rideElapsedMsRef.current = 0;
+    lastPerfTickRef.current = null;
     powerSamplesRef.current = [];
     lastPowerChartSecRef.current = -1;
     lapStartSecRef.current = 0;
@@ -508,10 +526,7 @@ export function RideSession() {
 
     if (!ridingRef.current) return;
 
-    const elapsed =
-      rideStartRef.current != null
-        ? Math.floor((Date.now() - rideStartRef.current) / 1000)
-        : 0;
+    const elapsed = ridingRef.current ? readRideElapsedSec() : 0;
 
     if (typeof sample.powerWatts === 'number' && sample.powerWatts >= 0) {
       powerSumRef.current += sample.powerWatts;
@@ -660,6 +675,8 @@ export function RideSession() {
     if (!connectionRef.current) return;
     resetAccumulators();
     rideStartRef.current = Date.now();
+    rideElapsedMsRef.current = 0;
+    lastPerfTickRef.current = performance.now();
     ridingRef.current = true;
     setPhase('riding');
     if (workoutId) {
@@ -673,8 +690,8 @@ export function RideSession() {
     }
     stopTimer();
     timerRef.current = window.setInterval(() => {
-      if (rideStartRef.current == null) return;
-      const e = Math.floor((Date.now() - rideStartRef.current) / 1000);
+      if (!ridingRef.current) return;
+      const e = readRideElapsedSec();
       setElapsedSec(e);
       recomputeLiveStats(e);
       syncSessionFromElapsed(e, distanceRef.current);
@@ -684,8 +701,8 @@ export function RideSession() {
   }
 
   function handleLap() {
-    if (phase !== 'riding' || rideStartRef.current == null) return;
-    const elapsed = Math.floor((Date.now() - rideStartRef.current) / 1000);
+    if (phase !== 'riding' || !ridingRef.current) return;
+    const elapsed = readRideElapsedSec();
     const durationSec = Math.max(1, elapsed - lapStartSecRef.current);
     const dist = Math.max(0, distanceRef.current - lapStartDistRef.current);
     const lap: LapRecord = {
@@ -720,12 +737,7 @@ export function RideSession() {
   async function handleEndRide() {
     stopTimer();
     ridingRef.current = false;
-    const durationSeconds = Math.max(
-      0,
-      rideStartRef.current != null
-        ? Math.floor((Date.now() - rideStartRef.current) / 1000)
-        : elapsedSec
-    );
+    const durationSeconds = Math.max(0, readRideElapsedSec() || elapsedSec);
 
     if (durationSeconds < 15) {
       toast.error('Ride a bit longer (15s+) before saving');
@@ -850,12 +862,14 @@ export function RideSession() {
       toast.error(e instanceof Error ? e.message : 'Could not save ride');
       setPhase('riding');
       ridingRef.current = true;
-      rideStartRef.current = Date.now() - durationSeconds * 1000;
+      rideElapsedMsRef.current = durationSeconds * 1000;
+      lastPerfTickRef.current = performance.now();
       timerRef.current = window.setInterval(() => {
-        if (rideStartRef.current == null) return;
-        const e2 = Math.floor((Date.now() - rideStartRef.current) / 1000);
+        if (!ridingRef.current) return;
+        const e2 = readRideElapsedSec();
         setElapsedSec(e2);
         recomputeLiveStats(e2);
+        syncSessionFromElapsed(e2, distanceRef.current);
       }, 250);
     }
   }
@@ -872,6 +886,24 @@ export function RideSession() {
     setControlMode('free');
     resetAccumulators();
   }
+
+  async function handleDeleteRide(id: string) {
+    if (!window.confirm('Delete this ride? It will be removed from your stats.')) return;
+    try {
+      const res = await fetch(`/api/workout/ride?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Delete failed');
+      }
+      toast.success('Ride deleted');
+      await loadRecent();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete ride');
+    }
+  }
+
 
   async function applyErg() {
     const conn = connectionRef.current;
@@ -1351,7 +1383,7 @@ export function RideSession() {
             {recent.map((r) => (
               <li
                 key={r.id}
-                className="rounded-card border border-border bg-card px-4 py-3 font-sans text-sm text-muted flex flex-wrap gap-x-3 gap-y-1"
+                className="rounded-card border border-border bg-card px-4 py-3 font-sans text-sm text-muted flex flex-wrap items-center gap-x-3 gap-y-1"
               >
                 <span>{r.durationMinutes ?? '—'} min</span>
                 {r.avgPowerWatts != null && <span>avg {r.avgPowerWatts} W</span>}
@@ -1361,6 +1393,16 @@ export function RideSession() {
                 {r.workKj != null && <span>{r.workKj} kJ</span>}
                 {r.lapCount != null && r.lapCount > 0 && <span>{r.lapCount} laps</span>}
                 {r.caloriesBurned != null && <span>{r.caloriesBurned} kcal</span>}
+                {(r.durationMinutes ?? 0) >= 120 && (
+                  <span className="text-accent2">suspect long</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteRide(r.id)}
+                  className="ml-auto font-sans text-xs text-muted hover:text-accent2 underline"
+                >
+                  Delete
+                </button>
               </li>
             ))}
           </ul>

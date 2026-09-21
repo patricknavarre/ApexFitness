@@ -4,8 +4,11 @@ import { connectDB } from '@/lib/mongodb';
 import WorkoutLog from '@/models/WorkoutLog';
 import { getCardioOption } from '@/lib/cardio';
 import { xpFromRide } from '@/lib/ride/xp';
+import { getRideWorkout, workoutTotalSeconds } from '@/lib/ride/workouts';
 
 const RIDE_CARDIO_ID = 'indoor-cycling';
+/** Hard ceiling so sleep/tab-freeze bugs can't poison Momentum stats. */
+const MAX_RIDE_SECONDS = 6 * 60 * 60;
 
 type LapBody = {
   index?: number;
@@ -144,18 +147,30 @@ export async function POST(req: Request) {
       );
     }
 
+    // Clamp absurd durations (e.g. laptop sleep left the wall clock running).
+    let safeDurationSec = Math.min(Math.max(0, durationSeconds), MAX_RIDE_SECONDS);
+    const workout =
+      typeof workoutId === 'string' ? getRideWorkout(workoutId) : null;
+    if (workout) {
+      const planned = workoutTotalSeconds(workout);
+      const softCap = planned + 10 * 60;
+      if (safeDurationSec > softCap) {
+        safeDurationSec = planned;
+      }
+    }
+
     const source =
       rideSource === 'ftms' || rideSource === 'cps' || rideSource === 'mock'
         ? rideSource
         : 'ftms';
 
     const option = getCardioOption(RIDE_CARDIO_ID)!;
-    const durationMinutes = Math.max(1, Math.round(durationSeconds / 60));
+    const durationMinutes = Math.max(1, Math.round(safeDurationSec / 60));
     const fromEnergy =
       typeof energyKcal === 'number' && energyKcal > 0 ? Math.round(energyKcal) : null;
     const fromPower =
       typeof avgPowerWatts === 'number' && avgPowerWatts > 0
-        ? Math.round((avgPowerWatts * durationSeconds) / 1000)
+        ? Math.round((avgPowerWatts * safeDurationSec) / 1000)
         : null;
     const caloriesBurned =
       fromEnergy ?? fromPower ?? Math.round(durationMinutes * option.calPerMin);
@@ -182,11 +197,31 @@ export async function POST(req: Request) {
     const usedErg = Boolean(rideUsedErg);
     const finishedCourse = Boolean(courseCompleted);
     const finishedWorkout = Boolean(workoutCompleted);
+
+    // If duration was clamped, recompute TSS from NP so inflated client TSS doesn't stick.
+    let safeTss =
+      typeof trainingStressScore === 'number' ? trainingStressScore : null;
+    let safeWork =
+      typeof workKj === 'number' ? workKj : null;
+    if (safeDurationSec < durationSeconds) {
+      const np =
+        typeof normalizedPowerWatts === 'number' ? normalizedPowerWatts : null;
+      const ftp = typeof ftpUsed === 'number' && ftpUsed > 0 ? ftpUsed : 200;
+      if (np != null && np > 0) {
+        const iff = np / ftp;
+        safeTss = ((safeDurationSec * np * iff) / (ftp * 3600)) * 100;
+      } else {
+        safeTss = null;
+      }
+      if (typeof avgPowerWatts === 'number' && avgPowerWatts > 0) {
+        safeWork = (avgPowerWatts * safeDurationSec) / 1000;
+      }
+    }
+
     const rideXp = xpFromRide({
-      durationSeconds,
-      trainingStressScore:
-        typeof trainingStressScore === 'number' ? trainingStressScore : null,
-      workKj: typeof workKj === 'number' ? workKj : null,
+      durationSeconds: safeDurationSec,
+      trainingStressScore: safeTss,
+      workKj: safeWork,
       avgHeartRateBpm:
         typeof avgHeartRateBpm === 'number' ? avgHeartRateBpm : null,
       usedErg,
@@ -221,10 +256,8 @@ export async function POST(req: Request) {
           ? Math.round(intensityFactor! * 100) / 100
           : undefined,
       trainingStressScore:
-        numOrUndef(trainingStressScore) != null
-          ? Math.round(trainingStressScore!)
-          : undefined,
-      workKj: numOrUndef(workKj) != null ? Math.round(workKj! * 10) / 10 : undefined,
+        safeTss != null ? Math.round(safeTss) : undefined,
+      workKj: safeWork != null ? Math.round(safeWork * 10) / 10 : undefined,
       avgCadenceRpm:
         numOrUndef(avgCadenceRpm) != null ? Math.round(avgCadenceRpm!) : undefined,
       maxCadenceRpm:
@@ -295,9 +328,38 @@ export async function POST(req: Request) {
       courseCompleted: Boolean(doc.courseCompleted),
       workoutId: doc.workoutId ?? null,
       workoutCompleted: Boolean(doc.workoutCompleted),
+      durationClamped: safeDurationSec < durationSeconds,
     });
   } catch (e) {
     console.error('Ride POST error:', e);
     return NextResponse.json({ error: 'Failed to save ride' }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get('id');
+  if (!id) {
+    return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+  }
+  try {
+    await connectDB();
+    const result = await WorkoutLog.deleteOne({
+      _id: id,
+      userId: session.user.id,
+      cardioExercise: RIDE_CARDIO_ID,
+      rideSource: { $in: ['ftms', 'cps', 'mock'] },
+    });
+    if (result.deletedCount === 0) {
+      return NextResponse.json({ error: 'Ride not found' }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error('Ride DELETE error:', e);
+    return NextResponse.json({ error: 'Failed to delete ride' }, { status: 500 });
   }
 }
