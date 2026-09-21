@@ -310,26 +310,19 @@ export function RideSession() {
 
   async function sendCourseGrade(grade: number) {
     const conn = connectionRef.current;
-    if (!conn?.canControl) {
-      setSimGrade(grade);
-      setCourseGrade(grade);
-      return;
-    }
+    setCourseGrade(grade);
+    setSimGrade(grade);
+    if (!conn?.canControl) return;
     const prev = lastSentGradeRef.current;
-    if (prev != null && Math.abs(prev - grade) < 0.4) {
-      setCourseGrade(grade);
-      return;
-    }
+    if (prev != null && Math.abs(prev - grade) < 0.25) return;
     try {
-      await conn.requestControl();
       await conn.setSimulationGrade(grade);
       lastSentGradeRef.current = grade;
-      setSimGrade(grade);
-      setCourseGrade(grade);
-      setControlMode('course');
-    } catch {
-      setCourseGrade(grade);
-      setSimGrade(grade);
+      if (controlMode !== 'course' && controlMode !== 'sim') {
+        setControlMode('course');
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Grade update failed');
     }
   }
 
@@ -347,12 +340,51 @@ export function RideSession() {
     }
     if (!conn?.canControl) return;
     try {
-      await conn.requestControl();
       await conn.setTargetPower(watts);
       setControlMode('workout');
-    } catch {
-      /* ignore */
+    } catch (e) {
+      if (lastWorkoutSegRef.current === segIndex) {
+        toast.error(e instanceof Error ? e.message : 'ERG update failed');
+      }
     }
+  }
+
+  async function pushLiveSimGrade(grade: number) {
+    setSimGrade(grade);
+    if (!ridingRef.current) return;
+    if (workoutIdRef.current) return; // ERG owns the trainer during workouts
+    const conn = connectionRef.current;
+    if (!conn?.canControl) return;
+    const prev = lastSentGradeRef.current;
+    if (prev != null && Math.abs(prev - grade) < 0.2) return;
+    try {
+      await conn.setSimulationGrade(grade);
+      lastSentGradeRef.current = grade;
+      setCourseGrade(grade);
+      setControlMode(courseIdRef.current ? 'course' : 'sim');
+      pushEvent({
+        kind: 'surge',
+        title: `${grade >= 0 ? '+' : ''}${grade.toFixed(1)}%`,
+        detail: 'Grade sent to trainer',
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not set grade');
+    }
+  }
+
+  const simSendTimerRef = useRef<number | null>(null);
+
+  function onSimSliderChange(value: number) {
+    setSimGrade(value);
+    if (!ridingRef.current && controlMode !== 'sim' && controlMode !== 'course') {
+      return;
+    }
+    if (simSendTimerRef.current != null) {
+      window.clearTimeout(simSendTimerRef.current);
+    }
+    simSendTimerRef.current = window.setTimeout(() => {
+      void pushLiveSimGrade(value);
+    }, 180);
   }
 
   function syncSessionFromElapsed(elapsed: number, distance: number) {
@@ -696,8 +728,11 @@ export function RideSession() {
       recomputeLiveStats(e);
       syncSessionFromElapsed(e, distanceRef.current);
     }, 250);
-    // Kick first target immediately
+    // Kick first target immediately + claim FTMS control early
     syncSessionFromElapsed(0, 0);
+    if (connectionRef.current?.canControl) {
+      void connectionRef.current.ensureReady().catch(() => undefined);
+    }
   }
 
   function handleLap() {
@@ -907,9 +942,11 @@ export function RideSession() {
 
   async function applyErg() {
     const conn = connectionRef.current;
-    if (!conn?.canControl) return;
+    if (!conn?.canControl) {
+      toast.error('Trainer has no resistance control');
+      return;
+    }
     try {
-      await conn.requestControl();
       await conn.setTargetPower(ergTarget);
       setControlMode('erg');
       usedErgRef.current = true;
@@ -924,14 +961,23 @@ export function RideSession() {
 
   async function applySim() {
     const conn = connectionRef.current;
-    if (!conn?.canControl) return;
+    if (!conn?.canControl) {
+      toast.error('Trainer has no resistance control');
+      return;
+    }
     try {
-      await conn.requestControl();
       await conn.setSimulationGrade(simGrade);
+      lastSentGradeRef.current = simGrade;
+      setCourseGrade(simGrade);
       setControlMode('sim');
-      toast.success(`Grade ${simGrade.toFixed(1)}%`);
+      toast.success(`Grade ${simGrade.toFixed(1)}% sent`);
+      pushEvent({
+        kind: 'surge',
+        title: `${simGrade >= 0 ? '+' : ''}${simGrade.toFixed(1)}%`,
+        detail: 'Trainer SIM mode',
+      });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'SIM failed');
+      toast.error(e instanceof Error ? e.message : 'SIM failed — is FTMS control supported?');
     }
   }
 
@@ -1281,6 +1327,7 @@ export function RideSession() {
             {controlMode === 'sim' || controlMode === 'course'
               ? ` · grade ${simGrade.toFixed(1)}%`
               : ''}
+            {canControl ? ' · FTMS control ready' : ''}
             {workoutFinished ? ' · workout done' : ''}
             {courseFinished ? ' · course done' : ''}
           </p>
@@ -1306,14 +1353,14 @@ export function RideSession() {
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="font-sans text-sm text-muted w-full sm:w-auto">
-              SIM grade ({simGrade.toFixed(1)}%)
+              SIM grade ({simGrade.toFixed(1)}%) — live while riding
               <input
                 type="range"
                 min={-5}
                 max={15}
                 step={0.5}
                 value={simGrade}
-                onChange={(e) => setSimGrade(Number(e.target.value))}
+                onChange={(e) => onSimSliderChange(Number(e.target.value))}
                 className="block w-full sm:w-56 mt-2"
               />
             </label>

@@ -12,17 +12,17 @@ export function startMockTrainer(onMetrics: MetricsHandler): TrainerConnection {
     const base =
       targetPower != null
         ? targetPower + (Math.random() * 16 - 8)
-        : 180 + 40 * Math.sin(t / 8) + (Math.random() * 20 - 10) + gradePct * 8;
+        : 160 + 35 * Math.sin(t / 8) + (Math.random() * 16 - 8) + gradePct * 14;
     const powerWatts = Math.max(0, Math.round(base));
     const cadenceRpm = Math.round(85 + 8 * Math.sin(t / 5) + (Math.random() * 4 - 2));
-    const speedKmh = Math.max(0, 28 + powerWatts / 40 + Math.sin(t / 12) - gradePct * 0.4);
+    const speedKmh = Math.max(0, 30 + powerWatts / 45 + Math.sin(t / 12) - gradePct * 1.1);
     const sample: IndoorBikeSample = {
       powerWatts,
       cadenceRpm,
       speedKmh: Math.round(speedKmh * 10) / 10,
       energyKcal: Math.floor(t * 0.25),
       elapsedTimeSec: t,
-      resistanceLevel: Math.round(gradePct + 5),
+      resistanceLevel: Math.round(Math.max(0, 8 + gradePct * 1.2)),
     };
     onMetrics(sample);
   }, 1000);
@@ -33,6 +33,7 @@ export function startMockTrainer(onMetrics: MetricsHandler): TrainerConnection {
     source: 'mock',
     canControl: true,
     requestControl: async () => undefined,
+    ensureReady: async () => undefined,
     setTargetPower: async (watts: number) => {
       targetPower = watts;
     },

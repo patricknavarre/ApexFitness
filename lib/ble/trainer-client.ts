@@ -17,6 +17,7 @@ export type TrainerConnection = {
   source: 'ftms' | 'cps' | 'mock';
   canControl: boolean;
   requestControl: () => Promise<void>;
+  ensureReady: () => Promise<void>;
   setTargetPower: (watts: number) => Promise<void>;
   setSimulationGrade: (gradePct: number) => Promise<void>;
   resetControl: () => Promise<void>;
@@ -32,13 +33,14 @@ export function isWebBluetoothSupported(): boolean {
 
 function noopControl(): Pick<
   TrainerConnection,
-  'requestControl' | 'setTargetPower' | 'setSimulationGrade' | 'resetControl'
+  'requestControl' | 'ensureReady' | 'setTargetPower' | 'setSimulationGrade' | 'resetControl'
 > {
   const unsupported = async () => {
     throw new Error('This trainer does not support resistance control');
   };
   return {
     requestControl: unsupported,
+    ensureReady: unsupported,
     setTargetPower: unsupported,
     setSimulationGrade: unsupported,
     resetControl: unsupported,
@@ -50,6 +52,7 @@ function wrapController(ctrl: FtmsController | null) {
   return {
     canControl: true as const,
     requestControl: () => ctrl.requestControl(),
+    ensureReady: () => ctrl.ensureReady(),
     setTargetPower: (w: number) => ctrl.setTargetPower(w),
     setSimulationGrade: (g: number) => ctrl.setSimulationGrade(g),
     resetControl: () => ctrl.reset(),
