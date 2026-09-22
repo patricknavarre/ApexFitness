@@ -71,6 +71,85 @@ export function hrZoneLabel(zone: HrZone): string {
   return labels[zone];
 }
 
+/** Solid zone palette for ladders / accents. */
+export const HR_ZONE_COLORS: Record<HrZone, string> = {
+  1: '#508cc8',
+  2: '#46b478',
+  3: '#dcb43c',
+  4: '#e67832',
+  5: '#dc3c46',
+};
+
+/** Sky / overlay wash — stronger than the old FPV tint. */
+export const HR_ZONE_TINT: Record<HrZone, string> = {
+  1: 'rgba(80, 140, 200, 0.28)',
+  2: 'rgba(70, 180, 120, 0.32)',
+  3: 'rgba(220, 180, 60, 0.36)',
+  4: 'rgba(230, 120, 50, 0.42)',
+  5: 'rgba(220, 60, 70, 0.48)',
+};
+
+/** Frame border / glow driven by active zone. */
+export const HR_ZONE_GLOW: Record<HrZone, string> = {
+  1: 'rgba(80, 140, 200, 0.55)',
+  2: 'rgba(70, 180, 120, 0.55)',
+  3: 'rgba(220, 180, 60, 0.55)',
+  4: 'rgba(230, 120, 50, 0.6)',
+  5: 'rgba(220, 60, 70, 0.65)',
+};
+
+export const HR_ZONES: HrZone[] = [1, 2, 3, 4, 5];
+
+export const WORLD_PANEL_STORAGE_KEY = 'apex.ride.worldPanel';
+
+export type WorldPanelMode = 'docked' | 'expanded';
+
+export type WorldPanelState = {
+  mode: WorldPanelMode;
+  x: number;
+  y: number;
+};
+
+const DEFAULT_WORLD_PANEL: WorldPanelState = {
+  mode: 'docked',
+  x: 24,
+  y: 48,
+};
+
+export function loadWorldPanelState(): WorldPanelState {
+  if (typeof window === 'undefined') return { ...DEFAULT_WORLD_PANEL };
+  try {
+    const raw = window.localStorage.getItem(WORLD_PANEL_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_WORLD_PANEL };
+    const parsed = JSON.parse(raw) as Partial<WorldPanelState>;
+    const mode: WorldPanelMode =
+      parsed.mode === 'expanded' ? 'expanded' : 'docked';
+    const x =
+      typeof parsed.x === 'number' && Number.isFinite(parsed.x)
+        ? parsed.x
+        : DEFAULT_WORLD_PANEL.x;
+    const y =
+      typeof parsed.y === 'number' && Number.isFinite(parsed.y)
+        ? parsed.y
+        : DEFAULT_WORLD_PANEL.y;
+    return { mode, x, y };
+  } catch {
+    return { ...DEFAULT_WORLD_PANEL };
+  }
+}
+
+export function saveWorldPanelState(state: WorldPanelState) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(
+    WORLD_PANEL_STORAGE_KEY,
+    JSON.stringify({
+      mode: state.mode === 'expanded' ? 'expanded' : 'docked',
+      x: Math.round(state.x),
+      y: Math.round(state.y),
+    })
+  );
+}
+
 export function defaultMaxHrFromAge(age: number | null | undefined): number {
   if (typeof age === 'number' && age >= 10 && age <= 100) {
     return Math.round(220 - age);

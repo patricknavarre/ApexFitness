@@ -9,6 +9,7 @@ import type { IndoorBikeSample } from '@/lib/ble/parse-indoor-bike';
 import type { TrainerConnection } from '@/lib/ble/trainer-client';
 import { PowerSparkline } from '@/components/cycling/PowerSparkline';
 import { RideWorld } from '@/components/cycling/RideWorld';
+import { RideWorldPanel } from '@/components/cycling/RideWorldPanel';
 import {
   RideEventToasts,
   RideXpCelebration,
@@ -1172,27 +1173,35 @@ export function RideSession() {
 
       <section className="rounded-card border border-border bg-card p-4 md:p-6 space-y-4 relative">
         <div className="relative">
-          <RideWorld
-            active={phase === 'riding'}
-            speedKmh={speed}
-            cadenceRpm={cadence}
-            powerWatts={power}
-            ftp={ftp}
-            gradePct={
-              controlMode === 'course'
-                ? courseGrade
-                : controlMode === 'sim'
-                  ? simGrade
-                  : courseGrade !== 0 && courseId
-                    ? courseGrade
-                    : 0
-            }
+          <RideWorldPanel
+            hrBpm={displayHr}
             hrZone={zone}
-            surge={surge}
-            speedUnit={speedUnit}
-            onToggleSpeedUnit={handleToggleSpeedUnit}
-          />
-          <RideEventToasts events={hudEvents} onDismiss={dismissEvent} />
+            riding={phase === 'riding'}
+            onEndRide={() => void handleEndRide()}
+          >
+            <RideWorld
+              active={phase === 'riding'}
+              speedKmh={speed}
+              cadenceRpm={cadence}
+              powerWatts={power}
+              ftp={ftp}
+              gradePct={
+                controlMode === 'course'
+                  ? courseGrade
+                  : controlMode === 'sim'
+                    ? simGrade
+                    : courseGrade !== 0 && courseId
+                      ? courseGrade
+                      : 0
+              }
+              hrBpm={displayHr}
+              hrZone={zone}
+              surge={surge}
+              speedUnit={speedUnit}
+              onToggleSpeedUnit={handleToggleSpeedUnit}
+            />
+            <RideEventToasts events={hudEvents} onDismiss={dismissEvent} />
+          </RideWorldPanel>
         </div>
 
         {workoutHud && workoutId && (
@@ -1273,17 +1282,6 @@ export function RideSession() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Metric
-            label="Heart rate"
-            value={displayHr != null ? String(Math.round(displayHr)) : '—'}
-            unit={displayHr != null ? 'bpm' : ''}
-            large
-          />
-          <Metric
-            label="HR zone"
-            value={zone != null ? `Z${zone}` : '—'}
-            unit={zone != null ? hrZoneLabel(zone).replace(/^Z\d\s/, '') : ''}
-          />
           <Metric label="Distance" value={formatDistance(distanceM)} unit="" />
           <Metric
             label="Resistance"

@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   formatSpeed,
+  HR_ZONE_GLOW,
+  HR_ZONE_TINT,
   type HrZone,
   type SpeedUnit,
 } from '@/lib/ride/stats';
@@ -14,18 +16,11 @@ type Props = {
   powerWatts: number;
   ftp: number;
   gradePct: number;
+  hrBpm: number | null;
   hrZone: HrZone | null;
   surge: boolean;
   speedUnit: SpeedUnit;
   onToggleSpeedUnit: () => void;
-};
-
-const ZONE_TINT: Record<HrZone, string> = {
-  1: 'rgba(80, 140, 200, 0.18)',
-  2: 'rgba(70, 180, 120, 0.22)',
-  3: 'rgba(220, 180, 60, 0.24)',
-  4: 'rgba(230, 120, 50, 0.28)',
-  5: 'rgba(220, 60, 70, 0.32)',
 };
 
 /** px of road texture advanced per km/h per second */
@@ -56,6 +51,7 @@ export function RideWorld({
   powerWatts,
   ftp,
   gradePct,
+  hrBpm,
   hrZone,
   surge,
   speedUnit,
@@ -141,16 +137,20 @@ export function RideWorld({
   return (
     <div
       ref={rootRef}
-      className={`ride-world relative overflow-hidden rounded-card border border-border ${
+      className={`ride-world relative overflow-hidden ${
         surge ? 'ride-world--surge' : ''
-      }`}
+      }${hrZone != null ? ` ride-world--z${hrZone}` : ''}`}
       style={{
         ['--ride-lean' as string]: `${lean}deg`,
         ['--zone-tint' as string]:
-          hrZone != null ? ZONE_TINT[hrZone] : 'transparent',
+          hrZone != null ? HR_ZONE_TINT[hrZone] : 'transparent',
+        ['--zone-glow' as string]:
+          hrZone != null ? HR_ZONE_GLOW[hrZone] : 'transparent',
       }}
+      data-hr-bpm={hrBpm != null ? Math.round(hrBpm) : undefined}
     >
       <div className="ride-world__sky" />
+      <div className="ride-world__haze" />
       <div className="ride-world__hills ride-world__hills--far" />
       <div className="ride-world__hills ride-world__hills--near" />
 
@@ -159,6 +159,7 @@ export function RideWorld({
         <div className="ride-world__ground">
           <div className="ride-world__road">
             <div className="ride-world__asphalt" />
+            <div className="ride-world__vanishing" />
             <div className="ride-world__edge ride-world__edge--left" />
             <div className="ride-world__edge ride-world__edge--right" />
             <div className="ride-world__lane" />
