@@ -52,7 +52,7 @@ export function MobileNav() {
         <div className="flex items-end gap-0.5 rounded-full border border-border/60 bg-card/90 px-2 py-1.5 shadow-glow backdrop-blur-xl">
           {PRIMARY_MOBILE_NAV.map((item) => {
             const active = isNavActive(pathname, item.href);
-            const isMove = item.href === '/move';
+            const isRide = item.href === '/cycling';
             return (
               <button
                 key={item.href}
@@ -60,7 +60,7 @@ export function MobileNav() {
                 onClick={() => navigate(item.href)}
                 className={`relative flex flex-col items-center justify-center min-w-[3.25rem] px-2.5 py-1.5 rounded-full transition-all duration-200 ${
                   active
-                    ? isMove
+                    ? isRide
                       ? 'text-black bg-accent shadow-glow scale-105'
                       : 'text-accent bg-accent/10'
                     : 'text-muted hover:text-tan'

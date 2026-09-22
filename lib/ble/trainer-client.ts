@@ -1,3 +1,4 @@
+import { formatWebBluetoothError } from './errors';
 import { createFtmsController, type FtmsController } from './ftms-control';
 import {
   CPS_SERVICE,
@@ -64,9 +65,7 @@ export async function connectTrainer(
   onDisconnect?: DisconnectHandler
 ): Promise<TrainerConnection> {
   if (!isWebBluetoothSupported()) {
-    throw new Error(
-      'Web Bluetooth is not supported in this browser. Use Chrome or Edge on desktop or Android.'
-    );
+    throw new Error(formatWebBluetoothError('Web Bluetooth is not supported'));
   }
 
   let device: BluetoothDevice;
@@ -82,7 +81,7 @@ export async function connectTrainer(
         optionalServices: [FTMS_SERVICE, CPS_SERVICE],
       });
     } catch {
-      throw first;
+      throw new Error(formatWebBluetoothError(first));
     }
   }
 

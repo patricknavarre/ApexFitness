@@ -1,3 +1,4 @@
+import { formatWebBluetoothError } from './errors';
 import { HR_MEASUREMENT, HR_SERVICE } from './uuids';
 
 export type HrConnection = {
@@ -27,9 +28,7 @@ export async function connectHeartRateMonitor(
   onDisconnect?: () => void
 ): Promise<HrConnection> {
   if (!isWebBluetoothSupported()) {
-    throw new Error(
-      'Web Bluetooth is not supported in this browser. Use Chrome or Edge on desktop or Android.'
-    );
+    throw new Error(formatWebBluetoothError('Web Bluetooth is not supported'));
   }
 
   const bluetooth = navigator.bluetooth!;
@@ -47,7 +46,7 @@ export async function connectHeartRateMonitor(
         optionalServices: [HR_SERVICE],
       });
     } catch {
-      throw first;
+      throw new Error(formatWebBluetoothError(first));
     }
   }
 

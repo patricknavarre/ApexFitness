@@ -26,7 +26,6 @@ export const DESKTOP_NAV: NavItemConfig[] = [
   { href: '/daily-stoic', label: 'Daily Stoic', Icon: IconBook, mobileLabel: 'Stoic' },
   { href: '/analysis', label: 'AI Analysis', Icon: IconScan },
   { href: '/workouts', label: 'Workouts', Icon: IconDumbbell },
-  { href: '/move', label: 'Move', Icon: IconMove },
   { href: '/cycling', label: 'Virtual Ride', Icon: IconBike, mobileLabel: 'Ride' },
   { href: '/self-defense', label: 'Self-Defense', Icon: IconShield, mobileLabel: 'Defense' },
   { href: '/nutrition', label: 'Nutrition', Icon: IconLeaf },
@@ -38,7 +37,7 @@ export const DESKTOP_NAV: NavItemConfig[] = [
 export const PRIMARY_MOBILE_NAV: NavItemConfig[] = [
   { href: '/dashboard', label: 'Home', Icon: IconHome, mobileLabel: 'Home' },
   { href: '/workouts', label: 'Workouts', Icon: IconDumbbell },
-  { href: '/move', label: 'Move', Icon: IconMove },
+  { href: '/cycling', label: 'Virtual Ride', Icon: IconBike, mobileLabel: 'Ride' },
   { href: '/nutrition', label: 'Nutrition', Icon: IconLeaf },
 ];
 
@@ -46,7 +45,7 @@ export const PRIMARY_MOBILE_NAV: NavItemConfig[] = [
 export const MORE_NAV: NavItemConfig[] = [
   { href: '/daily-stoic', label: 'Daily Stoic', Icon: IconBook, mobileLabel: 'Stoic' },
   { href: '/analysis', label: 'AI Analysis', Icon: IconScan },
-  { href: '/cycling', label: 'Virtual Ride', Icon: IconBike, mobileLabel: 'Ride' },
+  { href: '/move', label: 'Move', Icon: IconMove },
   { href: '/self-defense', label: 'Self-Defense', Icon: IconShield, mobileLabel: 'Defense' },
   { href: '/progress', label: 'Progress', Icon: IconChart },
   { href: '/settings', label: 'Settings', Icon: IconSettings },

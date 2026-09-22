@@ -1041,8 +1041,9 @@ export function RideSession() {
 
       {!bleOk && (
         <div className="rounded-card border border-border bg-bg2 px-4 py-3 font-sans text-sm text-muted">
-          Web Bluetooth needs Chrome or Edge (desktop/Android). Safari/iOS cannot pair
-          devices in the browser — use mock trainer / mock HR to preview the HUD.
+          Web Bluetooth needs Chrome or Edge (desktop/Android) on localhost or HTTPS.
+          Brave and in-app previews often block it — open a normal Chrome/Edge window.
+          Safari/iOS cannot pair devices; use mock trainer / mock HR to preview the HUD.
         </div>
       )}
 
