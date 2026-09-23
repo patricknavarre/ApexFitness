@@ -60,6 +60,7 @@ export const EQUIP_COLORS: Record<string, string> = {
   Band: '#10b981',
   'Band cable column': '#10b981',
   Bodyweight: '#64748b',
+  Gym: '#C4A35A',
   Step: '#f97316',
   Balance: '#eab308',
   Bike: '#06b6d4',

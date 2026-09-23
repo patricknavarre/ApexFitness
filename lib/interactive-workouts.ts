@@ -12,6 +12,23 @@ function parseSets(sets: string): number {
   return match ? parseInt(match[0], 10) : 3;
 }
 
+function inferEquip(name: string): string {
+  const n = name.toLowerCase();
+  if (/band/.test(n)) return 'Band';
+  if (/cable/.test(n)) return 'Cable';
+  if (/machine|leg press|leg curl|leg extension|lat pulldown/.test(n)) return 'Machine';
+  if (/barbell|bb |deadlift|squat|bench press|overhead press|hip thrust/.test(n) && !/goblet|db |dumbbell/.test(n)) {
+    if (/bodyweight|push-up|plank|bird dog|dead bug|glute bridge|balance/.test(n)) return 'Bodyweight';
+    return 'BB';
+  }
+  if (/db |dumbbell|goblet|incline db|hammer curl|shrug/.test(n)) return 'DB';
+  if (/bodyweight|push-up|plank|bird dog|dead bug|glute bridge|balance|step-up/.test(n)) {
+    return 'Bodyweight';
+  }
+  if (/med ball|medicine/.test(n)) return 'Med ball';
+  return 'Gym';
+}
+
 function workoutDayToInteractive(day: WorkoutDay): InteractiveWorkoutDay | null {
   if (day.isRest || day.exercises.length === 0) return null;
   return {
@@ -23,7 +40,7 @@ function workoutDayToInteractive(day: WorkoutDay): InteractiveWorkoutDay | null 
           name: ex.name,
           sets: parseSets(ex.sets),
           reps: ex.reps,
-          equip: 'DB',
+          equip: inferEquip(ex.name),
         })),
       },
     ],

@@ -916,15 +916,20 @@ function WorkoutsPageInner() {
           dayTitle={workoutMode.dayTitle}
           workout={activeWorkout}
           equipment={
-            workoutMode.planId === 'recovery'
-              ? RECOVERY_EQUIPMENT
-              : workoutMode.planId === 'ankle-pt'
-                ? ANKLE_PT_EQUIPMENT
-                : workoutMode.planId === 'golf'
-                  ? GOLF_EQUIPMENT
-                  : workoutMode.planId === 'softball'
-                    ? SOFTBALL_EQUIPMENT
-                    : ['Adjustable bench', 'Dumbbells', 'Resistance bands', 'Band cable column']
+            (() => {
+              const plan = WORKOUT_PLANS.find((p) => p.id === workoutMode.planId);
+              if (workoutMode.planId === 'recovery') return RECOVERY_EQUIPMENT;
+              if (workoutMode.planId === 'ankle-pt') return ANKLE_PT_EQUIPMENT;
+              if (workoutMode.planId === 'golf') return GOLF_EQUIPMENT;
+              if (workoutMode.planId === 'softball') return SOFTBALL_EQUIPMENT;
+              if (plan?.equipment === 'home') {
+                return ['Dumbbells', 'Resistance bands', 'Adjustable bench', 'Bodyweight'];
+              }
+              if (plan?.equipment === 'none') {
+                return ['Bodyweight', 'Resistance bands'];
+              }
+              return ['Barbell', 'Dumbbells', 'Cables', 'Machines', 'Bench'];
+            })()
           }
           onClose={() => setWorkoutMode(null)}
           onMarkDone={() => {

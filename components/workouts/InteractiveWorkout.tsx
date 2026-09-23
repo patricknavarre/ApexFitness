@@ -109,8 +109,8 @@ export function InteractiveWorkout({
 
   const phaseColors = getPhaseColors(planId);
   const colors = phaseColors[workout.phase] ?? {
-    bg: '#1e293b',
-    accent: '#3b82f6',
+    bg: '#2A3318',
+    accent: '#C4A35A',
     label: workout.phase,
   };
 

@@ -99,6 +99,7 @@ export const WORKOUT_PLANS: WorkoutPlan[] = [
     repRange: '8–15 reps',
     rest: '60–90 seconds between sets',
     equipment: 'full',
+    interactive: true,
     days: [
       {
         dayNumber: 1,
@@ -198,6 +199,7 @@ export const WORKOUT_PLANS: WorkoutPlan[] = [
     repRange: '8–12 reps',
     rest: '90–120 seconds',
     equipment: 'full',
+    interactive: true,
     days: [
       {
         dayNumber: 1,
@@ -267,6 +269,7 @@ export const WORKOUT_PLANS: WorkoutPlan[] = [
     repRange: '6–12 reps (compound), 10–15 (isolation)',
     rest: '60–90 seconds',
     equipment: 'full',
+    interactive: true,
     days: [
       {
         dayNumber: 1,
@@ -338,6 +341,7 @@ export const WORKOUT_PLANS: WorkoutPlan[] = [
     repRange: '10–15 reps',
     rest: '60–90 seconds',
     equipment: 'none',
+    interactive: true,
     days: [
       {
         dayNumber: 1,
@@ -394,6 +398,7 @@ export const WORKOUT_PLANS: WorkoutPlan[] = [
     repRange: '10–15 reps',
     rest: '60–90 seconds',
     equipment: 'none',
+    interactive: true,
     days: [
       {
         dayNumber: 1,
@@ -438,6 +443,7 @@ export const WORKOUT_PLANS: WorkoutPlan[] = [
     repRange: '10–12 reps',
     rest: '60–90 seconds',
     equipment: 'home',
+    interactive: true,
     days: [
       {
         dayNumber: 1,
@@ -501,6 +507,7 @@ export const WORKOUT_PLANS: WorkoutPlan[] = [
     repRange: '6–10 (compound), 10–15 (isolation)',
     rest: '60–90 seconds',
     equipment: 'full',
+    interactive: true,
     days: [
       {
         dayNumber: 1,
@@ -578,6 +585,7 @@ export const WORKOUT_PLANS: WorkoutPlan[] = [
     repRange: '8–12 (compound), 12–15 (isolation)',
     rest: '60–90 seconds',
     equipment: 'full',
+    interactive: true,
     days: [
       {
         dayNumber: 1,
@@ -670,6 +678,7 @@ export const WORKOUT_PLANS: WorkoutPlan[] = [
     repRange: '4–6 (main), 6–10 (accessory)',
     rest: '2–3 min (main), 90 sec (accessory)',
     equipment: 'full',
+    interactive: true,
     days: [
       {
         dayNumber: 1,
