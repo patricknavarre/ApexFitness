@@ -712,6 +712,7 @@ body::before {
 .ride-world-panel__stage {
   position: relative;
   height: 300px;
+  overflow: hidden;
 }
 
 .ride-world-panel--expanded .ride-world-panel__stage {
@@ -762,5 +763,114 @@ body::before {
   .ride-world-panel {
     transition: none;
   }
+
+  .ride-moment {
+    transition: none;
+  }
+}
+
+/* —— Ride motivational moment overlays —— */
+.ride-moment-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  padding: 1rem;
+}
+
+.ride-moment {
+  pointer-events: auto;
+  max-width: min(92%, 22rem);
+  width: 100%;
+  text-align: center;
+  padding: 1.15rem 1.25rem 1.25rem;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--accent) 14%, var(--card)) 0%,
+      var(--card) 55%
+    );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent),
+    0 18px 48px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
+  transition:
+    opacity 0.3s ease,
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ride-moment--show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.ride-moment__eyebrow {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.ride-moment__title {
+  display: block;
+  font-size: clamp(1.6rem, 5vw, 2.15rem);
+  line-height: 1.05;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.ride-moment__detail {
+  display: block;
+  margin-top: 0.45rem;
+  font-size: 0.875rem;
+  color: var(--tan);
+  line-height: 1.35;
+}
+
+.ride-moment--climb {
+  border-color: color-mix(in srgb, #e67832 55%, var(--border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #e67832 25%, transparent),
+    0 18px 48px rgba(0, 0, 0, 0.5),
+    0 0 36px color-mix(in srgb, #e67832 22%, transparent);
+}
+
+.ride-moment--climb .ride-moment__title {
+  color: #e67832;
+}
+
+.ride-moment--sprint {
+  border-color: color-mix(in srgb, var(--accent2) 55%, var(--border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent2) 25%, transparent),
+    0 18px 48px rgba(0, 0, 0, 0.5),
+    0 0 36px color-mix(in srgb, var(--accent2) 22%, transparent);
+}
+
+.ride-moment--sprint .ride-moment__title {
+  color: var(--accent2);
+}
+
+.ride-moment--push {
+  border-color: color-mix(in srgb, #dc3c46 55%, var(--border));
+}
+
+.ride-moment--push .ride-moment__title {
+  color: #dc3c46;
+}
+
+.ride-moment--milestone .ride-moment__title,
+.ride-moment--pr .ride-moment__title {
+  color: var(--accent);
 }
 

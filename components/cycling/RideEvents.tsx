@@ -9,6 +9,15 @@ export type RideHudEvent = {
   kind: 'lap' | 'pr' | 'zone' | 'surge' | 'xp' | 'badge';
 };
 
+export type RideMomentKind = 'climb' | 'sprint' | 'push' | 'milestone' | 'pr';
+
+export type RideMoment = {
+  id: string;
+  kind: RideMomentKind;
+  title: string;
+  detail?: string;
+};
+
 const KIND_CLASS: Record<RideHudEvent['kind'], string> = {
   lap: 'border-accent3/50 text-tan',
   pr: 'border-accent text-accent shadow-glow',
@@ -16,6 +25,22 @@ const KIND_CLASS: Record<RideHudEvent['kind'], string> = {
   surge: 'border-accent text-accent',
   xp: 'border-accent text-accent',
   badge: 'border-accent text-accent shadow-glow',
+};
+
+const MOMENT_CLASS: Record<RideMomentKind, string> = {
+  climb: 'ride-moment--climb',
+  sprint: 'ride-moment--sprint',
+  push: 'ride-moment--push',
+  milestone: 'ride-moment--milestone',
+  pr: 'ride-moment--pr',
+};
+
+const MOMENT_EYEBROW: Record<RideMomentKind, string> = {
+  climb: 'Climb',
+  sprint: 'Sprint',
+  push: 'Push',
+  milestone: 'Milestone',
+  pr: 'Personal best',
 };
 
 export function RideEventToasts({
@@ -68,6 +93,59 @@ function ToastItem({
   );
 }
 
+/** Larger motivational card over the FPV stage for climbs, sprints, etc. */
+export function RideMomentOverlay({
+  moment,
+  onDismiss,
+}: {
+  moment: RideMoment | null;
+  onDismiss: (id: string) => void;
+}) {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!moment) {
+      setShow(false);
+      return;
+    }
+    setShow(false);
+    const enter = window.setTimeout(() => setShow(true), 30);
+    const leave = window.setTimeout(() => {
+      setShow(false);
+      window.setTimeout(() => onDismiss(moment.id), 320);
+    }, 4000);
+    return () => {
+      window.clearTimeout(enter);
+      window.clearTimeout(leave);
+    };
+  }, [moment?.id, moment, onDismiss]);
+
+  if (!moment) return null;
+
+  return (
+    <div className="ride-moment-layer" aria-live="assertive">
+      <button
+        type="button"
+        className={`ride-moment ${MOMENT_CLASS[moment.kind]}${
+          show ? ' ride-moment--show' : ''
+        }`}
+        onClick={() => {
+          setShow(false);
+          window.setTimeout(() => onDismiss(moment.id), 280);
+        }}
+      >
+        <span className="ride-moment__eyebrow font-mono">
+          {MOMENT_EYEBROW[moment.kind]}
+        </span>
+        <span className="ride-moment__title font-display">{moment.title}</span>
+        {moment.detail ? (
+          <span className="ride-moment__detail font-sans">{moment.detail}</span>
+        ) : null}
+      </button>
+    </div>
+  );
+}
+
 export function RideXpCelebration({
   open,
   xpGained,
@@ -79,7 +157,12 @@ export function RideXpCelebration({
   open: boolean;
   xpGained: number;
   levelBefore: { level: number; title: string; progressPct: number };
-  levelAfter: { level: number; title: string; progressPct: number; totalXp: number };
+  levelAfter: {
+    level: number;
+    title: string;
+    progressPct: number;
+    totalXp: number;
+  };
   newBadges: string[];
   onClose: () => void;
 }) {

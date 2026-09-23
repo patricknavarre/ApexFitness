@@ -12,8 +12,11 @@ import { RideWorld } from '@/components/cycling/RideWorld';
 import { RideWorldPanel } from '@/components/cycling/RideWorldPanel';
 import {
   RideEventToasts,
+  RideMomentOverlay,
   RideXpCelebration,
   type RideHudEvent,
+  type RideMoment,
+  type RideMomentKind,
 } from '@/components/cycling/RideEvents';
 import {
   defaultMaxHrFromAge,
@@ -161,6 +164,7 @@ export function RideSession() {
   const [lastSaved, setLastSaved] = useState<RideSummary | null>(null);
   const [recent, setRecent] = useState<RideSummary[]>([]);
   const [hudEvents, setHudEvents] = useState<RideHudEvent[]>([]);
+  const [rideMoment, setRideMoment] = useState<RideMoment | null>(null);
   const [surge, setSurge] = useState(false);
   const [bestPowerEver, setBestPowerEver] = useState(0);
   const [totalRideXp, setTotalRideXp] = useState(0);
@@ -197,6 +201,12 @@ export function RideSession() {
   const prAnnouncedRef = useRef(false);
   const surgeUntilRef = useRef(0);
   const bestPowerEverRef = useRef(0);
+  /** Global cooldown between large moment overlays (ms timestamp). */
+  const momentCooldownUntilRef = useRef(0);
+  const momentKindCooldownRef = useRef<Partial<Record<RideMomentKind, number>>>({});
+  const lastClimbBucketRef = useRef<string | null>(null);
+  const lastMilestoneMinRef = useRef(0);
+  const highPowerSinceRef = useRef<number | null>(null);
   const powerSumRef = useRef(0);
   const powerCountRef = useRef(0);
   const maxPowerRef = useRef(0);
@@ -232,6 +242,7 @@ export function RideSession() {
   const courseIdRef = useRef<string | null>(null);
   const workoutIdRef = useRef<string | null>(null);
   const canControlRef = useRef(false);
+  const simGradeRef = useRef(0);
 
   useEffect(() => {
     courseIdRef.current = courseId;
@@ -242,6 +253,9 @@ export function RideSession() {
   useEffect(() => {
     canControlRef.current = canControl;
   }, [canControl]);
+  useEffect(() => {
+    simGradeRef.current = simGrade;
+  }, [simGrade]);
 
   useEffect(() => {
     setBleOk(isWebBluetoothSupported());
@@ -315,6 +329,72 @@ export function RideSession() {
 
   function dismissEvent(id: string) {
     setHudEvents((prev) => prev.filter((e) => e.id !== id));
+  }
+
+  function dismissMoment(id: string) {
+    setRideMoment((prev) => (prev?.id === id ? null : prev));
+  }
+
+  /** Major motivational overlay; respects global + per-kind cooldowns. */
+  function pushMoment(
+    kind: RideMomentKind,
+    title: string,
+    detail?: string,
+    opts?: { force?: boolean; kindCooldownMs?: number }
+  ): boolean {
+    const now = Date.now();
+    const kindCd = opts?.kindCooldownMs ?? 75_000;
+    if (!opts?.force) {
+      if (now < momentCooldownUntilRef.current) return false;
+      const kindUntil = momentKindCooldownRef.current[kind] ?? 0;
+      if (now < kindUntil) return false;
+    }
+    const id = `m-${now}-${Math.random().toString(36).slice(2, 6)}`;
+    setRideMoment({ id, kind, title, detail });
+    momentCooldownUntilRef.current = now + 55_000;
+    momentKindCooldownRef.current[kind] = now + kindCd;
+    return true;
+  }
+
+  function maybeAnnounceClimb(grade: number) {
+    if (!ridingRef.current) return;
+    if (grade < 5) {
+      if (grade < 2) lastClimbBucketRef.current = null;
+      return;
+    }
+    const bucket = grade >= 7 ? 'steep' : 'climb';
+    if (lastClimbBucketRef.current === bucket) return;
+    lastClimbBucketRef.current = bucket;
+    pushMoment(
+      'climb',
+      bucket === 'steep' ? 'Steep climb' : 'Climb ahead',
+      bucket === 'steep'
+        ? `${grade.toFixed(1)}% — settle in and hold the effort`
+        : `${grade.toFixed(1)}% — stay smooth, keep turning`
+    );
+  }
+
+  function maybeAnnounceMilestone(elapsedSec: number) {
+    if (!ridingRef.current || elapsedSec < 60) return;
+    const mins = Math.floor(elapsedSec / 60);
+    const targets = [15, 30, 45, 60];
+    let hit: number | null = null;
+    for (const t of targets) {
+      if (mins >= t && lastMilestoneMinRef.current < t) {
+        hit = t;
+        break;
+      }
+    }
+    if (hit == null && mins > 60 && mins % 30 === 0 && lastMilestoneMinRef.current < mins) {
+      hit = mins;
+    }
+    if (hit == null) return;
+    lastMilestoneMinRef.current = hit;
+    pushMoment(
+      'milestone',
+      hit >= 60 ? `${hit} minutes` : `${hit} min in`,
+      hit >= 60 ? 'Long ride energy — keep rolling' : 'Keep rolling. You’ve got this.'
+    );
   }
 
   async function sendCourseGrade(grade: number) {
@@ -411,6 +491,7 @@ export function RideSession() {
         progress.segmentIndex,
         progress.segment.name
       );
+      maybeAnnounceMilestone(elapsed);
       if (progress.done && !workoutFinishedRef.current) {
         workoutFinishedRef.current = true;
         setWorkoutFinished(true);
@@ -424,12 +505,18 @@ export function RideSession() {
     }
 
     const course = getRideCourse(cId);
-    if (!course) return;
+    if (!course) {
+      maybeAnnounceClimb(simGradeRef.current);
+      maybeAnnounceMilestone(elapsed);
+      return;
+    }
 
     const grade = gradeAtDistance(course, distance);
     const elev = elevationGainTo(course, distance);
     setElevationGainM(elev);
     void sendCourseGrade(grade);
+    maybeAnnounceClimb(grade);
+    maybeAnnounceMilestone(elapsed);
 
     if (distance >= course.lengthMeters && !courseFinishedRef.current) {
       courseFinishedRef.current = true;
@@ -516,6 +603,7 @@ export function RideSession() {
     setPowerSeries([]);
     setLaps([]);
     setSurge(false);
+    setRideMoment(null);
     prAnnouncedRef.current = false;
     lastZoneRef.current = null;
     usedErgRef.current = false;
@@ -523,6 +611,11 @@ export function RideSession() {
     lastWorkoutSegRef.current = -1;
     courseFinishedRef.current = false;
     workoutFinishedRef.current = false;
+    momentCooldownUntilRef.current = 0;
+    momentKindCooldownRef.current = {};
+    lastClimbBucketRef.current = null;
+    lastMilestoneMinRef.current = 0;
+    highPowerSinceRef.current = null;
     setCourseFinished(false);
     setWorkoutFinished(false);
     setCourseGrade(0);
@@ -553,11 +646,21 @@ export function RideSession() {
 
     const z = hrZone(bpm, maxHrSettingRef.current);
     if (lastZoneRef.current != null && z > lastZoneRef.current) {
-      pushEvent({
-        kind: 'zone',
-        title: hrZoneLabel(z),
-        detail: `${Math.round(bpm)} bpm`,
-      });
+      if (z >= 4) {
+        pushMoment(
+          'push',
+          z >= 5 ? 'Red zone' : 'Threshold zone',
+          z >= 5
+            ? `${Math.round(bpm)} bpm — short and sharp, stay focused`
+            : `${Math.round(bpm)} bpm — this is the work`
+        );
+      } else {
+        pushEvent({
+          kind: 'zone',
+          title: hrZoneLabel(z),
+          detail: `${Math.round(bpm)} bpm`,
+        });
+      }
     }
     lastZoneRef.current = z;
   }, []);
@@ -583,21 +686,43 @@ export function RideSession() {
         prAnnouncedRef.current = true;
         bestPowerEverRef.current = sample.powerWatts;
         setBestPowerEver(sample.powerWatts);
-        pushEvent({
-          kind: 'pr',
-          title: 'New power PR!',
-          detail: `${Math.round(sample.powerWatts)} W`,
-        });
+        pushMoment(
+          'pr',
+          'New power PR!',
+          `${Math.round(sample.powerWatts)} W — that’s a new peak`,
+          { force: true }
+        );
       }
       const ftpNow = ftpRef.current;
       if (ftpNow > 0 && sample.powerWatts >= ftpNow * 1.05) {
         const nowMs = Date.now();
-        if (nowMs > surgeUntilRef.current) {
-          surgeUntilRef.current = nowMs + 1800;
-          setSurge(true);
-          window.setTimeout(() => setSurge(false), 700);
-          pushEvent({ kind: 'surge', title: 'Power surge', detail: 'Above FTP' });
+        if (sample.powerWatts >= ftpNow * 1.2) {
+          if (highPowerSinceRef.current == null) {
+            highPowerSinceRef.current = nowMs;
+          } else if (nowMs - highPowerSinceRef.current >= 2500) {
+            if (nowMs > surgeUntilRef.current) {
+              surgeUntilRef.current = nowMs + 1800;
+              setSurge(true);
+              window.setTimeout(() => setSurge(false), 700);
+              pushMoment(
+                'sprint',
+                'Sprint!',
+                `${Math.round(sample.powerWatts)} W — dig in`
+              );
+              highPowerSinceRef.current = null;
+            }
+          }
+        } else {
+          highPowerSinceRef.current = null;
+          if (nowMs > surgeUntilRef.current) {
+            surgeUntilRef.current = nowMs + 1800;
+            setSurge(true);
+            window.setTimeout(() => setSurge(false), 700);
+            pushEvent({ kind: 'surge', title: 'Power surge', detail: 'Above FTP' });
+          }
         }
+      } else {
+        highPowerSinceRef.current = null;
       }
       powerSamplesRef.current.push(sample.powerWatts);
       if (powerSamplesRef.current.length > 7200) {
@@ -1021,6 +1146,7 @@ export function RideSession() {
   const displayHr = hrBpm ?? live.heartRateBpm ?? null;
   const zone: HrZone | null =
     displayHr != null ? hrZone(displayHr, maxHrSetting) : null;
+  const rideLevel = levelFromXp(totalRideXp);
 
   return (
     <div className="max-w-3xl space-y-8">
@@ -1031,13 +1157,63 @@ export function RideSession() {
         <p className="font-sans text-sm text-muted mt-1">
           Trainer + Amazfit/HR strap, live zones, ERG/SIM, laps — earn XP and badges as you ride.
         </p>
-        {totalRideXp > 0 || rideCount > 0 ? (
-          <p className="font-mono text-[11px] uppercase tracking-widest text-accent mt-2">
-            {leveledDetail(levelFromXp(totalRideXp))} · {totalRideXp} XP · {rideCount} rides
-            {bestPowerEver > 0 ? ` · PR ${bestPowerEver} W` : ''}
-          </p>
-        ) : null}
       </div>
+
+      <section className="rounded-card border border-accent/35 bg-card p-4 md:p-5 shadow-glow relative overflow-hidden">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-40"
+          style={{
+            background:
+              'linear-gradient(115deg, color-mix(in srgb, var(--accent) 18%, transparent) 0%, transparent 55%)',
+          }}
+          aria-hidden
+        />
+        <div className="relative flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted">
+              Rider progress
+            </p>
+            <h2 className="font-display text-2xl md:text-3xl text-accent uppercase tracking-wide mt-1 leading-none">
+              L{rideLevel.level} {rideLevel.title}
+            </h2>
+            <p className="font-sans text-sm text-tan mt-2">
+              {totalRideXp} XP earned
+              {rideLevel.level < 11
+                ? ` · ${Math.max(0, rideLevel.xpForNext - rideLevel.xpIntoLevel)} XP to next level`
+                : ' · Max title unlocked'}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <div className="rounded-card border border-border bg-bg2/80 px-3 py-2 text-center min-w-[4.5rem]">
+              <p className="font-mono text-[9px] uppercase tracking-widest text-muted">Rides</p>
+              <p className="font-display text-xl text-tan leading-none mt-0.5">{rideCount}</p>
+            </div>
+            {bestPowerEver > 0 ? (
+              <div className="rounded-card border border-border bg-bg2/80 px-3 py-2 text-center min-w-[4.5rem]">
+                <p className="font-mono text-[9px] uppercase tracking-widest text-muted">Power PR</p>
+                <p className="font-display text-xl text-accent leading-none mt-0.5">
+                  {bestPowerEver}
+                  <span className="font-mono text-[10px] text-muted ml-0.5">W</span>
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <div className="relative mt-4">
+          <div className="flex justify-between font-mono text-[10px] uppercase tracking-widest text-muted mb-1.5">
+            <span>
+              {rideLevel.xpIntoLevel} / {rideLevel.xpForNext} XP
+            </span>
+            <span>{Math.round(rideLevel.progressPct)}%</span>
+          </div>
+          <div className="h-2.5 rounded-full bg-bg3 overflow-hidden border border-border/60">
+            <div
+              className="h-full rounded-full bg-accent transition-all duration-500"
+              style={{ width: `${Math.min(100, Math.max(2, rideLevel.progressPct))}%` }}
+            />
+          </div>
+        </div>
+      </section>
 
       {!bleOk && (
         <div className="rounded-card border border-border bg-bg2 px-4 py-3 font-sans text-sm text-muted">
@@ -1202,6 +1378,7 @@ export function RideSession() {
               onToggleSpeedUnit={handleToggleSpeedUnit}
             />
             <RideEventToasts events={hudEvents} onDismiss={dismissEvent} />
+            <RideMomentOverlay moment={rideMoment} onDismiss={dismissMoment} />
           </RideWorldPanel>
         </div>
 

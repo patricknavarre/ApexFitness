@@ -8,6 +8,11 @@ const secret =
   process.env.AUTH_SECRET ??
   (process.env.NODE_ENV === 'development' ? 'dev-secret-replace-in-production' : undefined);
 
+/** 60 days — persistent cookies so iOS home-screen launches stay signed in. */
+const SESSION_MAX_AGE = 60 * 24 * 60 * 60;
+const SESSION_UPDATE_AGE = 24 * 60 * 60;
+const useSecureCookies = process.env.NODE_ENV === 'production';
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret,
   trustHost: true,
@@ -73,5 +78,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   pages: { signIn: '/auth/login', error: '/auth/login' },
-  session: { strategy: 'jwt' },
+  session: {
+    strategy: 'jwt',
+    maxAge: SESSION_MAX_AGE,
+    updateAge: SESSION_UPDATE_AGE,
+  },
+  jwt: {
+    maxAge: SESSION_MAX_AGE,
+  },
+  cookies: {
+    sessionToken: {
+      name: useSecureCookies
+        ? '__Secure-authjs.session-token'
+        : 'authjs.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: useSecureCookies,
+        maxAge: SESSION_MAX_AGE,
+      },
+    },
+  },
 });
