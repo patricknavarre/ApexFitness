@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export type RideHudEvent = {
   id: string;
@@ -102,23 +102,32 @@ export function RideMomentOverlay({
   onDismiss: (id: string) => void;
 }) {
   const [show, setShow] = useState(false);
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
 
   useEffect(() => {
     if (!moment) {
       setShow(false);
       return;
     }
+
+    const momentId = moment.id;
     setShow(false);
     const enter = window.setTimeout(() => setShow(true), 30);
+    /** Hold long enough to read, then auto-close (10–15s range). */
     const leave = window.setTimeout(() => {
       setShow(false);
-      window.setTimeout(() => onDismiss(moment.id), 320);
-    }, 4000);
+    }, 12_000);
+    const remove = window.setTimeout(() => {
+      onDismissRef.current(momentId);
+    }, 12_320);
+
     return () => {
       window.clearTimeout(enter);
       window.clearTimeout(leave);
+      window.clearTimeout(remove);
     };
-  }, [moment?.id, moment, onDismiss]);
+  }, [moment?.id]);
 
   if (!moment) return null;
 
@@ -131,7 +140,7 @@ export function RideMomentOverlay({
         }`}
         onClick={() => {
           setShow(false);
-          window.setTimeout(() => onDismiss(moment.id), 280);
+          window.setTimeout(() => onDismissRef.current(moment.id), 280);
         }}
       >
         <span className="ride-moment__eyebrow font-mono">
