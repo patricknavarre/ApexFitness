@@ -264,6 +264,10 @@ export async function POST(req: Request) {
         numOrUndef(maxCadenceRpm) != null ? Math.round(maxCadenceRpm!) : undefined,
       distanceMeters:
         numOrUndef(distanceMeters) != null ? Math.round(distanceMeters!) : undefined,
+      distanceMiles:
+        numOrUndef(distanceMeters) != null && distanceMeters! > 0
+          ? Math.round((distanceMeters! / 1609.344) * 1000) / 1000
+          : undefined,
       energyKcal: fromEnergy ?? undefined,
       avgHeartRateBpm:
         numOrUndef(avgHeartRateBpm) != null ? Math.round(avgHeartRateBpm!) : undefined,

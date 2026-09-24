@@ -11,6 +11,8 @@ import Analysis from '@/models/Analysis';
 import { getAnthropicModelId } from '@/lib/anthropic-model';
 import { WORKOUT_PLANS, getActivePlanDay, getPlanDayByNumber, getTodaysDay } from '@/lib/workout-plans';
 import { computeWorkoutStreak, countDaysThisWeek } from '@/lib/streak';
+import { getRideCourse } from '@/lib/ride/courses';
+import { getRideWorkout } from '@/lib/ride/workouts';
 import {
   addLocalCalendarDays,
   dateOnlyToUtcNoon,
@@ -25,10 +27,24 @@ export const maxDuration = 30;
 
 const DEFAULT_CALORIES_BURNED = 270;
 const ALL_MEALS = ['breakfast', 'lunch', 'dinner', 'snacks'] as const;
+const RIDE_SOURCES = new Set(['ftms', 'cps', 'mock']);
 
 type InsightPayload = {
   headline: string;
   body: string;
+};
+
+type RideInsight = {
+  durationMinutes: number;
+  caloriesBurned: number;
+  avgPowerWatts: number | null;
+  distanceMeters: number | null;
+  trainingStressScore: number | null;
+  rideXp: number | null;
+  courseName: string | null;
+  courseCompleted: boolean;
+  workoutName: string | null;
+  workoutCompleted: boolean;
 };
 
 type InsightContext = {
@@ -61,6 +77,12 @@ type InsightContext = {
   mealsLogged: string[];
   mealsMissing: string[];
   caloriesBurnedToday: number;
+  /** intake − workout burn; negative = deficit (e.g. ride on empty stomach) */
+  calorieBalance: number;
+  energyState: 'deficit' | 'surplus' | 'even';
+  rideToday: RideInsight | null;
+  ridesCompletedToday: number;
+  rideXpEarnedToday: number;
   workoutStreak: number;
   daysThisWeek: number;
   timeOfDayBucket: 'morning' | 'afternoon' | 'evening';
@@ -125,6 +147,51 @@ function parseInsightText(raw: string | null | undefined): InsightPayload | null
   return { headline: "Today's focus", body: trimmed };
 }
 
+function formatRideDistance(meters: number | null): string | null {
+  if (meters == null || meters <= 0) return null;
+  const mi = meters / 1609.344;
+  if (mi < 0.1) return `${Math.round(meters * 3.28084)} ft`;
+  return mi < 10 ? `${mi.toFixed(2)} mi` : `${mi.toFixed(1)} mi`;
+}
+
+function rideHighlight(ride: RideInsight): string {
+  const bits: string[] = [];
+  bits.push(`${ride.durationMinutes} min`);
+  if (ride.avgPowerWatts != null && ride.avgPowerWatts > 0) {
+    bits.push(`${ride.avgPowerWatts} W avg`);
+  }
+  const dist = formatRideDistance(ride.distanceMeters);
+  if (dist) bits.push(dist);
+  if (ride.caloriesBurned > 0) bits.push(`${ride.caloriesBurned} kcal burned`);
+  if (ride.trainingStressScore != null && ride.trainingStressScore > 0) {
+    bits.push(`TSS ${ride.trainingStressScore}`);
+  }
+  if (ride.courseName) {
+    bits.push(
+      ride.courseCompleted ? `${ride.courseName} finished` : `on ${ride.courseName}`
+    );
+  } else if (ride.workoutName) {
+    bits.push(
+      ride.workoutCompleted
+        ? `${ride.workoutName} complete`
+        : ride.workoutName
+    );
+  }
+  if (ride.rideXp != null && ride.rideXp > 0) bits.push(`+${ride.rideXp} ride XP`);
+  return bits.join(', ');
+}
+
+function balancePhrase(context: InsightContext): string {
+  const bal = context.calorieBalance;
+  if (bal < 0) {
+    return `You're in a ${Math.abs(bal)} cal deficit from food vs burn — the work is pulling ahead.`;
+  }
+  if (bal > 0) {
+    return `Energy balance sits at +${bal} cal (food minus burn).`;
+  }
+  return 'Food and burn are neck and neck today.';
+}
+
 function buildRulesInsight(context: InsightContext): InsightPayload {
   const calPart =
     context.calorieTarget != null
@@ -141,6 +208,42 @@ function buildRulesInsight(context: InsightContext): InsightPayload {
   const forward = context.nextCalendarWorkout
     ? `Tomorrow: ${context.nextCalendarWorkout}.`
     : 'Keep the streak going tomorrow.';
+  const ride = context.rideToday;
+
+  if (ride) {
+    const rideLine = `Ride locked in: ${rideHighlight(ride)}.`;
+    const progressBit =
+      context.daysThisWeek > 0
+        ? ` That's ${context.daysThisWeek} training day${context.daysThisWeek === 1 ? '' : 's'} this week` +
+          (context.workoutStreak > 0 ? ` and a ${context.workoutStreak}-day streak.` : '.')
+        : '';
+    if (context.energyState === 'deficit') {
+      return {
+        headline: 'Ride fueled the deficit',
+        body: [
+          rideLine + progressBit,
+          balancePhrase(context),
+          proteinPart
+            ? `Refuel smart — ${proteinPart}. ${missing}`
+            : `Log food when you're ready — ${calPart}. ${missing}`,
+        ].join(' '),
+      };
+    }
+    return {
+      headline: ride.courseCompleted
+        ? 'Course conquered'
+        : ride.workoutCompleted
+          ? 'Workout crushed'
+          : 'Strong ride in the books',
+      body: [
+        rideLine + progressBit,
+        balancePhrase(context),
+        proteinPart
+          ? `Recovery fuel: aim toward ${proteinPart}. ${missing}`
+          : `Keep fueling — ${calPart}. ${forward}`,
+      ].join(' '),
+    };
+  }
 
   if (context.workoutStatus === 'rest') {
     return {
@@ -150,7 +253,9 @@ function buildRulesInsight(context: InsightContext): InsightPayload {
         proteinPart
           ? `Nutrition checkpoint: ${proteinPart}. ${missing}`
           : `Nutrition checkpoint: ${calPart}. ${missing}`,
-        forward,
+        context.caloriesBurnedToday > 0
+          ? `${balancePhrase(context)} ${forward}`
+          : forward,
       ].join(' '),
     };
   }
@@ -161,11 +266,16 @@ function buildRulesInsight(context: InsightContext): InsightPayload {
       headline: `${context.todayWorkout} — done`,
       body: [
         `Session logged for ${context.todayWorkout}.${focus}`,
+        context.caloriesBurnedToday > 0
+          ? `${balancePhrase(context)} Burned ${context.caloriesBurnedToday} cal from training.`
+          : '',
         proteinPart
           ? `Refuel toward ${proteinPart}. ${missing}`
           : `Keep fueling — ${calPart} so far. ${missing}`,
         forward,
-      ].join(' '),
+      ]
+        .filter(Boolean)
+        .join(' '),
     };
   }
 
@@ -178,11 +288,14 @@ function buildRulesInsight(context: InsightContext): InsightPayload {
     headline: `${session} ready`,
     body: [
       `${session} is still open.${liftHint}`,
+      context.caloriesBurnedToday > 0 ? balancePhrase(context) : null,
       proteinPart && context.remainingProtein != null && context.remainingProtein > 0
         ? `You're at ${proteinPart} — leave room to finish protein after training. ${missing}`
         : `Fuel check: ${calPart}. ${missing}`,
       forward,
-    ].join(' '),
+    ]
+      .filter(Boolean)
+      .join(' '),
   };
 }
 
@@ -237,7 +350,7 @@ export async function GET(req: Request) {
         .sort({ loggedAt: -1 })
         .limit(100)
         .select(
-          'planId dayNumber loggedAt caloriesBurned cardioExercise cardioDurationMinutes isRestDay exerciseName'
+          'planId dayNumber loggedAt caloriesBurned cardioExercise cardioDurationMinutes isRestDay exerciseName rideSource avgPowerWatts distanceMeters trainingStressScore rideXp courseId courseCompleted workoutId workoutCompleted'
         )
         .lean(),
       Analysis.findOne({ userId: session.user.id }).sort({ createdAt: -1 }).lean(),
@@ -258,17 +371,72 @@ export async function GET(req: Request) {
 
     const loggedDates = new Set<string>();
     let caloriesBurnedToday = 0;
+    const ridesToday: RideInsight[] = [];
     for (const log of workoutLogs) {
       if (!log.loggedAt) continue;
       const local = toAppDateOnly(new Date(log.loggedAt));
       loggedDates.add(local);
-      if (local === today) {
-        // Skip per-exercise set-logs (Save loads) — they have no session burn
-        if (typeof log.exerciseName === 'string' && log.exerciseName.length > 0) continue;
-        caloriesBurnedToday +=
-          log.caloriesBurned != null ? Number(log.caloriesBurned) : DEFAULT_CALORIES_BURNED;
+      if (local !== today) continue;
+
+      const isSetLog = typeof log.exerciseName === 'string' && log.exerciseName.length > 0;
+      const isRide =
+        typeof log.rideSource === 'string' && RIDE_SOURCES.has(log.rideSource);
+
+      if (isRide) {
+        const burn =
+          log.caloriesBurned != null ? Math.round(Number(log.caloriesBurned)) : 0;
+        caloriesBurnedToday += burn;
+        const course = getRideCourse(
+          typeof log.courseId === 'string' ? log.courseId : null
+        );
+        const structured = getRideWorkout(
+          typeof log.workoutId === 'string' ? log.workoutId : null
+        );
+        ridesToday.push({
+          durationMinutes: Math.max(
+            1,
+            Math.round(Number(log.cardioDurationMinutes) || 0)
+          ),
+          caloriesBurned: burn,
+          avgPowerWatts:
+            typeof log.avgPowerWatts === 'number'
+              ? Math.round(log.avgPowerWatts)
+              : null,
+          distanceMeters:
+            typeof log.distanceMeters === 'number'
+              ? Math.round(log.distanceMeters)
+              : null,
+          trainingStressScore:
+            typeof log.trainingStressScore === 'number'
+              ? Math.round(log.trainingStressScore)
+              : null,
+          rideXp:
+            typeof log.rideXp === 'number' ? Math.round(log.rideXp) : null,
+          courseName: course?.name ?? null,
+          courseCompleted: Boolean(log.courseCompleted),
+          workoutName: structured?.name ?? null,
+          workoutCompleted: Boolean(log.workoutCompleted),
+        });
+        continue;
       }
+
+      // Skip per-exercise set-logs (Save loads) — they have no session burn
+      if (isSetLog) continue;
+      if (log.isRestDay) continue;
+      caloriesBurnedToday +=
+        log.caloriesBurned != null
+          ? Number(log.caloriesBurned)
+          : DEFAULT_CALORIES_BURNED;
     }
+
+    const rideToday = ridesToday[0] ?? null;
+    const rideXpEarnedToday = ridesToday.reduce(
+      (s, r) => s + (r.rideXp ?? 0),
+      0
+    );
+    const calorieBalance = Math.round(totalCal - caloriesBurnedToday);
+    const energyState: InsightContext['energyState'] =
+      calorieBalance < 0 ? 'deficit' : calorieBalance > 0 ? 'surplus' : 'even';
 
     let plan = WORKOUT_PLANS.find((p) => p.id === user.activePlanId) ?? null;
     let planStartedAt = serializeDateOnly(user.planStartedAt as Date | undefined);
@@ -415,8 +583,10 @@ export async function GET(req: Request) {
     const workoutCompletedToday = !!(loggedDay && !loggedDay.day.isRest);
 
     const workoutStatus: InsightContext['workoutStatus'] = activeDay?.day.isRest
-      ? 'rest'
-      : workoutCompletedToday
+      ? rideToday
+        ? 'completed'
+        : 'rest'
+      : workoutCompletedToday || !!rideToday
         ? 'completed'
         : 'pending';
 
@@ -434,20 +604,36 @@ export async function GET(req: Request) {
         ? (latestAnalysis.focusAreas as string[]).slice(0, 3)
         : null;
 
+    const todayWorkoutLabel = (() => {
+      if (rideToday) {
+        if (rideToday.courseName) {
+          return rideToday.courseCompleted
+            ? `Virtual ride — ${rideToday.courseName}`
+            : `Virtual ride · ${rideToday.courseName}`;
+        }
+        if (rideToday.workoutName) {
+          return `Virtual ride — ${rideToday.workoutName}`;
+        }
+        return `Virtual ride · ${rideToday.durationMinutes} min`;
+      }
+      if (activeDay) {
+        return activeDay.day.isRest
+          ? `Rest day (Day ${activeDay.dayNumber})`
+          : `Day ${activeDay.dayNumber} — ${activeDay.day.title}`;
+      }
+      return 'No active plan';
+    })();
+
     const context: InsightContext = {
       goal: (user.goal as string) ?? 'not set',
-      todayWorkout: activeDay
-        ? activeDay.day.isRest
-          ? `Rest day (Day ${activeDay.dayNumber})`
-          : `Day ${activeDay.dayNumber} — ${activeDay.day.title}`
-        : 'No active plan',
+      todayWorkout: todayWorkoutLabel,
       isRestDay: activeDay?.day.isRest ?? false,
       workoutStatus,
       exercises:
         activeDay && !activeDay.day.isRest
           ? activeDay.day.exercises.map((e) => e.name).slice(0, 8)
           : [],
-      workoutCompletedToday,
+      workoutCompletedToday: workoutCompletedToday || !!rideToday,
       nextCalendarWorkout,
       nutritionReminders: plan?.nutritionReminders?.slice(0, 3) ?? [],
       caloriesToday: totalCal,
@@ -471,6 +657,11 @@ export async function GET(req: Request) {
       mealsLogged,
       mealsMissing,
       caloriesBurnedToday: Math.round(caloriesBurnedToday),
+      calorieBalance,
+      energyState,
+      rideToday,
+      ridesCompletedToday: ridesToday.length,
+      rideXpEarnedToday,
       workoutStreak: computeWorkoutStreak(loggedDates, plan, planStartedAt),
       daysThisWeek: countDaysThisWeek(loggedDates),
       timeOfDayBucket: timeOfDayBucket(today),
@@ -501,13 +692,14 @@ export async function GET(req: Request) {
       const { text } = await generateText({
         model: anthropic(getAnthropicModelId()),
         system: [
-          'You are a precise, encouraging fitness coach.',
+          'You are a precise, encouraging fitness coach who celebrates training and honest energy balance.',
           'Return ONLY valid JSON: {"headline":"...","body":"..."}.',
-          'headline: 6-10 words, session-aware (mention workout name or Rest, and done/open when relevant).',
-          'body: exactly 2-3 short sentences covering (1) today workout status with one training detail,',
-          '(2) one concrete nutrition number (calories/protein remaining or % of target, or a missing meal),',
-          '(3) a forward look using nextCalendarWorkout or recovery.',
-          'No bullet points. No markdown fences.',
+          'headline: 6-10 words, session-aware (mention Virtual ride / course / workout name or Rest, and done/open when relevant).',
+          'body: exactly 2-3 short sentences covering:',
+          '(1) today training status — if rideToday exists, cite concrete ride numbers (minutes, watts, distance, kcal, TSS, course, or ride XP) and how it advances daysThisWeek / workoutStreak / goal;',
+          '(2) energy balance using calorieBalance and energyState (negative calorieBalance = deficit from food minus burn — motivate without guilt; empty-stomach training driving a deficit is progress toward fat-loss goals when goal implies that);',
+          '(3) one nutrition cue (protein remaining / missing meal) OR a forward look with nextCalendarWorkout.',
+          'Never invent ride stats that are null. No bullet points. No markdown fences.',
         ].join(' '),
         prompt: `User data today:\n${JSON.stringify(context, null, 2)}\n\nWrite today's insight JSON.`,
         maxTokens: 220,

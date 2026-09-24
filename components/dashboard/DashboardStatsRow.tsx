@@ -48,6 +48,8 @@ export function DashboardStatsRow({
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [totalCal, setTotalCal] = useState(0);
+  const [totalBurn, setTotalBurn] = useState(0);
+  const [calorieBalance, setCalorieBalance] = useState(0);
   const [calorieTarget, setCalorieTarget] = useState<number | null>(null);
   const [streak, setStreak] = useState(0);
   const [daysThisWeek, setDaysThisWeek] = useState(0);
@@ -81,14 +83,40 @@ export function DashboardStatsRow({
       fetch('/api/workout/log?limit=100').then((r) =>
         r.ok ? r.json() : Promise.resolve({ logs: [] })
       ),
+      fetch('/api/progress/daily-summary?days=1').then((r) =>
+        r.ok ? r.json() : Promise.resolve({ days: [] })
+      ),
     ])
-      .then(([nutritionData, userData, workoutData]) => {
+      .then(([nutritionData, userData, workoutData, summaryData]) => {
         if (cancelled) return;
         const entries = nutritionData.entries ?? [];
-        setTotalCal(entries.reduce((s: number, e: { calories?: number }) => s + (e.calories ?? 0), 0));
+        const intake = entries.reduce(
+          (s: number, e: { calories?: number }) => s + (e.calories ?? 0),
+          0
+        );
+        setTotalCal(intake);
         setCalorieTarget(
           typeof userData.calorieTarget === 'number' ? userData.calorieTarget : null
         );
+
+        const todaySummary = (summaryData.days ?? []).find(
+          (d: { date?: string }) => d.date === today
+        ) as
+          | { intake?: number; totalBurn?: number; surplus?: number }
+          | undefined;
+        if (todaySummary) {
+          const burn = Math.round(Number(todaySummary.totalBurn) || 0);
+          const surplus =
+            typeof todaySummary.surplus === 'number'
+              ? Math.round(todaySummary.surplus)
+              : Math.round(intake - burn);
+          setTotalBurn(burn);
+          setCalorieBalance(surplus);
+        } else {
+          setTotalBurn(0);
+          setCalorieBalance(intake);
+        }
+
         const dates = new Set<string>();
         for (const log of workoutData.logs ?? []) {
           if (log.loggedAt) dates.add(toLocalDateOnly(log.loggedAt));
@@ -124,6 +152,20 @@ export function DashboardStatsRow({
             typeof log.dayNumber === 'number' &&
             !log.isRestDay
         );
+        const todaysRide = (workoutData.logs ?? []).find(
+          (log: {
+            loggedAt?: string | null;
+            rideSource?: string | null;
+            cardioExercise?: string | null;
+            cardioDurationMinutes?: number | null;
+          }) =>
+            log.loggedAt &&
+            toLocalDateOnly(log.loggedAt) === today &&
+            (log.rideSource === 'ftms' ||
+              log.rideSource === 'cps' ||
+              log.rideSource === 'mock' ||
+              log.cardioExercise === 'indoor-cycling')
+        );
         const todaysLog = todaysMatchingLog ?? todaysAnyLog;
         if (todaysLog && typeof todaysLog.dayNumber === 'number' && todaysLog.planId) {
           const logPlan = WORKOUT_PLANS.find((p) => p.id === todaysLog.planId) ?? null;
@@ -137,11 +179,21 @@ export function DashboardStatsRow({
             return;
           }
         }
+        if (todaysRide) {
+          const mins =
+            typeof todaysRide.cardioDurationMinutes === 'number'
+              ? todaysRide.cardioDurationMinutes
+              : null;
+          setWorkoutLabel(mins != null ? `Ride · ${mins} min` : 'Virtual ride');
+          return;
+        }
         setWorkoutLabel(scheduledLabel);
       })
       .catch(() => {
         if (!cancelled) {
           setTotalCal(0);
+          setTotalBurn(0);
+          setCalorieBalance(0);
           setStreak(0);
           setDaysThisWeek(0);
           setWorkoutLabel(scheduledLabel);
@@ -168,18 +220,32 @@ export function DashboardStatsRow({
     );
   }
 
+  const balanceLabel =
+    calorieBalance < 0 ? 'Deficit' : calorieBalance > 0 ? 'Surplus' : 'Even';
+  const balanceColor =
+    calorieBalance < 0
+      ? 'text-red-400'
+      : calorieBalance > 0
+        ? 'text-accent'
+        : 'text-muted';
+
   return (
     <div className="grid grid-cols-3 gap-2 sm:gap-3">
       <Link
-        href="/nutrition"
+        href="/progress"
         className="bg-card border border-border rounded-card p-3 sm:p-4 hover:border-accent/40 transition-colors"
       >
-        <p className="font-mono text-[10px] uppercase tracking-wider text-muted mb-1">Calories</p>
-        <p className="font-mono text-base sm:text-lg text-accent leading-tight">
-          {totalCal}
-          {calorieTarget != null && (
-            <span className="text-muted text-xs font-sans"> / {calorieTarget}</span>
-          )}
+        <p className="font-mono text-[10px] uppercase tracking-wider text-muted mb-1">
+          {balanceLabel}
+        </p>
+        <p className={`font-mono text-base sm:text-lg leading-tight ${balanceColor}`}>
+          {calorieBalance >= 0 ? '+' : ''}
+          {calorieBalance}
+          <span className="text-muted text-xs font-sans"> cal</span>
+        </p>
+        <p className="font-sans text-[10px] sm:text-xs text-muted mt-1">
+          {totalCal} in · {totalBurn} burn
+          {calorieTarget != null ? ` · goal ${calorieTarget}` : ''}
         </p>
         {calorieTarget != null && calorieTarget > 0 && (
           <div className="mt-2 h-1 rounded-full bg-bg3 overflow-hidden">

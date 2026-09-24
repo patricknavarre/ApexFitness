@@ -44,7 +44,13 @@ type WorkoutItem = {
   cardioExercise?: string | null;
   cardioDurationMinutes?: number | null;
   distanceMiles?: number | null;
+  distanceMeters?: number | null;
   isRestDay?: boolean;
+  rideSource?: string | null;
+  avgPowerWatts?: number | null;
+  trainingStressScore?: number | null;
+  rideXp?: number | null;
+  courseId?: string | null;
 };
 
 type DaySummary = {
@@ -64,6 +70,36 @@ function getPlanDayLabel(planId: string | null, dayNumber: number | null): strin
 
 function getWorkoutLabel(w: WorkoutItem): string {
   if (w.isRestDay) return 'Rest';
+  const isRide =
+    (typeof w.rideSource === 'string' && w.rideSource.length > 0) ||
+    w.cardioExercise === 'indoor-cycling';
+  if (isRide) {
+    const parts: string[] = ['Virtual ride'];
+    if (w.cardioDurationMinutes != null && w.cardioDurationMinutes > 0) {
+      parts.push(`${w.cardioDurationMinutes} min`);
+    }
+    if (typeof w.distanceMiles === 'number' && w.distanceMiles > 0) {
+      const mi =
+        w.distanceMiles >= 10
+          ? String(Math.round(w.distanceMiles))
+          : w.distanceMiles.toFixed(1).replace(/\.0$/, '');
+      parts.push(`${mi} mi`);
+    } else if (typeof w.distanceMeters === 'number' && w.distanceMeters > 0) {
+      const mi = w.distanceMeters / 1609.344;
+      parts.push(
+        mi >= 10
+          ? `${Math.round(mi)} mi`
+          : `${mi.toFixed(1).replace(/\.0$/, '')} mi`
+      );
+    }
+    if (typeof w.avgPowerWatts === 'number' && w.avgPowerWatts > 0) {
+      parts.push(`${w.avgPowerWatts} W avg`);
+    }
+    if (w.caloriesBurned > 0) {
+      parts.push(`${w.caloriesBurned} kcal`);
+    }
+    return parts.join(' · ');
+  }
   if (w.cardioExercise) {
     const label = getCardioLabel(w.cardioExercise);
     if (typeof w.distanceMiles === 'number' && w.distanceMiles > 0) {
@@ -79,6 +115,12 @@ function getWorkoutLabel(w: WorkoutItem): string {
     return label;
   }
   return getPlanDayLabel(w.planId, w.dayNumber);
+}
+
+function surplusClass(surplus: number): string {
+  if (surplus < 0) return 'text-red-400 font-medium';
+  if (surplus > 0) return 'text-accent';
+  return 'text-muted';
 }
 
 function parseBodyFatMidpoint(range?: string): number | null {
@@ -699,7 +741,7 @@ export default function ProgressPage() {
                           </td>
                           <td className="p-3 text-text">{day.totalBurn} cal</td>
                           <td className="p-3">
-                            <span className={day.surplus >= 0 ? 'text-accent' : 'text-accent2'}>
+                            <span className={surplusClass(day.surplus)}>
                               {day.surplus >= 0 ? '+' : ''}
                               {day.surplus} cal
                             </span>
@@ -741,7 +783,7 @@ export default function ProgressPage() {
                 </h3>
                 <p className="font-sans text-xs text-muted mt-1">
                   {selectedDay.intake} cal in · {selectedDay.totalBurn} burn ·{' '}
-                  <span className={selectedDay.surplus >= 0 ? 'text-accent' : 'text-accent2'}>
+                  <span className={surplusClass(selectedDay.surplus)}>
                     {selectedDay.surplus >= 0 ? '+' : ''}
                     {selectedDay.surplus}
                   </span>

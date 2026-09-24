@@ -18,7 +18,7 @@ import {
   type RideMoment,
   type RideMomentKind,
 } from '@/components/cycling/RideEvents';
-import { formatDistance } from '@/lib/ride/format';
+import { formatDistance, formatMilesFromMeters } from '@/lib/ride/format';
 import {
   defaultMaxHrFromAge,
   hrZone,
@@ -1646,6 +1646,9 @@ export function RideSession() {
       {lastSaved && (
         <section className="rounded-card border border-border bg-bg2 px-4 py-3 font-sans text-sm text-muted">
           Last saved: {lastSaved.durationMinutes} min
+          {lastSaved.distanceMeters != null && lastSaved.distanceMeters > 0
+            ? ` · ${formatMilesFromMeters(lastSaved.distanceMeters)}`
+            : ''}
           {lastSaved.avgPowerWatts != null ? ` · avg ${lastSaved.avgPowerWatts} W` : ''}
           {lastSaved.normalizedPowerWatts != null
             ? ` · NP ${lastSaved.normalizedPowerWatts}`
@@ -1672,6 +1675,9 @@ export function RideSession() {
                 className="rounded-card border border-border bg-card px-4 py-3 font-sans text-sm text-muted flex flex-wrap items-center gap-x-3 gap-y-1"
               >
                 <span>{r.durationMinutes ?? '—'} min</span>
+                {r.distanceMeters != null && r.distanceMeters > 0 && (
+                  <span>{formatMilesFromMeters(r.distanceMeters)}</span>
+                )}
                 {r.avgPowerWatts != null && <span>avg {r.avgPowerWatts} W</span>}
                 {r.normalizedPowerWatts != null && <span>NP {r.normalizedPowerWatts}</span>}
                 {r.trainingStressScore != null && <span>TSS {r.trainingStressScore}</span>}

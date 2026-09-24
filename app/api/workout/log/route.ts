@@ -76,7 +76,7 @@ export async function GET(req: Request) {
       filter.distanceMiles = { $exists: true, $gt: 0 };
     }
     const selectFields = [
-      'planId dayNumber loggedAt caloriesBurned cardioExercise cardioDurationMinutes isRestDay distanceMiles avgHeartRateBpm maxHeartRateBpm hrDeviceName',
+      'planId dayNumber loggedAt caloriesBurned cardioExercise cardioDurationMinutes isRestDay distanceMiles avgHeartRateBpm maxHeartRateBpm hrDeviceName rideSource',
       includeRoute ? 'route' : '',
     ]
       .filter(Boolean)
@@ -100,17 +100,13 @@ export async function GET(req: Request) {
             : DEFAULT_CALORIES_BURNED,
         cardioExercise: l.cardioExercise ?? null,
         cardioDurationMinutes: l.cardioDurationMinutes ?? null,
-        distanceMiles:
-          typeof l.distanceMiles === 'number' && Number.isFinite(l.distanceMiles)
-            ? l.distanceMiles
-            : null,
-        avgHeartRateBpm:
-          typeof l.avgHeartRateBpm === 'number' ? l.avgHeartRateBpm : null,
-        maxHeartRateBpm:
-          typeof l.maxHeartRateBpm === 'number' ? l.maxHeartRateBpm : null,
-        hrDeviceName: typeof l.hrDeviceName === 'string' ? l.hrDeviceName : null,
-        route: includeRoute && Array.isArray(l.route) ? l.route : undefined,
+        distanceMiles: l.distanceMiles ?? null,
         isRestDay: !!l.isRestDay,
+        rideSource: l.rideSource ?? null,
+        avgHeartRateBpm: l.avgHeartRateBpm ?? null,
+        maxHeartRateBpm: l.maxHeartRateBpm ?? null,
+        hrDeviceName: l.hrDeviceName ?? null,
+        ...(includeRoute && Array.isArray(l.route) ? { route: l.route } : {}),
       })),
     });
   } catch (e) {

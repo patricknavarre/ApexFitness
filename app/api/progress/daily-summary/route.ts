@@ -42,7 +42,13 @@ type SessionWorkout = {
   cardioExercise: string | null;
   cardioDurationMinutes: number | null;
   distanceMiles: number | null;
+  distanceMeters: number | null;
   isRestDay: boolean;
+  rideSource: string | null;
+  avgPowerWatts: number | null;
+  trainingStressScore: number | null;
+  rideXp: number | null;
+  courseId: string | null;
 };
 
 export async function GET(req: Request) {
@@ -84,7 +90,7 @@ export async function GET(req: Request) {
         loggedAt: { $gte: rangeStart, $lte: rangeEnd },
       })
         .select(
-          'planId dayNumber caloriesBurned cardioExercise cardioDurationMinutes distanceMiles isRestDay exerciseName loggedAt'
+          'planId dayNumber caloriesBurned cardioExercise cardioDurationMinutes distanceMiles distanceMeters isRestDay exerciseName loggedAt rideSource avgPowerWatts trainingStressScore rideXp courseId'
         )
         .lean(),
     ]);
@@ -111,22 +117,52 @@ export async function GET(req: Request) {
         (l) => typeof l.exerciseName === 'string' && l.exerciseName.length > 0
       );
 
-      let workouts: SessionWorkout[] = sessionLogs.map((l) => ({
-        planId: l.planId ?? null,
-        dayNumber: l.dayNumber ?? null,
-        caloriesBurned: l.isRestDay
-          ? 0
-          : l.caloriesBurned != null
-            ? Number(l.caloriesBurned)
-            : DEFAULT_CALORIES_BURNED,
-        cardioExercise: l.cardioExercise ?? null,
-        cardioDurationMinutes: l.cardioDurationMinutes ?? null,
-        distanceMiles:
+      const toSession = (l: (typeof sessionLogs)[number]): SessionWorkout => {
+        const distanceMeters =
+          typeof l.distanceMeters === 'number' && Number.isFinite(l.distanceMeters)
+            ? Number(l.distanceMeters)
+            : null;
+        const distanceMilesFromLog =
           typeof l.distanceMiles === 'number' && Number.isFinite(l.distanceMiles)
             ? Number(l.distanceMiles)
-            : null,
-        isRestDay: !!l.isRestDay,
-      }));
+            : null;
+        const distanceMiles =
+          distanceMilesFromLog ??
+          (distanceMeters != null && distanceMeters > 0
+            ? Math.round((distanceMeters / 1609.344) * 100) / 100
+            : null);
+        const isRide =
+          typeof l.rideSource === 'string' &&
+          ['ftms', 'cps', 'mock'].includes(l.rideSource);
+
+        return {
+          planId: l.planId ?? null,
+          dayNumber: l.dayNumber ?? null,
+          caloriesBurned: l.isRestDay
+            ? 0
+            : l.caloriesBurned != null
+              ? Number(l.caloriesBurned)
+              : isRide
+                ? 0
+                : DEFAULT_CALORIES_BURNED,
+          cardioExercise: l.cardioExercise ?? null,
+          cardioDurationMinutes: l.cardioDurationMinutes ?? null,
+          distanceMiles,
+          distanceMeters,
+          isRestDay: !!l.isRestDay,
+          rideSource: isRide ? String(l.rideSource) : null,
+          avgPowerWatts:
+            typeof l.avgPowerWatts === 'number' ? Math.round(l.avgPowerWatts) : null,
+          trainingStressScore:
+            typeof l.trainingStressScore === 'number'
+              ? Math.round(l.trainingStressScore)
+              : null,
+          rideXp: typeof l.rideXp === 'number' ? Math.round(l.rideXp) : null,
+          courseId: typeof l.courseId === 'string' ? l.courseId : null,
+        };
+      };
+
+      let workouts: SessionWorkout[] = sessionLogs.map(toSession);
 
       // Older flow: "Save loads" only — no Mark complete. Show one session per plan day.
       if (workouts.length === 0 && setLogs.length > 0) {
@@ -144,7 +180,13 @@ export async function GET(req: Request) {
             cardioExercise: null,
             cardioDurationMinutes: null,
             distanceMiles: null,
+            distanceMeters: null,
             isRestDay: false,
+            rideSource: null,
+            avgPowerWatts: null,
+            trainingStressScore: null,
+            rideXp: null,
+            courseId: null,
           });
         }
       }
@@ -154,7 +196,8 @@ export async function GET(req: Request) {
         0
       );
       const totalBurn = workouts.reduce((sum, w) => sum + w.caloriesBurned, 0);
-      const surplus = intake - totalBurn;
+      // Food in − workout burn out. Empty stomach + ride → negative (deficit).
+      const surplus = Math.round(intake - totalBurn);
 
       return {
         date: dateStr,
