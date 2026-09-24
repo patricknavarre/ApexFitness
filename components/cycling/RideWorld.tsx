@@ -23,14 +23,14 @@ type Props = {
   onToggleSpeedUnit: () => void;
 };
 
-/** px of road texture advanced per km/h per second */
-const ROAD_PX_PER_KMH = 9;
+/** px of road texture advanced per km/h per second (toward viewer) */
+const ROAD_PX_PER_KMH = 14;
 /** Floor so a crawl still moves when above the stop gate */
 const SCROLL_FLOOR_KMH = 1.2;
 const STOP_SPEED_KMH = 2;
 const STOP_CADENCE_RPM = 25;
-const HILLS_FAR_RATIO = 0.07;
-const HILLS_NEAR_RATIO = 0.16;
+const HILLS_FAR_RATIO = 0.05;
+const HILLS_NEAR_RATIO = 0.12;
 /** Ease rate toward target scroll velocity (higher = snappier) */
 const EASE_IN = 10;
 const EASE_OUT = 7;

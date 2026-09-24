@@ -260,7 +260,7 @@ body::before {
   right: 0;
   top: 36%;
   bottom: 0;
-  perspective: 320px;
+  perspective: 280px;
   perspective-origin: 50% 0%;
   overflow: hidden;
 }
@@ -269,12 +269,14 @@ body::before {
   position: absolute;
   left: 50%;
   top: 0;
-  width: 150%;
-  height: 170%;
-  margin-left: -75%;
+  width: 160%;
+  height: 200%;
+  margin-left: -80%;
   transform-origin: 50% 0%;
-  transform: rotateX(64deg);
+  /* Stronger pitch so foreshortening sells motion toward the rider */
+  transform: rotateX(68deg);
   transform-style: preserve-3d;
+  will-change: transform;
 }
 
 .ride-world__asphalt {
@@ -318,7 +320,9 @@ body::before {
     color-mix(in srgb, var(--tan) 80%, transparent) 0 14px,
     transparent 14px 28px
   );
-  background-position: 0 calc(-1 * var(--road-offset, 0px));
+  /* Positive Y = texture rushes from horizon (far) toward bottom (viewer) */
+  background-position: 0 var(--road-offset, 0px);
+  background-size: 100% 56px;
   opacity: 0.65;
 }
 
@@ -341,10 +345,12 @@ body::before {
   margin-left: -2.5px;
   background: repeating-linear-gradient(
     180deg,
-    var(--accent) 0 20px,
-    transparent 20px 46px
+    var(--accent) 0 18px,
+    transparent 18px 42px
   );
-  background-position: 0 calc(-1 * var(--road-offset, 0px));
+  /* Same direction: dashes emerge at vanishing point and rush toward cockpit */
+  background-position: 0 var(--road-offset, 0px);
+  background-size: 100% 60px;
   opacity: 0.95;
   filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 45%, transparent));
 }
@@ -357,9 +363,10 @@ body::before {
   background: repeating-linear-gradient(
     180deg,
     color-mix(in srgb, var(--tan) 55%, transparent) 0 10px,
-    transparent 10px 52px
+    transparent 10px 48px
   );
-  background-position: 0 calc(-1 * var(--road-offset, 0px) * 1.15);
+  background-position: 0 calc(var(--road-offset, 0px) * 1.2);
+  background-size: 100% 58px;
   opacity: 0.4;
 }
 

@@ -1,12 +1,18 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import NextAuth from 'next-auth';
+import { authConfig } from '@/lib/auth.config';
 
-// Auth is enforced in (dashboard)/layout.tsx with auth() so session is read in Node, not Edge.
-// Edge middleware often can't read the session cookie on Vercel.
-export async function middleware(_req: NextRequest) {
-  return NextResponse.next();
-}
+/**
+ * Edge-safe middleware: validates JWT and re-sets the session cookie with a
+ * fresh Expires/Max-Age on every navigation (critical for iOS home-screen PWAs).
+ */
+export default NextAuth(authConfig).auth;
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    /*
+     * Match all paths except static assets. Include pages + API so session
+     * cookies refresh whenever the standalone app loads.
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+  ],
 };

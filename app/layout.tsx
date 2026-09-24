@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Bebas_Neue, DM_Sans, Space_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
+import { Providers } from '@/components/providers';
 import './globals.css';
 
 const bebas = Bebas_Neue({
@@ -59,7 +60,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body className="font-sans antialiased relative bg-bg text-text min-h-screen">
-        {children}
+        <Providers>{children}</Providers>
         <Toaster theme="dark" position="top-right" richColors />
       </body>
     </html>

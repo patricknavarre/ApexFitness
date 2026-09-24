@@ -2,21 +2,16 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import bcrypt from 'bcryptjs';
+import { authConfig } from '@/lib/auth.config';
 
 const secret =
-  process.env.NEXTAUTH_SECRET ??
   process.env.AUTH_SECRET ??
+  process.env.NEXTAUTH_SECRET ??
   (process.env.NODE_ENV === 'development' ? 'dev-secret-replace-in-production' : undefined);
 
-/** 60 days — persistent cookies so iOS home-screen launches stay signed in. */
-const SESSION_MAX_AGE = 60 * 24 * 60 * 60;
-const SESSION_UPDATE_AGE = 24 * 60 * 60;
-const useSecureCookies = process.env.NODE_ENV === 'production';
-
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   secret,
-  trustHost: true,
-  ...(process.env.NEXTAUTH_URL && { url: process.env.NEXTAUTH_URL }),
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID ?? '',
@@ -49,12 +44,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) token.userId = user.id;
+    ...authConfig.callbacks,
+    async jwt({ token, user, account }) {
+      if (user) {
+        // Credentials: Mongo id. Google: resolve Mongo user so session stays stable.
+        if (account?.provider === 'google' && user.email) {
+          const { connectDB } = await import('./mongodb');
+          const User = (await import('@/models/User')).default;
+          await connectDB();
+          const doc = await User.findOne({ email: user.email }).select('_id');
+          token.userId = doc?._id?.toString() ?? user.id;
+        } else {
+          token.userId = user.id;
+        }
+      }
       return token;
     },
     async session({ session, token }) {
-      if (session.user) session.user.id = token.userId as string;
+      if (session.user && token.userId) {
+        session.user.id = token.userId as string;
+      }
       return session;
     },
     async signIn({ user, account }) {
@@ -75,29 +84,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         );
       }
       return true;
-    },
-  },
-  pages: { signIn: '/auth/login', error: '/auth/login' },
-  session: {
-    strategy: 'jwt',
-    maxAge: SESSION_MAX_AGE,
-    updateAge: SESSION_UPDATE_AGE,
-  },
-  jwt: {
-    maxAge: SESSION_MAX_AGE,
-  },
-  cookies: {
-    sessionToken: {
-      name: useSecureCookies
-        ? '__Secure-authjs.session-token'
-        : 'authjs.session-token',
-      options: {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: useSecureCookies,
-        maxAge: SESSION_MAX_AGE,
-      },
     },
   },
 });
