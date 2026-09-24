@@ -3,6 +3,7 @@
 import { formatDistance } from '@/lib/ride/format';
 import type { CourseSegmentHint } from '@/lib/ride/courses';
 import type { WorkoutProgress } from '@/lib/ride/workouts';
+import type { SpeedUnit } from '@/lib/ride/stats';
 
 function formatDuration(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -18,6 +19,7 @@ export function CourseClimbHud({
   elevationGainM,
   hint,
   finished,
+  distanceUnit = 'kmh',
 }: {
   courseName: string;
   distanceM: number;
@@ -26,6 +28,7 @@ export function CourseClimbHud({
   elevationGainM: number;
   hint: CourseSegmentHint;
   finished: boolean;
+  distanceUnit?: SpeedUnit;
 }) {
   const pct = Math.min(100, Math.round((distanceM / Math.max(1, courseLengthM)) * 100));
   return (
@@ -35,7 +38,8 @@ export function CourseClimbHud({
           {finished ? 'Course complete' : courseName}
         </p>
         <p className="font-mono text-[10px] text-muted">
-          {formatDistance(distanceM)} / {formatDistance(courseLengthM)}
+          {formatDistance(distanceM, distanceUnit)} /{' '}
+          {formatDistance(courseLengthM, distanceUnit)}
         </p>
       </div>
       <div className="h-1.5 rounded-full bg-bg3 overflow-hidden">

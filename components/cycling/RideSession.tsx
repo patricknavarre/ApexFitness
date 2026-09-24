@@ -18,6 +18,7 @@ import {
   type RideMoment,
   type RideMomentKind,
 } from '@/components/cycling/RideEvents';
+import { formatDistance } from '@/lib/ride/format';
 import {
   defaultMaxHrFromAge,
   hrZone,
@@ -52,6 +53,7 @@ import {
 import { CoursePicker } from '@/components/cycling/CoursePicker';
 import { WorkoutPicker } from '@/components/cycling/WorkoutPicker';
 import { CourseClimbHud, WorkoutIntervalHud } from '@/components/cycling/SessionHuds';
+import { ElevationProfileOverlay } from '@/components/cycling/ElevationProfileOverlay';
 
 type Phase = 'idle' | 'connected' | 'riding' | 'saving';
 type ControlMode = 'free' | 'erg' | 'sim' | 'course' | 'workout';
@@ -86,11 +88,6 @@ function formatDuration(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-function formatDistance(meters: number): string {
-  if (meters < 1000) return `${Math.round(meters)} m`;
-  return `${(meters / 1000).toFixed(2)} km`;
 }
 
 function leveledDetail(level: ReturnType<typeof levelFromXp>): string {
@@ -182,6 +179,7 @@ export function RideSession() {
   const [workoutHud, setWorkoutHud] = useState<WorkoutProgress | null>(null);
   const [courseFinished, setCourseFinished] = useState(false);
   const [workoutFinished, setWorkoutFinished] = useState(false);
+  const [trainerGradeLive, setTrainerGradeLive] = useState(false);
 
   const ridesCacheRef = useRef<
     {
@@ -243,6 +241,9 @@ export function RideSession() {
   const workoutIdRef = useRef<string | null>(null);
   const canControlRef = useRef(false);
   const simGradeRef = useRef(0);
+  const syncSessionRef = useRef<(elapsed: number, distance: number) => void>(
+    () => undefined
+  );
 
   useEffect(() => {
     courseIdRef.current = courseId;
@@ -397,20 +398,24 @@ export function RideSession() {
     );
   }
 
-  async function sendCourseGrade(grade: number) {
+  async function sendCourseGrade(grade: number, opts?: { force?: boolean }) {
     const conn = connectionRef.current;
     setCourseGrade(grade);
     setSimGrade(grade);
-    if (!conn?.canControl) return;
+    simGradeRef.current = grade;
+    if (!conn?.canControl) {
+      setTrainerGradeLive(false);
+      return;
+    }
     const prev = lastSentGradeRef.current;
-    if (prev != null && Math.abs(prev - grade) < 0.25) return;
+    if (!opts?.force && prev != null && Math.abs(prev - grade) < 0.15) return;
     try {
       await conn.setSimulationGrade(grade);
       lastSentGradeRef.current = grade;
-      if (controlMode !== 'course' && controlMode !== 'sim') {
-        setControlMode('course');
-      }
+      setControlMode('course');
+      setTrainerGradeLive(true);
     } catch (e) {
+      setTrainerGradeLive(false);
       toast.error(e instanceof Error ? e.message : 'Grade update failed');
     }
   }
@@ -451,12 +456,14 @@ export function RideSession() {
       lastSentGradeRef.current = grade;
       setCourseGrade(grade);
       setControlMode(courseIdRef.current ? 'course' : 'sim');
+      setTrainerGradeLive(true);
       pushEvent({
         kind: 'surge',
         title: `${grade >= 0 ? '+' : ''}${grade.toFixed(1)}%`,
         detail: 'Grade sent to trainer',
       });
     } catch (e) {
+      setTrainerGradeLive(false);
       toast.error(e instanceof Error ? e.message : 'Could not set grade');
     }
   }
@@ -528,6 +535,7 @@ export function RideSession() {
       });
     }
   }
+  syncSessionRef.current = syncSessionFromElapsed;
 
   function readRideElapsedSec(): number {
     const now = performance.now();
@@ -618,6 +626,7 @@ export function RideSession() {
     highPowerSinceRef.current = null;
     setCourseFinished(false);
     setWorkoutFinished(false);
+    setTrainerGradeLive(false);
     setCourseGrade(0);
     setElevationGainM(0);
     setWorkoutHud(null);
@@ -768,7 +777,7 @@ export function RideSession() {
     }
     lastTickRef.current = now;
     recomputeLiveStats(elapsed);
-    syncSessionFromElapsed(elapsed, distanceRef.current);
+    syncSessionRef.current(elapsed, distanceRef.current);
   }, [onHr]);
 
   async function attachTrainer(conn: TrainerConnection) {
@@ -860,12 +869,25 @@ export function RideSession() {
       const e = readRideElapsedSec();
       setElapsedSec(e);
       recomputeLiveStats(e);
-      syncSessionFromElapsed(e, distanceRef.current);
+      syncSessionRef.current(e, distanceRef.current);
     }, 250);
     // Kick first target immediately + claim FTMS control early
-    syncSessionFromElapsed(0, 0);
+    syncSessionRef.current(0, 0);
     if (connectionRef.current?.canControl) {
-      void connectionRef.current.ensureReady().catch(() => undefined);
+      void (async () => {
+        try {
+          await connectionRef.current?.ensureReady();
+          const cId = courseIdRef.current;
+          const course = getRideCourse(cId);
+          if (course) {
+            const grade = gradeAtDistance(course, distanceRef.current);
+            lastSentGradeRef.current = null;
+            await sendCourseGrade(grade, { force: true });
+          }
+        } catch {
+          /* trainer may still accept later grade writes */
+        }
+      })();
     }
   }
 
@@ -1363,11 +1385,11 @@ export function RideSession() {
               powerWatts={power}
               ftp={ftp}
               gradePct={
-                controlMode === 'course'
+                courseId && !workoutId
                   ? courseGrade
                   : controlMode === 'sim'
                     ? simGrade
-                    : courseGrade !== 0 && courseId
+                    : courseGrade !== 0
                       ? courseGrade
                       : 0
               }
@@ -1379,6 +1401,15 @@ export function RideSession() {
             />
             <RideEventToasts events={hudEvents} onDismiss={dismissEvent} />
             <RideMomentOverlay moment={rideMoment} onDismiss={dismissMoment} />
+            {courseId && getRideCourse(courseId) && !workoutId ? (
+              <ElevationProfileOverlay
+                course={getRideCourse(courseId)!}
+                distanceM={distanceM}
+                gradePct={courseGrade}
+                elevationGainM={elevationGainM}
+                trainerLinked={trainerGradeLive && canControl}
+              />
+            ) : null}
           </RideWorldPanel>
         </div>
 
@@ -1395,6 +1426,7 @@ export function RideSession() {
             elevationGainM={elevationGainM}
             hint={upcomingSegment(getRideCourse(courseId)!, distanceM)}
             finished={courseFinished}
+            distanceUnit={speedUnit}
           />
         )}
 
@@ -1460,7 +1492,13 @@ export function RideSession() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Metric label="Distance" value={formatDistance(distanceM)} unit="" />
+          <Metric
+            label="Distance"
+            value={formatDistance(distanceM, speedUnit)}
+            unit=""
+            onClick={handleToggleSpeedUnit}
+            title="Toggle km ↔ mi (also switches speed km/h ↔ mph)"
+          />
           <Metric
             label="Resistance"
             value={
@@ -1596,7 +1634,7 @@ export function RideSession() {
               >
                 <span className="text-text">Lap {lap.index}</span>
                 <span>{formatDuration(lap.durationSec)}</span>
-                <span>{formatDistance(lap.distanceMeters)}</span>
+                <span>{formatDistance(lap.distanceMeters, speedUnit)}</span>
                 {lap.avgPowerWatts != null && <span>avg {lap.avgPowerWatts} W</span>}
                 {lap.avgHeartRateBpm != null && <span>avg {lap.avgHeartRateBpm} bpm</span>}
               </li>

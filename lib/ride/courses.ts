@@ -190,6 +190,28 @@ export function elevationGainTo(course: RideCourse, distanceMeters: number): num
   return gain;
 }
 
+export type ElevSample = { d: number; elev: number };
+
+/** Sampled elevation profile for chart overlays (relative meters from start). */
+export function elevationProfile(course: RideCourse, samples = 64): ElevSample[] {
+  const len = Math.max(1, course.lengthMeters);
+  const n = Math.max(8, samples);
+  const out: ElevSample[] = [];
+  let elev = 0;
+  let prevG = gradeAtDistance(course, 0);
+  out.push({ d: 0, elev: 0 });
+  for (let i = 1; i <= n; i++) {
+    const d = (i / n) * len;
+    const g = gradeAtDistance(course, d);
+    const dd = len / n;
+    elev += ((prevG + g) / 2 / 100) * dd;
+    out.push({ d, elev });
+    prevG = g;
+  }
+  const minE = Math.min(...out.map((p) => p.elev));
+  return out.map((p) => ({ d: p.d, elev: p.elev - minE }));
+}
+
 export type CourseSegmentHint = {
   grade: number;
   remainingMeters: number;
