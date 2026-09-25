@@ -41,17 +41,38 @@ export function SelfDefenseBrowser() {
     };
   }, []);
 
-  async function markModuleDone(mod: YouthSdModule) {
+  async function markModuleDone(
+    mod: YouthSdModule,
+    hr?: {
+      avgHeartRateBpm?: number;
+      maxHeartRateBpm?: number;
+      hrDeviceName?: string;
+    }
+  ) {
     setLogging(true);
     try {
       const res = await fetch('/api/workout/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId: 'youth-sd', dayNumber: mod.number }),
+        body: JSON.stringify({
+          planId: 'youth-sd',
+          dayNumber: mod.number,
+          ...(hr?.avgHeartRateBpm != null
+            ? { avgHeartRateBpm: hr.avgHeartRateBpm }
+            : {}),
+          ...(hr?.maxHeartRateBpm != null
+            ? { maxHeartRateBpm: hr.maxHeartRateBpm }
+            : {}),
+          ...(hr?.hrDeviceName ? { hrDeviceName: hr.hrDeviceName } : {}),
+        }),
       });
       if (!res.ok) throw new Error('Failed to log');
       clearWorkoutSetProgress('youth-sd', mod.number);
-      toast.success('Module logged.');
+      toast.success(
+        hr?.avgHeartRateBpm != null
+          ? `Module logged · avg HR ${hr.avgHeartRateBpm}`
+          : 'Module logged.'
+      );
       setActive(null);
     } catch {
       toast.error('Could not log module');
@@ -69,9 +90,9 @@ export function SelfDefenseBrowser() {
         workout={active.workout}
         equipment={YOUTH_SD_EQUIPMENT}
         onClose={() => setActive(null)}
-        onMarkDone={() => {
+        onMarkDone={(hr) => {
           if (logging) return;
-          void markModuleDone(active);
+          void markModuleDone(active, hr);
         }}
       />
     );

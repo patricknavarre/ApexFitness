@@ -8,7 +8,18 @@ import { todayLocal } from '@/lib/local-date';
 import { RestTimer } from './RestTimer';
 import { ExerciseGuide } from './ExerciseGuide';
 import { WorkoutPrModal, type WorkoutPr } from './WorkoutPrModal';
+import {
+  WorkoutHrPanel,
+  type WorkoutHrPanelHandle,
+  type WorkoutHrStats,
+} from '@/components/workouts/WorkoutHrPanel';
 import { toast } from 'sonner';
+
+export type WorkoutHrPayload = {
+  avgHeartRateBpm?: number;
+  maxHeartRateBpm?: number;
+  hrDeviceName?: string;
+};
 
 type Props = {
   planId: string;
@@ -17,7 +28,7 @@ type Props = {
   workout: InteractiveWorkoutDay;
   equipment?: string[];
   onClose: () => void;
-  onMarkDone?: () => void;
+  onMarkDone?: (hr?: WorkoutHrPayload) => void;
 };
 
 type SetRow = { weight: string; reps: string };
@@ -106,6 +117,22 @@ export function InteractiveWorkout({
   const setRowsRef = useRef(setRows);
   setRowsRef.current = setRows;
   const sessionMaxesRef = useRef<Record<string, { weight: number; reps: number }>>({});
+  const hrPanelRef = useRef<WorkoutHrPanelHandle>(null);
+
+  function hrPayloadFromStats(stats: WorkoutHrStats | null | undefined): WorkoutHrPayload | undefined {
+    if (!stats || stats.sampleCount <= 0) return undefined;
+    return {
+      ...(stats.avgHeartRateBpm != null ? { avgHeartRateBpm: stats.avgHeartRateBpm } : {}),
+      ...(stats.maxHeartRateBpm != null ? { maxHeartRateBpm: stats.maxHeartRateBpm } : {}),
+      ...(stats.hrDeviceName ? { hrDeviceName: stats.hrDeviceName } : {}),
+    };
+  }
+
+  function completeWithHr() {
+    const hr = hrPayloadFromStats(hrPanelRef.current?.getStats());
+    hrPanelRef.current?.disconnect();
+    onMarkDone?.(hr);
+  }
 
   const phaseColors = getPhaseColors(planId);
   const colors = phaseColors[workout.phase] ?? {
@@ -294,12 +321,12 @@ export function InteractiveWorkout({
       return;
     }
 
-    onMarkDone();
+    completeWithHr();
   }, [onMarkDone, workout, planId, dayNumber]);
 
   const dismissPrModal = useCallback(() => {
     setShowPrModal(false);
-    onMarkDone?.();
+    completeWithHr();
   }, [onMarkDone]);
 
   const toggleSet = useCallback(
@@ -351,7 +378,10 @@ export function InteractiveWorkout({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              hrPanelRef.current?.disconnect();
+              onClose();
+            }}
             disabled={finishing}
             className="shrink-0 min-h-[44px] rounded-card border border-border px-3 py-2 font-sans text-xs text-muted hover:border-accent disabled:opacity-40"
           >
@@ -408,6 +438,10 @@ export function InteractiveWorkout({
           </ul>
         )}
       </header>
+
+      <div className="shrink-0 px-4 pt-3">
+        <WorkoutHrPanel ref={hrPanelRef} />
+      </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
         {workout.sections.map((section) => (

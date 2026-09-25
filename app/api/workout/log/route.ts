@@ -298,12 +298,28 @@ export async function POST(req: Request) {
     } else {
       caloriesBurned = DEFAULT_CALORIES_BURNED;
     }
+    const avgHeartRateBpm =
+      typeof rawAvgHr === 'number' && Number.isFinite(rawAvgHr) && rawAvgHr > 0
+        ? Math.round(rawAvgHr)
+        : undefined;
+    const maxHeartRateBpm =
+      typeof rawMaxHr === 'number' && Number.isFinite(rawMaxHr) && rawMaxHr > 0
+        ? Math.round(rawMaxHr)
+        : undefined;
+    const hrDeviceName =
+      typeof rawHrDevice === 'string' && rawHrDevice.trim()
+        ? rawHrDevice.trim().slice(0, 80)
+        : undefined;
+
     const doc = await WorkoutLog.create({
       userId: session.user.id,
       planId,
       dayNumber,
       caloriesBurned,
       ...(loggedAtOverride ? { loggedAt: loggedAtOverride } : {}),
+      ...(avgHeartRateBpm != null ? { avgHeartRateBpm } : {}),
+      ...(maxHeartRateBpm != null ? { maxHeartRateBpm } : {}),
+      ...(hrDeviceName ? { hrDeviceName } : {}),
     });
     return NextResponse.json({
       id: String(doc._id),
@@ -315,6 +331,9 @@ export async function POST(req: Request) {
       cardioDurationMinutes: null,
       distanceMiles: null,
       isRestDay: false,
+      avgHeartRateBpm: doc.avgHeartRateBpm ?? avgHeartRateBpm ?? null,
+      maxHeartRateBpm: doc.maxHeartRateBpm ?? maxHeartRateBpm ?? null,
+      hrDeviceName: doc.hrDeviceName ?? hrDeviceName ?? null,
     });
   } catch (e) {
     console.error('Workout log POST error:', e);

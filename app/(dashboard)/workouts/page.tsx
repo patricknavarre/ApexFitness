@@ -355,7 +355,15 @@ function PlanCard({
   recentLogs: LogEntry[];
   onGetStarted: (planId: string) => void;
   onSwitchPlan: (planId: string) => void;
-  onMarkDone: (planId: string, dayNumber: number) => void;
+  onMarkDone: (
+    planId: string,
+    dayNumber: number,
+    hr?: {
+      avgHeartRateBpm?: number;
+      maxHeartRateBpm?: number;
+      hrDeviceName?: string;
+    }
+  ) => void;
   markingDone: boolean;
   latestSetLogs: Record<string, WorkoutSetLog | undefined>;
   onSetsLogged?: () => void;
@@ -824,14 +832,32 @@ function WorkoutsPageInner() {
     }
   }
 
-  async function markDayDone(planId: string, dayNumber: number) {
+  async function markDayDone(
+    planId: string,
+    dayNumber: number,
+    hr?: {
+      avgHeartRateBpm?: number;
+      maxHeartRateBpm?: number;
+      hrDeviceName?: string;
+    }
+  ) {
     setMarkingDone(true);
     try {
       await ensureActiveForDay(planId, dayNumber);
       const res = await fetch('/api/workout/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId, dayNumber }),
+        body: JSON.stringify({
+          planId,
+          dayNumber,
+          ...(hr?.avgHeartRateBpm != null
+            ? { avgHeartRateBpm: hr.avgHeartRateBpm }
+            : {}),
+          ...(hr?.maxHeartRateBpm != null
+            ? { maxHeartRateBpm: hr.maxHeartRateBpm }
+            : {}),
+          ...(hr?.hrDeviceName ? { hrDeviceName: hr.hrDeviceName } : {}),
+        }),
       });
       if (!res.ok) throw new Error('Failed to log');
       const data = await res.json();
@@ -840,7 +866,11 @@ function WorkoutsPageInner() {
         ...prev,
       ]);
       // Stay on today's plan day until midnight — dashboard shows Completed.
-      toast.success('Workout logged.');
+      toast.success(
+        hr?.avgHeartRateBpm != null
+          ? `Workout logged · avg HR ${hr.avgHeartRateBpm}`
+          : 'Workout logged.'
+      );
     } catch {
       toast.error('Could not log workout');
     }
@@ -932,9 +962,9 @@ function WorkoutsPageInner() {
             })()
           }
           onClose={() => setWorkoutMode(null)}
-          onMarkDone={() => {
+          onMarkDone={(hr) => {
             clearWorkoutSetProgress(workoutMode.planId, workoutMode.dayNumber);
-            markDayDone(workoutMode.planId, workoutMode.dayNumber);
+            void markDayDone(workoutMode.planId, workoutMode.dayNumber, hr);
             setWorkoutMode(null);
           }}
         />
