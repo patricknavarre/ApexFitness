@@ -114,6 +114,7 @@ export async function POST(req: Request) {
       workoutCompleted,
       pausedSeconds,
       powerSeries,
+      hrSeries,
     } = body as {
       durationSeconds?: number;
       avgPowerWatts?: number;
@@ -142,6 +143,7 @@ export async function POST(req: Request) {
       workoutCompleted?: boolean;
       pausedSeconds?: number;
       powerSeries?: { t?: number; w?: number }[];
+      hrSeries?: { t?: number; bpm?: number }[];
     };
 
     if (typeof durationSeconds !== 'number' || durationSeconds < 15) {
@@ -192,7 +194,7 @@ export async function POST(req: Request) {
           }))
       : [];
 
-    const MAX_POWER_POINTS = 3600;
+    const MAX_SERIES_POINTS = 3600;
     let powerSeriesDocs: { t: number; w: number }[] = [];
     if (Array.isArray(powerSeries) && powerSeries.length > 0) {
       const cleaned = powerSeries
@@ -204,10 +206,10 @@ export async function POST(req: Request) {
             Number.isFinite(p.w)
         )
         .map((p) => ({ t: Math.max(0, Math.round(p.t)), w: Math.round(p.w) }));
-      if (cleaned.length <= MAX_POWER_POINTS) {
+      if (cleaned.length <= MAX_SERIES_POINTS) {
         powerSeriesDocs = cleaned;
       } else {
-        const step = Math.ceil(cleaned.length / MAX_POWER_POINTS);
+        const step = Math.ceil(cleaned.length / MAX_SERIES_POINTS);
         for (let i = 0; i < cleaned.length; i += step) {
           powerSeriesDocs.push(cleaned[i]!);
         }
@@ -215,7 +217,37 @@ export async function POST(req: Request) {
         if (powerSeriesDocs[powerSeriesDocs.length - 1]?.t !== last.t) {
           powerSeriesDocs.push(last);
         }
-        powerSeriesDocs = powerSeriesDocs.slice(0, MAX_POWER_POINTS);
+        powerSeriesDocs = powerSeriesDocs.slice(0, MAX_SERIES_POINTS);
+      }
+    }
+
+    let hrSeriesDocs: { t: number; bpm: number }[] = [];
+    if (Array.isArray(hrSeries) && hrSeries.length > 0) {
+      const cleaned = hrSeries
+        .filter(
+          (p): p is { t: number; bpm: number } =>
+            typeof p?.t === 'number' &&
+            Number.isFinite(p.t) &&
+            typeof p?.bpm === 'number' &&
+            Number.isFinite(p.bpm) &&
+            p.bpm > 0
+        )
+        .map((p) => ({
+          t: Math.max(0, Math.round(p.t)),
+          bpm: Math.round(p.bpm),
+        }));
+      if (cleaned.length <= MAX_SERIES_POINTS) {
+        hrSeriesDocs = cleaned;
+      } else {
+        const step = Math.ceil(cleaned.length / MAX_SERIES_POINTS);
+        for (let i = 0; i < cleaned.length; i += step) {
+          hrSeriesDocs.push(cleaned[i]!);
+        }
+        const last = cleaned[cleaned.length - 1]!;
+        if (hrSeriesDocs[hrSeriesDocs.length - 1]?.t !== last.t) {
+          hrSeriesDocs.push(last);
+        }
+        hrSeriesDocs = hrSeriesDocs.slice(0, MAX_SERIES_POINTS);
       }
     }
 
@@ -330,6 +362,7 @@ export async function POST(req: Request) {
       laps: lapDocs,
       pausedSeconds: safePausedSec,
       powerSeries: powerSeriesDocs.length > 0 ? powerSeriesDocs : undefined,
+      hrSeries: hrSeriesDocs.length > 0 ? hrSeriesDocs : undefined,
     });
 
     const xpAgg = await WorkoutLog.aggregate([

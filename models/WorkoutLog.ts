@@ -53,6 +53,13 @@ const WorkoutLogSchema = new Schema({
       w: Number,
     },
   ],
+  /** ~1 Hz heart-rate samples for post-ride chart (capped server-side). */
+  hrSeries: [
+    {
+      t: Number,
+      bpm: Number,
+    },
+  ],
   laps: [
     {
       index: Number,

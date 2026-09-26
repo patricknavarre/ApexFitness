@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { WORKOUT_PLANS } from '@/lib/workout-plans';
 import { CARDIO_OPTIONS, getCardioLabel } from '@/lib/cardio';
 import { MomentumCard } from '@/components/progress/MomentumCard';
+import { RecentRides } from '@/components/progress/RecentRides';
 import { evaluateRestDayMacros, type RestMacroStatus } from '@/lib/rest-day-macros';
 import { todayLocal } from '@/lib/local-date';
 import { syncActivePlanToDay } from '@/lib/sync-active-plan';
@@ -663,6 +664,8 @@ export default function ProgressPage() {
           </div>
         )}
       </section>
+
+      <RecentRides />
 
       <section>
         <button

@@ -91,14 +91,14 @@ function formatDuration(sec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-/** Cap saved power series (~1 Hz → max ~1h; longer rides downsample). */
-function capPowerSeries(
-  series: { t: number; w: number }[],
+/** Cap saved time series (~1 Hz → max ~1h; longer rides downsample). */
+function capTimeSeries<T extends { t: number }>(
+  series: T[],
   maxPoints = 3600
-): { t: number; w: number }[] {
+): T[] {
   if (series.length <= maxPoints) return series;
   const step = Math.ceil(series.length / maxPoints);
-  const out: { t: number; w: number }[] = [];
+  const out: T[] = [];
   for (let i = 0; i < series.length; i += step) {
     out.push(series[i]!);
   }
@@ -255,6 +255,8 @@ export function RideSession() {
   const pauseStartedAtRef = useRef<number | null>(null);
   /** Full 1 Hz series for save (sparkline state is windowed). */
   const powerSeriesFullRef = useRef<{ t: number; w: number }[]>([]);
+  const hrSeriesFullRef = useRef<{ t: number; bpm: number }[]>([]);
+  const lastHrChartSecRef = useRef(-1);
   const ftpRef = useRef(200);
   const maxHrSettingRef = useRef(184);
   const lastSentGradeRef = useRef<number | null>(null);
@@ -637,6 +639,8 @@ export function RideSession() {
     pausedAccumMsRef.current = 0;
     pauseStartedAtRef.current = null;
     powerSeriesFullRef.current = [];
+    hrSeriesFullRef.current = [];
+    lastHrChartSecRef.current = -1;
     setPaused(false);
     setElapsedSec(0);
     setDistanceM(0);
@@ -684,6 +688,14 @@ export function RideSession() {
     if (bpm > maxHrRef.current) maxHrRef.current = bpm;
     lapHrSumRef.current += bpm;
     lapHrCountRef.current += 1;
+
+    if (bpm > 0) {
+      const elapsed = readRideElapsedSec();
+      if (elapsed !== lastHrChartSecRef.current) {
+        lastHrChartSecRef.current = elapsed;
+        hrSeriesFullRef.current.push({ t: elapsed, bpm: Math.round(bpm) });
+      }
+    }
 
     const z = hrZone(bpm, maxHrSettingRef.current);
     if (lastZoneRef.current != null && z > lastZoneRef.current) {
@@ -1051,7 +1063,8 @@ export function RideSession() {
       np != null
         ? trainingStressScore(durationSeconds, np, ftpRef.current)
         : null;
-    const powerSeriesPayload = capPowerSeries(powerSeriesFullRef.current);
+    const powerSeriesPayload = capTimeSeries(powerSeriesFullRef.current);
+    const hrSeriesPayload = capTimeSeries(hrSeriesFullRef.current);
 
     try {
       if (connectionRef.current?.canControl) {
@@ -1068,6 +1081,7 @@ export function RideSession() {
           durationSeconds,
           pausedSeconds: pausedSeconds > 0 ? pausedSeconds : undefined,
           powerSeries: powerSeriesPayload.length > 0 ? powerSeriesPayload : undefined,
+          hrSeries: hrSeriesPayload.length > 0 ? hrSeriesPayload : undefined,
           avgPowerWatts: avgPower,
           maxPowerWatts: maxPowerRef.current || undefined,
           normalizedPowerWatts: np ?? undefined,

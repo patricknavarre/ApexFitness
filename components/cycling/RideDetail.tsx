@@ -13,8 +13,10 @@ import {
   YAxis,
 } from 'recharts';
 import { formatMilesFromMeters } from '@/lib/ride/format';
+import { RideTelemetryCharts } from '@/components/cycling/RideTelemetryCharts';
 
 type PowerPoint = { t: number; w: number };
+type HrPoint = { t: number; bpm: number };
 
 type Lap = {
   index: number | null;
@@ -41,11 +43,13 @@ type RideDetailData = {
   maxHeartRateBpm: number | null;
   distanceMeters: number | null;
   elevationGainMeters: number | null;
+  courseId: string | null;
   courseName: string | null;
   courseCompleted: boolean;
   workoutName: string | null;
   workoutCompleted: boolean;
   powerSeries: PowerPoint[];
+  hrSeries: HrPoint[];
   laps: Lap[];
 };
 
@@ -283,6 +287,14 @@ export function RideDetail({ rideId }: { rideId: string }) {
             </ResponsiveContainer>
           </div>
         )}
+      </section>
+
+      <section className="space-y-3">
+        <RideTelemetryCharts
+          hrSeries={ride.hrSeries ?? []}
+          courseId={ride.courseId}
+          distanceMeters={ride.distanceMeters}
+        />
       </section>
 
       {ride.laps.length > 0 ? (

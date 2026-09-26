@@ -48,6 +48,7 @@ export async function GET(_req: Request, { params }: Params) {
       durationMinutes != null ? Math.round(Number(durationMinutes) * 60) : null;
 
     const powerRaw = Array.isArray(log.powerSeries) ? log.powerSeries : [];
+    const hrRaw = Array.isArray(log.hrSeries) ? log.hrSeries : [];
     const lapsRaw = Array.isArray(log.laps) ? log.laps : [];
 
     return NextResponse.json({
@@ -108,6 +109,10 @@ export async function GET(_req: Request, { params }: Params) {
       powerSeries: powerRaw.map((p) => {
         const pt = p as { t?: number; w?: number };
         return { t: Number(pt.t) || 0, w: Number(pt.w) || 0 };
+      }),
+      hrSeries: hrRaw.map((p) => {
+        const pt = p as { t?: number; bpm?: number };
+        return { t: Number(pt.t) || 0, bpm: Number(pt.bpm) || 0 };
       }),
       laps: lapsRaw.map((lap) => {
         const l = lap as {
