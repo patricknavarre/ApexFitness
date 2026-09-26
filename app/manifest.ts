@@ -6,7 +6,11 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'APEX',
     description: 'Your body. Your data. Your potential.',
     start_url: '/dashboard',
+    scope: '/',
+    id: '/',
     display: 'standalone',
+    display_override: ['standalone', 'browser'],
+    orientation: 'portrait-primary',
     background_color: '#12140f',
     theme_color: '#12140f',
     icons: [

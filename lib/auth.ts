@@ -2,16 +2,14 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import bcrypt from 'bcryptjs';
-import { authConfig } from '@/lib/auth.config';
-
-const secret =
-  process.env.AUTH_SECRET ??
-  process.env.NEXTAUTH_SECRET ??
-  (process.env.NODE_ENV === 'development' ? 'dev-secret-replace-in-production' : undefined);
+import { authConfig, resolveAuthSecret } from '@/lib/auth.config';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  secret,
+  secret: resolveAuthSecret(),
+  ...(process.env.AUTH_URL || process.env.NEXTAUTH_URL
+    ? { url: process.env.AUTH_URL ?? process.env.NEXTAUTH_URL }
+    : {}),
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID ?? '',
