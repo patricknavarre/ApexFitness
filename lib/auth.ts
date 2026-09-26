@@ -2,13 +2,26 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import bcrypt from 'bcryptjs';
-import { authConfig, resolveAuthSecret } from '@/lib/auth.config';
+
+/**
+ * Summer-proven Auth.js setup.
+ * Do not customize cookie names (JWT salt = cookie name) — Auth.js defaults
+ * based on HTTPS are what kept home-screen logins alive for months.
+ */
+const secret =
+  process.env.NEXTAUTH_SECRET ??
+  process.env.AUTH_SECRET ??
+  (process.env.NODE_ENV === 'development' ? 'dev-secret-replace-in-production' : undefined);
+
+/** 90 days — Auth.js applies this as cookie Expires/Max-Age on sign-in. */
+const SESSION_MAX_AGE = 90 * 24 * 60 * 60;
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  ...authConfig,
-  secret: resolveAuthSecret(),
-  ...(process.env.AUTH_URL || process.env.NEXTAUTH_URL
-    ? { url: process.env.AUTH_URL ?? process.env.NEXTAUTH_URL }
+  secret,
+  trustHost: true,
+  ...(process.env.NEXTAUTH_URL && { url: process.env.NEXTAUTH_URL }),
+  ...(process.env.AUTH_URL && !process.env.NEXTAUTH_URL
+    ? { url: process.env.AUTH_URL }
     : {}),
   providers: [
     Google({
@@ -42,10 +55,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    ...authConfig.callbacks,
     async jwt({ token, user, account }) {
       if (user) {
-        // Credentials: Mongo id. Google: resolve Mongo user so session stays stable.
         if (account?.provider === 'google' && user.email) {
           const { connectDB } = await import('./mongodb');
           const User = (await import('@/models/User')).default;
@@ -83,5 +94,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return true;
     },
+  },
+  pages: { signIn: '/auth/login', error: '/auth/login' },
+  session: {
+    strategy: 'jwt',
+    maxAge: SESSION_MAX_AGE,
+  },
+  jwt: {
+    maxAge: SESSION_MAX_AGE,
   },
 });
