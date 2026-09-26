@@ -22,6 +22,9 @@ type Props = {
   hrBpm: number | null;
   hrZone: HrZone | null;
   riding: boolean;
+  paused?: boolean;
+  onPause?: () => void;
+  onResume?: () => void;
   onEndRide?: () => void;
 };
 
@@ -41,6 +44,9 @@ export function RideWorldPanel({
   hrBpm,
   hrZone,
   riding,
+  paused = false,
+  onPause,
+  onResume,
   onEndRide,
 }: Props) {
   const [mode, setMode] = useState<WorldPanelMode>('docked');
@@ -196,6 +202,24 @@ export function RideWorldPanel({
             </span>
           </div>
           <div className="ride-world-panel__chrome-actions">
+            {expanded && riding && !paused && onPause ? (
+              <button
+                type="button"
+                className="ride-world-panel__btn font-sans"
+                onClick={onPause}
+              >
+                Pause
+              </button>
+            ) : null}
+            {expanded && riding && paused && onResume ? (
+              <button
+                type="button"
+                className="ride-world-panel__btn font-sans"
+                onClick={onResume}
+              >
+                Resume
+              </button>
+            ) : null}
             {expanded && riding && onEndRide ? (
               <button
                 type="button"

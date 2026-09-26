@@ -44,6 +44,15 @@ const WorkoutLogSchema = new Schema({
   elevationGainMeters: Number,
   workoutId: String,
   workoutCompleted: { type: Boolean, default: false },
+  /** Wall-clock seconds spent paused (not counted in duration). */
+  pausedSeconds: Number,
+  /** ~1 Hz power samples for post-ride chart (capped server-side). */
+  powerSeries: [
+    {
+      t: Number,
+      w: Number,
+    },
+  ],
   laps: [
     {
       index: Number,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import { isWebBluetoothSupported, connectTrainer } from '@/lib/ble/trainer-client';
 import { startMockHeartRate, startMockTrainer } from '@/lib/ble/mock-trainer';
@@ -88,6 +89,22 @@ function formatDuration(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+/** Cap saved power series (~1 Hz → max ~1h; longer rides downsample). */
+function capPowerSeries(
+  series: { t: number; w: number }[],
+  maxPoints = 3600
+): { t: number; w: number }[] {
+  if (series.length <= maxPoints) return series;
+  const step = Math.ceil(series.length / maxPoints);
+  const out: { t: number; w: number }[] = [];
+  for (let i = 0; i < series.length; i += step) {
+    out.push(series[i]!);
+  }
+  const last = series[series.length - 1]!;
+  if (out[out.length - 1]?.t !== last.t) out.push(last);
+  return out.slice(0, maxPoints);
 }
 
 function leveledDetail(level: ReturnType<typeof levelFromXp>): string {
@@ -180,6 +197,7 @@ export function RideSession() {
   const [courseFinished, setCourseFinished] = useState(false);
   const [workoutFinished, setWorkoutFinished] = useState(false);
   const [trainerGradeLive, setTrainerGradeLive] = useState(false);
+  const [paused, setPaused] = useState(false);
 
   const ridesCacheRef = useRef<
     {
@@ -231,6 +249,12 @@ export function RideSession() {
   const lapHrCountRef = useRef(0);
   const lapStartDistRef = useRef(0);
   const ridingRef = useRef(false);
+  const pausedRef = useRef(false);
+  /** Wall-clock pause total (ms) for detail page display. */
+  const pausedAccumMsRef = useRef(0);
+  const pauseStartedAtRef = useRef<number | null>(null);
+  /** Full 1 Hz series for save (sparkline state is windowed). */
+  const powerSeriesFullRef = useRef<{ t: number; w: number }[]>([]);
   const ftpRef = useRef(200);
   const maxHrSettingRef = useRef(184);
   const lastSentGradeRef = useRef<number | null>(null);
@@ -538,6 +562,9 @@ export function RideSession() {
   syncSessionRef.current = syncSessionFromElapsed;
 
   function readRideElapsedSec(): number {
+    if (pausedRef.current) {
+      return Math.floor(rideElapsedMsRef.current / 1000);
+    }
     const now = performance.now();
     if (lastPerfTickRef.current != null) {
       const dt = now - lastPerfTickRef.current;
@@ -606,6 +633,11 @@ export function RideSession() {
     lapHrCountRef.current = 0;
     lapStartDistRef.current = 0;
     ridingRef.current = false;
+    pausedRef.current = false;
+    pausedAccumMsRef.current = 0;
+    pauseStartedAtRef.current = null;
+    powerSeriesFullRef.current = [];
+    setPaused(false);
     setElapsedSec(0);
     setDistanceM(0);
     setPowerSeries([]);
@@ -646,7 +678,7 @@ export function RideSession() {
   const onHr = useCallback((bpm: number) => {
     setHrBpm(bpm);
     setLive((prev) => ({ ...prev, heartRateBpm: bpm }));
-    if (!ridingRef.current) return;
+    if (!ridingRef.current || pausedRef.current) return;
     hrSumRef.current += bpm;
     hrCountRef.current += 1;
     if (bpm > maxHrRef.current) maxHrRef.current = bpm;
@@ -677,7 +709,7 @@ export function RideSession() {
   const onMetrics = useCallback((sample: IndoorBikeSample) => {
     setLive((prev) => ({ ...prev, ...sample }));
 
-    if (!ridingRef.current) return;
+    if (!ridingRef.current || pausedRef.current) return;
 
     const elapsed = ridingRef.current ? readRideElapsedSec() : 0;
 
@@ -741,8 +773,10 @@ export function RideSession() {
       lapPowerCountRef.current += 1;
       if (elapsed !== lastPowerChartSecRef.current) {
         lastPowerChartSecRef.current = elapsed;
+        const point = { t: elapsed, w: sample.powerWatts! };
+        powerSeriesFullRef.current.push(point);
         setPowerSeries((prev) => {
-          const next = [...prev, { t: elapsed, w: sample.powerWatts! }];
+          const next = [...prev, point];
           return next.length > 240 ? next.slice(-240) : next;
         });
       }
@@ -853,6 +887,8 @@ export function RideSession() {
     rideElapsedMsRef.current = 0;
     lastPerfTickRef.current = performance.now();
     ridingRef.current = true;
+    pausedRef.current = false;
+    setPaused(false);
     setPhase('riding');
     if (workoutId) {
       setControlMode('workout');
@@ -865,7 +901,7 @@ export function RideSession() {
     }
     stopTimer();
     timerRef.current = window.setInterval(() => {
-      if (!ridingRef.current) return;
+      if (!ridingRef.current || pausedRef.current) return;
       const e = readRideElapsedSec();
       setElapsedSec(e);
       recomputeLiveStats(e);
@@ -891,8 +927,43 @@ export function RideSession() {
     }
   }
 
+  function handlePause() {
+    if (phase !== 'riding' || pausedRef.current) return;
+    // Flush any pending moving-time tick, then freeze.
+    readRideElapsedSec();
+    lastPerfTickRef.current = null;
+    lastTickRef.current = null;
+    pausedRef.current = true;
+    pauseStartedAtRef.current = performance.now();
+    setPaused(true);
+    if (connectionRef.current?.canControl) {
+      void connectionRef.current.resetControl().catch(() => undefined);
+    }
+    toast.message('Paused · moving time frozen');
+  }
+
+  async function handleResume() {
+    if (phase !== 'riding' || !pausedRef.current) return;
+    if (pauseStartedAtRef.current != null) {
+      pausedAccumMsRef.current += performance.now() - pauseStartedAtRef.current;
+      pauseStartedAtRef.current = null;
+    }
+    pausedRef.current = false;
+    setPaused(false);
+    lastPerfTickRef.current = performance.now();
+    lastTickRef.current = null;
+    if (connectionRef.current?.canControl) {
+      try {
+        await connectionRef.current.ensureReady();
+        syncSessionRef.current(readRideElapsedSec(), distanceRef.current);
+      } catch {
+        /* re-apply on next metrics tick */
+      }
+    }
+  }
+
   function handleLap() {
-    if (phase !== 'riding' || !ridingRef.current) return;
+    if (phase !== 'riding' || !ridingRef.current || pausedRef.current) return;
     const elapsed = readRideElapsedSec();
     const durationSec = Math.max(1, elapsed - lapStartSecRef.current);
     const dist = Math.max(0, distanceRef.current - lapStartDistRef.current);
@@ -926,9 +997,17 @@ export function RideSession() {
   }
 
   async function handleEndRide() {
+    // If ending while paused, fold open pause into total.
+    if (pausedRef.current && pauseStartedAtRef.current != null) {
+      pausedAccumMsRef.current += performance.now() - pauseStartedAtRef.current;
+      pauseStartedAtRef.current = null;
+    }
+    pausedRef.current = false;
+    setPaused(false);
     stopTimer();
     ridingRef.current = false;
     const durationSeconds = Math.max(0, readRideElapsedSec() || elapsedSec);
+    const pausedSeconds = Math.max(0, Math.round(pausedAccumMsRef.current / 1000));
 
     if (durationSeconds < 15) {
       toast.error('Ride a bit longer (15s+) before saving');
@@ -972,6 +1051,7 @@ export function RideSession() {
       np != null
         ? trainingStressScore(durationSeconds, np, ftpRef.current)
         : null;
+    const powerSeriesPayload = capPowerSeries(powerSeriesFullRef.current);
 
     try {
       if (connectionRef.current?.canControl) {
@@ -986,6 +1066,8 @@ export function RideSession() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           durationSeconds,
+          pausedSeconds: pausedSeconds > 0 ? pausedSeconds : undefined,
+          powerSeries: powerSeriesPayload.length > 0 ? powerSeriesPayload : undefined,
           avgPowerWatts: avgPower,
           maxPowerWatts: maxPowerRef.current || undefined,
           normalizedPowerWatts: np ?? undefined,
@@ -1376,10 +1458,13 @@ export function RideSession() {
             hrBpm={displayHr}
             hrZone={zone}
             riding={phase === 'riding'}
+            paused={paused}
+            onPause={handlePause}
+            onResume={() => void handleResume()}
             onEndRide={() => void handleEndRide()}
           >
             <RideWorld
-              active={phase === 'riding'}
+              active={phase === 'riding' && !paused}
               speedKmh={speed}
               cadenceRpm={cadence}
               powerWatts={power}
@@ -1395,10 +1480,17 @@ export function RideSession() {
               }
               hrBpm={displayHr}
               hrZone={zone}
-              surge={surge}
+              surge={surge && !paused}
               speedUnit={speedUnit}
               onToggleSpeedUnit={handleToggleSpeedUnit}
             />
+            {paused ? (
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-bg/55 pointer-events-none">
+                <p className="font-display text-lg md:text-xl text-accent uppercase tracking-wide">
+                  Paused · moving time frozen
+                </p>
+              </div>
+            ) : null}
             <RideEventToasts events={hudEvents} onDismiss={dismissEvent} />
             <RideMomentOverlay moment={rideMoment} onDismiss={dismissMoment} />
             {courseId && getRideCourse(courseId) && !workoutId ? (
@@ -1447,10 +1539,28 @@ export function RideSession() {
           )}
           {phase === 'riding' && (
             <>
+              {paused ? (
+                <button
+                  type="button"
+                  onClick={() => void handleResume()}
+                  className="font-sans text-sm px-4 py-2 rounded-card border border-border text-text hover:bg-bg2"
+                >
+                  Resume
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handlePause}
+                  className="font-sans text-sm px-4 py-2 rounded-card border border-border text-text hover:bg-bg2"
+                >
+                  Pause
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleLap}
-                className="font-sans text-sm px-4 py-2 rounded-card border border-border text-text hover:bg-bg2"
+                disabled={paused}
+                className="font-sans text-sm px-4 py-2 rounded-card border border-border text-text hover:bg-bg2 disabled:opacity-40 disabled:pointer-events-none"
               >
                 Lap
               </button>
@@ -1674,20 +1784,25 @@ export function RideSession() {
                 key={r.id}
                 className="rounded-card border border-border bg-card px-4 py-3 font-sans text-sm text-muted flex flex-wrap items-center gap-x-3 gap-y-1"
               >
-                <span>{r.durationMinutes ?? '—'} min</span>
-                {r.distanceMeters != null && r.distanceMeters > 0 && (
-                  <span>{formatMilesFromMeters(r.distanceMeters)}</span>
-                )}
-                {r.avgPowerWatts != null && <span>avg {r.avgPowerWatts} W</span>}
-                {r.normalizedPowerWatts != null && <span>NP {r.normalizedPowerWatts}</span>}
-                {r.trainingStressScore != null && <span>TSS {r.trainingStressScore}</span>}
-                {r.avgHeartRateBpm != null && <span>HR {r.avgHeartRateBpm}</span>}
-                {r.workKj != null && <span>{r.workKj} kJ</span>}
-                {r.lapCount != null && r.lapCount > 0 && <span>{r.lapCount} laps</span>}
-                {r.caloriesBurned != null && <span>{r.caloriesBurned} kcal</span>}
-                {(r.durationMinutes ?? 0) >= 120 && (
-                  <span className="text-accent2">suspect long</span>
-                )}
+                <Link
+                  href={`/cycling/${r.id}`}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted hover:text-text min-w-0"
+                >
+                  <span>{r.durationMinutes ?? '—'} min</span>
+                  {r.distanceMeters != null && r.distanceMeters > 0 && (
+                    <span>{formatMilesFromMeters(r.distanceMeters)}</span>
+                  )}
+                  {r.avgPowerWatts != null && <span>avg {r.avgPowerWatts} W</span>}
+                  {r.normalizedPowerWatts != null && <span>NP {r.normalizedPowerWatts}</span>}
+                  {r.trainingStressScore != null && <span>TSS {r.trainingStressScore}</span>}
+                  {r.avgHeartRateBpm != null && <span>HR {r.avgHeartRateBpm}</span>}
+                  {r.workKj != null && <span>{r.workKj} kJ</span>}
+                  {r.lapCount != null && r.lapCount > 0 && <span>{r.lapCount} laps</span>}
+                  {r.caloriesBurned != null && <span>{r.caloriesBurned} kcal</span>}
+                  {(r.durationMinutes ?? 0) >= 120 && (
+                    <span className="text-accent2">suspect long</span>
+                  )}
+                </Link>
                 <button
                   type="button"
                   onClick={() => void handleDeleteRide(r.id)}

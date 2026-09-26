@@ -112,6 +112,8 @@ export async function POST(req: Request) {
       elevationGainMeters,
       workoutId,
       workoutCompleted,
+      pausedSeconds,
+      powerSeries,
     } = body as {
       durationSeconds?: number;
       avgPowerWatts?: number;
@@ -138,6 +140,8 @@ export async function POST(req: Request) {
       elevationGainMeters?: number;
       workoutId?: string;
       workoutCompleted?: boolean;
+      pausedSeconds?: number;
+      powerSeries?: { t?: number; w?: number }[];
     };
 
     if (typeof durationSeconds !== 'number' || durationSeconds < 15) {
@@ -187,6 +191,38 @@ export async function POST(req: Request) {
             avgHeartRateBpm: numOrUndef(lap.avgHeartRateBpm),
           }))
       : [];
+
+    const MAX_POWER_POINTS = 3600;
+    let powerSeriesDocs: { t: number; w: number }[] = [];
+    if (Array.isArray(powerSeries) && powerSeries.length > 0) {
+      const cleaned = powerSeries
+        .filter(
+          (p): p is { t: number; w: number } =>
+            typeof p?.t === 'number' &&
+            Number.isFinite(p.t) &&
+            typeof p?.w === 'number' &&
+            Number.isFinite(p.w)
+        )
+        .map((p) => ({ t: Math.max(0, Math.round(p.t)), w: Math.round(p.w) }));
+      if (cleaned.length <= MAX_POWER_POINTS) {
+        powerSeriesDocs = cleaned;
+      } else {
+        const step = Math.ceil(cleaned.length / MAX_POWER_POINTS);
+        for (let i = 0; i < cleaned.length; i += step) {
+          powerSeriesDocs.push(cleaned[i]!);
+        }
+        const last = cleaned[cleaned.length - 1]!;
+        if (powerSeriesDocs[powerSeriesDocs.length - 1]?.t !== last.t) {
+          powerSeriesDocs.push(last);
+        }
+        powerSeriesDocs = powerSeriesDocs.slice(0, MAX_POWER_POINTS);
+      }
+    }
+
+    const safePausedSec =
+      typeof pausedSeconds === 'number' && Number.isFinite(pausedSeconds)
+        ? Math.min(Math.max(0, Math.round(pausedSeconds)), MAX_RIDE_SECONDS)
+        : undefined;
 
     await connectDB();
     const priorCount = await WorkoutLog.countDocuments({
@@ -292,6 +328,8 @@ export async function POST(req: Request) {
           : undefined,
       workoutCompleted: finishedWorkout,
       laps: lapDocs,
+      pausedSeconds: safePausedSec,
+      powerSeries: powerSeriesDocs.length > 0 ? powerSeriesDocs : undefined,
     });
 
     const xpAgg = await WorkoutLog.aggregate([
