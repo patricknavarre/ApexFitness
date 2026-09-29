@@ -92,7 +92,8 @@ export function RideWorld({
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
-    let sceneryMoving = false;
+    let sceneryAcc = 0;
+    let lastSceneryRate = -1;
 
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
@@ -110,19 +111,22 @@ export function RideWorld({
       if (Math.abs(vel) < 0.05) vel = 0;
       velocityRef.current = vel;
 
-      // Scenery locks to the same eased road velocity (one motion, two layers).
+      // Scenery locks to eased road velocity — but throttle WAAPI updates (~8 Hz).
+      // Pushing ~500 SVG animation rates every frame flashes/glitches the scene.
+      sceneryAcc += dt;
       const sceneryRate = sceneryRateFromRoadVelocity(vel);
-      if (sceneryRate < 0.05) {
-        if (sceneryMoving) {
-          sceneryMoving = false;
-          sceneryRef.current?.setMoving(false);
-        }
-      } else {
-        if (!sceneryMoving) {
-          sceneryMoving = true;
-          sceneryRef.current?.setMoving(true);
-        }
+      const rateDelta = Math.abs(sceneryRate - lastSceneryRate);
+      const stopping = sceneryRate < 0.04;
+      if (
+        rateDelta >= 0.04 &&
+        (stopping || lastSceneryRate < 0 || sceneryAcc >= 0.12)
+      ) {
+        sceneryAcc = 0;
+        lastSceneryRate = sceneryRate;
+        // setPlaybackRate owns freeze hysteresis + rate; avoid setMoving thrash.
         sceneryRef.current?.setPlaybackRate(sceneryRate);
+      } else if (sceneryAcc >= 0.12) {
+        sceneryAcc = 0;
       }
 
       offsetRef.current += vel * dt;

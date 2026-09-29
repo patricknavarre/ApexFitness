@@ -1,10 +1,16 @@
 /**
  * Scenery playback: freeze via CSS, speed via updatePlaybackRate.
  * Rate is driven from the same eased road velocity so layers stay locked.
- * Only applies when the rate actually changes (avoids mid-ride flash).
+ * Pause/resume uses hysteresis; rate updates no-op unless meaningfully changed
+ * (updating ~500 SVG animations every frame flashes the whole scene).
  */
 
-const RATE_EPSILON = 0.04;
+/** Freeze when rate drops below this (must be below RESUME_ABOVE). */
+const PAUSE_BELOW = 0.04;
+/** Unfreeze only after rate rises above this (hysteresis vs BLE/ease jitter). */
+const RESUME_ABOVE = 0.08;
+/** Ignore tiny rate jitter so we do not thrash Web Animations. */
+const RATE_EPSILON = 0.05;
 
 export type SceneryPlaybackState = {
   frozen: boolean;
@@ -57,21 +63,33 @@ export function setSceneryFrozen(
   });
 }
 
-/** While unfrozen, set playback rate from the shared road-velocity factor. */
+/**
+ * Desired scenery rate from road velocity (0 = stop).
+ * Applies freeze hysteresis, then updatePlaybackRate only on real changes.
+ */
 export function setSceneryRate(
   root: HTMLElement,
   rate: number,
   state: SceneryPlaybackState
 ): void {
-  if (state.frozen) return;
   const next = Math.max(0, rate);
+
+  if (state.frozen) {
+    if (next < RESUME_ABOVE) return;
+    setSceneryFrozen(root, false, state);
+  } else if (next < PAUSE_BELOW) {
+    setSceneryFrozen(root, true, state);
+    return;
+  }
+
+  if (state.frozen) return;
   if (Math.abs(next - state.appliedRate) < RATE_EPSILON) return;
   state.appliedRate = next;
 
   const animations = ensureAnimations(root, state);
   animations.forEach((a) => {
     try {
-      a.updatePlaybackRate(Math.max(0.05, next));
+      a.updatePlaybackRate(Math.max(PAUSE_BELOW, next));
     } catch {
       /* ignore */
     }
