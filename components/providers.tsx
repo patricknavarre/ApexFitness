@@ -1,6 +1,7 @@
 'use client';
 
 import { SessionProvider } from 'next-auth/react';
+import { PwaSessionKeepalive } from '@/components/auth/PwaSessionKeepalive';
 
 /**
  * Keep SessionProvider minimal — aggressive refetch + /api/auth/session probing
@@ -8,5 +9,10 @@ import { SessionProvider } from 'next-auth/react';
  * recent auth tweaks), which logged PWA users out on every cold start.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>;
+  return (
+    <SessionProvider>
+      <PwaSessionKeepalive />
+      {children}
+    </SessionProvider>
+  );
 }

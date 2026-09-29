@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { signIn, getSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { PWA_SESSION_STORAGE_KEY } from '@/lib/pwa-session';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -13,6 +14,18 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const registered = searchParams.get('registered');
   const sessionRedirect = searchParams.get('session') === 'redirect';
+  const [restoring, setRestoring] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (!window.localStorage.getItem(PWA_SESSION_STORAGE_KEY)) return;
+    } catch {
+      return;
+    }
+    setRestoring(true);
+    const timer = window.setTimeout(() => setRestoring(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,6 +45,17 @@ function LoginForm() {
       }
       const session = await getSession();
       if (session?.user) {
+        try {
+          const tokenRes = await fetch('/api/auth/pwa-token', { credentials: 'include' });
+          if (tokenRes.ok) {
+            const body = (await tokenRes.json()) as { token?: string };
+            if (body.token) {
+              window.localStorage.setItem(PWA_SESSION_STORAGE_KEY, body.token);
+            }
+          }
+        } catch {
+          /* backup is optional; the dashboard keepalive retries */
+        }
         window.location.href = res?.url || '/dashboard';
         return;
       }
@@ -47,7 +71,12 @@ function LoginForm() {
   return (
     <main className="min-h-screen flex items-center justify-center px-4 relative z-10">
       <div className="w-full max-w-md space-y-4">
-        {sessionRedirect && (
+        {restoring && (
+          <div className="bg-card border border-border rounded-card p-4">
+            <p className="font-sans text-sm text-text">Restoring your session…</p>
+          </div>
+        )}
+        {sessionRedirect && !restoring && (
           <div className="bg-accent2/20 border border-accent2 rounded-card p-4">
             <p className="font-sans text-accent2 text-sm font-medium mb-1">Session could not be verified</p>
             <p className="font-sans text-accent2/90 text-sm">

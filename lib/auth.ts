@@ -2,19 +2,18 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import bcrypt from 'bcryptjs';
+import {
+  SESSION_MAX_AGE,
+  authSecret,
+  sessionCookieName,
+  sessionCookieOptions,
+} from '@/lib/auth-cookie';
 
 /**
- * Summer-proven Auth.js setup.
- * Do not customize cookie names (JWT salt = cookie name) — Auth.js defaults
- * based on HTTPS are what kept home-screen logins alive for months.
+ * Cookie *name* stays the Auth.js default (it is the JWT salt).
+ * Options are persistent + SameSite=None so iOS home-screen launches send it.
  */
-const secret =
-  process.env.NEXTAUTH_SECRET ??
-  process.env.AUTH_SECRET ??
-  (process.env.NODE_ENV === 'development' ? 'dev-secret-replace-in-production' : undefined);
-
-/** 90 days — Auth.js applies this as cookie Expires/Max-Age on sign-in. */
-const SESSION_MAX_AGE = 90 * 24 * 60 * 60;
+const secret = authSecret();
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret,
@@ -102,5 +101,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   jwt: {
     maxAge: SESSION_MAX_AGE,
+  },
+  cookies: {
+    sessionToken: {
+      name: sessionCookieName(),
+      options: sessionCookieOptions(),
+    },
   },
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { signOut } from 'next-auth/react';
+import { signOutEverywhere } from '@/lib/sign-out-client';
 import { MORE_NAV, isNavActive } from '@/components/dashboard/nav-config';
 import { IconLogOut } from '@/components/ui/icons';
 
@@ -69,7 +69,7 @@ export function MoreNavSheet({ open, pathname, onClose, onNavigate }: Props) {
           <li>
             <button
               type="button"
-              onClick={() => signOut({ callbackUrl: '/' })}
+              onClick={() => void signOutEverywhere()}
               className="w-full flex items-center gap-3 rounded-card px-3 py-3 text-left text-muted hover:bg-bg3 hover:text-tan transition-colors"
             >
               <span className="shrink-0">

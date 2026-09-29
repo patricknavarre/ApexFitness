@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { signOut } from 'next-auth/react';
+import { signOutEverywhere } from '@/lib/sign-out-client';
 import { DESKTOP_NAV, isNavActive } from '@/components/dashboard/nav-config';
 import { MobileNav } from '@/components/dashboard/MobileNav';
 import { IconLogOut } from '@/components/ui/icons';
@@ -58,7 +58,7 @@ export function Sidebar() {
         <div className="p-2 border-t border-border">
           <button
             type="button"
-            onClick={() => signOut({ callbackUrl: '/' })}
+            onClick={() => void signOutEverywhere()}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-card text-muted hover:text-text hover:bg-bg2 transition-colors text-left font-sans text-sm"
           >
             <span className="flex-shrink-0">
