@@ -133,47 +133,6 @@ body::before {
 }
 
 /* —— Virtual ride FPV cockpit —— */
-.ride-world__scenery {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* CSS animations auto-run on insert; keep them frozen until pedaling.
-   Only toggle paused — do not force running (avoids full-tree style flash). */
-.ride-world__scenery--frozen .m,
-.ride-world__scenery--frozen .o {
-  animation-play-state: paused !important;
-}
-
-.ride-world__scenery svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  /* Vanishing point sits at y≈45% of the 400×800 artboard */
-  object-fit: cover;
-  object-position: center 45%;
-}
-
-.ride-world--scenery {
-  /* Match the SVG field green so no dark band shows at the horizon seam */
-  background: #7cb342;
-}
-
-.ride-world--scenery .ride-world__sky,
-.ride-world--scenery .ride-world__haze,
-.ride-world--scenery .ride-world__hills,
-.ride-world--scenery .ride-world__horizon-line {
-  display: none;
-}
-
-/* SVG vanishing point is ~45% down; keep road origin on that horizon */
-.ride-world--scenery .ride-world__ground {
-  top: 45%;
-}
-
 .ride-world {
   height: 100%;
   min-height: 300px;

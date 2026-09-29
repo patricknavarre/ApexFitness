@@ -1,13 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import {
-  CyclingScene,
-  type CyclingSceneHandle,
-} from '@/components/cycling/CyclingScene';
-import {
-  roadScrollTargetPxS,
-} from '@/lib/cycling/visual-motion';
+import { roadScrollTargetPxS } from '@/lib/cycling/visual-motion';
 import {
   formatSpeed,
   HR_ZONE_GLOW,
@@ -39,6 +33,17 @@ const HILLS_NEAR_Y_RATIO = 0.045;
 const EASE_IN = 10;
 const EASE_OUT = 7;
 
+function shouldFreeze(
+  active: boolean,
+  speedKmh: number,
+  cadenceRpm: number
+): boolean {
+  if (!active) return true;
+  // Soft gate: keep scrolling if either speed or cadence says you're moving
+  // (flywheel may report speed after you stop pedaling — both low = stop).
+  return speedKmh < STOP_SPEED_KMH && cadenceRpm < STOP_CADENCE_RPM;
+}
+
 export function RideWorld({
   active,
   speedKmh,
@@ -53,13 +58,11 @@ export function RideWorld({
   onToggleSpeedUnit,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const sceneryRef = useRef<CyclingSceneHandle>(null);
   const offsetRef = useRef(0);
   const velocityRef = useRef(0);
   const metricsRef = useRef({ active, speedKmh, cadenceRpm });
   const reducedMotionRef = useRef(false);
   const [particles, setParticles] = useState<{ id: number; x: number }[]>([]);
-  const [sceneryReady, setSceneryReady] = useState(false);
 
   metricsRef.current = { active, speedKmh, cadenceRpm };
 
@@ -79,9 +82,6 @@ export function RideWorld({
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
-    let sceneryMoving = false;
-    /** Require sustained pedaling before unfreeze; brief cadence dropouts stay moving. */
-    let lowCadenceSec = 0;
 
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
@@ -89,15 +89,8 @@ export function RideWorld({
 
       const { active: isActive, speedKmh: spd, cadenceRpm: cad } =
         metricsRef.current;
-      const hardFreeze =
-        reducedMotionRef.current || !isActive || spd < STOP_SPEED_KMH;
-      if (hardFreeze || cad < STOP_CADENCE_RPM) {
-        lowCadenceSec += dt;
-      } else {
-        lowCadenceSec = 0;
-      }
-      // 0.45s grace so BLE cadence blips do not pause/unpause the SVG.
-      const freeze = hardFreeze || lowCadenceSec >= 0.45;
+      const freeze =
+        reducedMotionRef.current || shouldFreeze(isActive, spd, cad);
       const target = roadScrollTargetPxS(spd, freeze);
 
       const ease = freeze ? EASE_OUT : EASE_IN;
@@ -105,14 +98,6 @@ export function RideWorld({
       vel += (target - vel) * Math.min(1, ease * dt);
       if (Math.abs(vel) < 0.05) vel = 0;
       velocityRef.current = vel;
-
-      // Scenery: start/stop only. Variable speed lives on the road layer —
-      // WAAPI updatePlaybackRate across ~500 CSS animations flashes the SVG.
-      const wantMoving = !freeze && vel >= 0.5;
-      if (wantMoving !== sceneryMoving) {
-        sceneryMoving = wantMoving;
-        sceneryRef.current?.setMoving(wantMoving);
-      }
 
       offsetRef.current += vel * dt;
       const offset = offsetRef.current;
@@ -153,9 +138,7 @@ export function RideWorld({
       ref={rootRef}
       className={`ride-world relative overflow-hidden ${
         surge ? 'ride-world--surge' : ''
-      }${sceneryReady ? ' ride-world--scenery' : ''}${
-        hrZone != null ? ` ride-world--z${hrZone}` : ''
-      }`}
+      }${hrZone != null ? ` ride-world--z${hrZone}` : ''}`}
       style={{
         ['--ride-lean' as string]: `${lean}deg`,
         ['--zone-tint' as string]:
@@ -165,10 +148,6 @@ export function RideWorld({
       }}
       data-hr-bpm={hrBpm != null ? Math.round(hrBpm) : undefined}
     >
-      <CyclingScene
-        ref={sceneryRef}
-        onReady={() => setSceneryReady(true)}
-      />
       <div className="ride-world__sky" />
       <div className="ride-world__haze" />
       <div className="ride-world__hills ride-world__hills--far" />
