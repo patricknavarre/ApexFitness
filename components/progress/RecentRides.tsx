@@ -30,6 +30,8 @@ type RideDetailPayload = {
   courseId: string | null;
   distanceMeters: number | null;
   elevationGainMeters: number | null;
+  avgHeartRateBpm: number | null;
+  maxHeartRateBpm: number | null;
 };
 
 export function RecentRides() {
@@ -85,6 +87,8 @@ export function RecentRides() {
             courseId: data.courseId ?? null,
             distanceMeters: data.distanceMeters ?? null,
             elevationGainMeters: data.elevationGainMeters ?? null,
+            avgHeartRateBpm: data.avgHeartRateBpm ?? null,
+            maxHeartRateBpm: data.maxHeartRateBpm ?? null,
           },
         }));
       } catch (e) {
@@ -217,6 +221,8 @@ export function RecentRides() {
                             hrSeries={detail.hrSeries}
                             courseId={detail.courseId}
                             distanceMeters={detail.distanceMeters}
+                            avgHeartRateBpm={detail.avgHeartRateBpm}
+                            maxHeartRateBpm={detail.maxHeartRateBpm}
                           />
                         ) : null}
                       </div>

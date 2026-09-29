@@ -294,6 +294,8 @@ export function RideDetail({ rideId }: { rideId: string }) {
           hrSeries={ride.hrSeries ?? []}
           courseId={ride.courseId}
           distanceMeters={ride.distanceMeters}
+          avgHeartRateBpm={ride.avgHeartRateBpm}
+          maxHeartRateBpm={ride.maxHeartRateBpm}
         />
       </section>
 

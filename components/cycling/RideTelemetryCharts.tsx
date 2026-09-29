@@ -34,9 +34,30 @@ function ChartEmpty({ message }: { message: string }) {
   );
 }
 
-export function RideHrChart({ series }: { series: HrPoint[] }) {
+export function RideHrChart({
+  series,
+  avgBpm,
+  maxBpm,
+}: {
+  series: HrPoint[];
+  avgBpm?: number | null;
+  maxBpm?: number | null;
+}) {
   if (series.length < 2) {
-    return <ChartEmpty message="No heart-rate series for this ride" />;
+    const hasScalars =
+      (typeof avgBpm === 'number' && avgBpm > 0) ||
+      (typeof maxBpm === 'number' && maxBpm > 0);
+    return (
+      <ChartEmpty
+        message={
+          hasScalars
+            ? `Avg ${avgBpm != null ? Math.round(avgBpm) : '—'} · max ${
+                maxBpm != null ? Math.round(maxBpm) : '—'
+              } bpm were saved, but the second-by-second chart needs a ride logged after series tracking was added. Do another ride with HR connected.`
+            : 'No heart-rate series for this ride'
+        }
+      />
+    );
   }
 
   return (
@@ -160,10 +181,14 @@ export function RideTelemetryCharts({
   hrSeries,
   courseId,
   distanceMeters,
+  avgHeartRateBpm,
+  maxHeartRateBpm,
 }: {
   hrSeries: HrPoint[];
   courseId?: string | null;
   distanceMeters?: number | null;
+  avgHeartRateBpm?: number | null;
+  maxHeartRateBpm?: number | null;
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -171,7 +196,11 @@ export function RideTelemetryCharts({
         <h3 className="font-display text-sm text-accent uppercase tracking-wide">
           Heart rate
         </h3>
-        <RideHrChart series={hrSeries} />
+        <RideHrChart
+          series={hrSeries}
+          avgBpm={avgHeartRateBpm}
+          maxBpm={maxHeartRateBpm}
+        />
       </div>
       <div className="space-y-2">
         <h3 className="font-display text-sm text-accent uppercase tracking-wide">

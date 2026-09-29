@@ -9,28 +9,15 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { toast } from 'sonner';
-import { connectHeartRateMonitor, isWebBluetoothSupported, type HrConnection } from '@/lib/ble/hr-client';
-import { startMockHeartRate } from '@/lib/ble/mock-trainer';
 import { HrZoneLadder } from '@/components/hr/HrZoneLadder';
-import {
-  HR_ZONE_COLORS,
-  hrZone,
-  loadRidePrefs,
-  type HrZone,
-  type WorldPanelMode,
-} from '@/lib/ride/stats';
+import { HrConnectActions, HrLiveStrip, HrSessionDetails } from '@/components/hr/HrLiveStrip';
+import { useHrSession, useIsPhone, type HrSessionStats } from '@/components/hr/useHrSession';
+import { HR_ZONE_COLORS, type WorldPanelMode } from '@/lib/ride/stats';
 
 const PANEL_STORAGE_KEY = 'apex.workout.hrPanel';
 const PANEL_MIN_W = 280;
-const SPARK_MAX = 48;
 
-export type WorkoutHrStats = {
-  avgHeartRateBpm: number | null;
-  maxHeartRateBpm: number | null;
-  hrDeviceName: string | null;
-  sampleCount: number;
-};
+export type WorkoutHrStats = HrSessionStats;
 
 export type WorkoutHrPanelHandle = {
   getStats: () => WorkoutHrStats;
@@ -78,41 +65,14 @@ function savePanelState(state: { mode: WorldPanelMode; x: number; y: number }) {
   );
 }
 
-function sparkPath(samples: number[], w: number, h: number): string {
-  if (samples.length < 2) return '';
-  const min = Math.min(...samples);
-  const max = Math.max(...samples);
-  const span = Math.max(8, max - min);
-  return samples
-    .map((v, i) => {
-      const x = (i / (samples.length - 1)) * w;
-      const y = h - ((v - min) / span) * (h - 8) - 4;
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(' ');
-}
-
 export const WorkoutHrPanel = forwardRef<WorkoutHrPanelHandle, Props>(
   function WorkoutHrPanel({ onStatsChange }, ref) {
+    const isPhone = useIsPhone();
+    const session = useHrSession(true);
     const [mode, setMode] = useState<WorldPanelMode>('docked');
     const [pos, setPos] = useState({ x: 24, y: 96 });
     const [hydrated, setHydrated] = useState(false);
-    const [bleOk, setBleOk] = useState(false);
-    const [hrBpm, setHrBpm] = useState<number | null>(null);
-    const [hrDeviceName, setHrDeviceName] = useState<string | null>(null);
-    const [maxHrSetting, setMaxHrSetting] = useState(184);
-    const [spark, setSpark] = useState<number[]>([]);
-    const [avgHr, setAvgHr] = useState(0);
-    const [maxHr, setMaxHr] = useState(0);
-    const [sampleCount, setSampleCount] = useState(0);
-
     const panelRef = useRef<HTMLDivElement>(null);
-    const hrConnRef = useRef<HrConnection | { disconnect: () => void } | null>(null);
-    const sumRef = useRef(0);
-    const countRef = useRef(0);
-    const maxRef = useRef(0);
-    const deviceNameRef = useRef<string | null>(null);
-    const maxHrSettingRef = useRef(184);
     const dragRef = useRef<{
       pointerId: number;
       startX: number;
@@ -121,51 +81,41 @@ export const WorkoutHrPanel = forwardRef<WorkoutHrPanelHandle, Props>(
       origY: number;
     } | null>(null);
 
-    const emitStats = useCallback(() => {
-      const stats: WorkoutHrStats = {
-        avgHeartRateBpm: countRef.current > 0 ? Math.round(sumRef.current / countRef.current) : null,
-        maxHeartRateBpm: maxRef.current > 0 ? Math.round(maxRef.current) : null,
-        hrDeviceName: deviceNameRef.current,
-        sampleCount: countRef.current,
-      };
-      onStatsChange?.(stats);
-      return stats;
-    }, [onStatsChange]);
+    useImperativeHandle(
+      ref,
+      () => ({
+        getStats: session.getStats,
+        disconnect: session.disconnect,
+      }),
+      [session.getStats, session.disconnect]
+    );
 
     useEffect(() => {
-      setBleOk(isWebBluetoothSupported());
+      onStatsChange?.(session.getStats());
+    }, [onStatsChange, session.getStats, session.sampleCount, session.hrDeviceName, session.hrBpm]);
+
+    useEffect(() => {
       const saved = loadPanelState();
       setMode(saved.mode);
       setPos({ x: saved.x, y: saved.y });
-      const prefs = loadRidePrefs();
-      setMaxHrSetting(prefs.maxHr);
-      maxHrSettingRef.current = prefs.maxHr;
       setHydrated(true);
-      return () => {
-        hrConnRef.current?.disconnect();
-        hrConnRef.current = null;
-      };
     }, []);
 
     useEffect(() => {
-      maxHrSettingRef.current = maxHrSetting;
-    }, [maxHrSetting]);
-
-    useEffect(() => {
-      if (!hydrated) return;
+      if (!hydrated || isPhone) return;
       savePanelState({ mode, x: pos.x, y: pos.y });
-    }, [hydrated, mode, pos.x, pos.y]);
+    }, [hydrated, isPhone, mode, pos.x, pos.y]);
 
     useEffect(() => {
-      if (!hydrated || mode !== 'expanded') return;
+      if (!hydrated || isPhone || mode !== 'expanded') return;
       const el = panelRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
       setPos((prev) => clampPosition(prev.x, prev.y, rect.width, rect.height));
-    }, [hydrated, mode]);
+    }, [hydrated, isPhone, mode]);
 
     useEffect(() => {
-      if (mode !== 'expanded') return;
+      if (isPhone || mode !== 'expanded') return;
       const onResize = () => {
         const el = panelRef.current;
         if (!el) return;
@@ -174,81 +124,7 @@ export const WorkoutHrPanel = forwardRef<WorkoutHrPanelHandle, Props>(
       };
       window.addEventListener('resize', onResize);
       return () => window.removeEventListener('resize', onResize);
-    }, [mode]);
-
-    const onHr = useCallback(
-      (bpm: number) => {
-        if (!Number.isFinite(bpm) || bpm <= 0) return;
-        setHrBpm(bpm);
-        sumRef.current += bpm;
-        countRef.current += 1;
-        if (bpm > maxRef.current) maxRef.current = bpm;
-        setAvgHr(Math.round(sumRef.current / countRef.current));
-        setMaxHr(Math.round(maxRef.current));
-        setSampleCount(countRef.current);
-        setSpark((prev) => {
-          const next = [...prev, Math.round(bpm)];
-          return next.length > SPARK_MAX ? next.slice(-SPARK_MAX) : next;
-        });
-        emitStats();
-      },
-      [emitStats]
-    );
-
-    const disconnect = useCallback(() => {
-      hrConnRef.current?.disconnect();
-      hrConnRef.current = null;
-      deviceNameRef.current = null;
-      setHrDeviceName(null);
-      setHrBpm(null);
-      emitStats();
-    }, [emitStats]);
-
-    useImperativeHandle(
-      ref,
-      () => ({
-        getStats: () => ({
-          avgHeartRateBpm:
-            countRef.current > 0 ? Math.round(sumRef.current / countRef.current) : null,
-          maxHeartRateBpm: maxRef.current > 0 ? Math.round(maxRef.current) : null,
-          hrDeviceName: deviceNameRef.current,
-          sampleCount: countRef.current,
-        }),
-        disconnect,
-      }),
-      [disconnect]
-    );
-
-    async function handleConnect() {
-      try {
-        const conn = await connectHeartRateMonitor(onHr, () => {
-          deviceNameRef.current = null;
-          setHrDeviceName(null);
-          setHrBpm(null);
-          hrConnRef.current = null;
-          emitStats();
-          toast.message('Heart rate monitor disconnected');
-        });
-        hrConnRef.current?.disconnect();
-        hrConnRef.current = conn;
-        deviceNameRef.current = conn.deviceName;
-        setHrDeviceName(conn.deviceName);
-        emitStats();
-        toast.success(`Connected ${conn.deviceName}`);
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Could not connect HR');
-      }
-    }
-
-    function handleMock() {
-      hrConnRef.current?.disconnect();
-      const conn = startMockHeartRate(onHr);
-      hrConnRef.current = conn;
-      deviceNameRef.current = conn.deviceName;
-      setHrDeviceName(conn.deviceName);
-      emitStats();
-      toast.success('Mock HR running');
-    }
+    }, [isPhone, mode]);
 
     const expand = useCallback(() => {
       setMode('expanded');
@@ -263,7 +139,7 @@ export const WorkoutHrPanel = forwardRef<WorkoutHrPanelHandle, Props>(
 
     const onHandlePointerDown = useCallback(
       (e: ReactPointerEvent<HTMLDivElement>) => {
-        if (mode !== 'expanded') return;
+        if (isPhone || mode !== 'expanded') return;
         if (e.button !== 0) return;
         const target = e.target as HTMLElement;
         if (target.closest('button, a, input, select, textarea, label')) return;
@@ -276,7 +152,7 @@ export const WorkoutHrPanel = forwardRef<WorkoutHrPanelHandle, Props>(
           origY: pos.y,
         };
       },
-      [mode, pos.x, pos.y]
+      [isPhone, mode, pos.x, pos.y]
     );
 
     const onHandlePointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
@@ -306,47 +182,12 @@ export const WorkoutHrPanel = forwardRef<WorkoutHrPanelHandle, Props>(
       }
     }, []);
 
-    const zone: HrZone | null =
-      hrBpm != null ? hrZone(hrBpm, maxHrSettingRef.current) : null;
-    const expanded = mode === 'expanded';
-    const path = sparkPath(spark, 280, 72);
+    if (isPhone) {
+      return <HrLiveStrip session={session} />;
+    }
 
-    const connectActions = (
-      <>
-        {!hrDeviceName ? (
-          <>
-            <button
-              type="button"
-              className="ride-world-panel__btn ride-world-panel__btn--accent font-sans"
-              onClick={() => void handleConnect()}
-              disabled={!bleOk}
-              title={
-                bleOk
-                  ? 'Pair Amazfit / chest strap'
-                  : 'Web Bluetooth not available in this browser'
-              }
-            >
-              Connect HR
-            </button>
-            <button
-              type="button"
-              className="ride-world-panel__btn font-sans"
-              onClick={handleMock}
-            >
-              Mock
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="ride-world-panel__btn font-sans"
-            onClick={disconnect}
-          >
-            Disconnect
-          </button>
-        )}
-      </>
-    );
+    const expanded = mode === 'expanded';
+    const zone = session.zone;
 
     return (
       <>
@@ -371,26 +212,26 @@ export const WorkoutHrPanel = forwardRef<WorkoutHrPanelHandle, Props>(
                 }
           }
         >
-          <div
-            className={`ride-world-panel__chrome${expanded ? ' ride-world-panel__chrome--drag' : ''}`}
-            onPointerDown={onHandlePointerDown}
-            onPointerMove={onHandlePointerMove}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-          >
-            <div className="ride-world-panel__chrome-left">
+          <div className="ride-world-panel__chrome">
+            <div
+              className={`ride-world-panel__chrome-left${expanded ? ' ride-world-panel__chrome--drag' : ''}`}
+              onPointerDown={onHandlePointerDown}
+              onPointerMove={onHandlePointerMove}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+            >
               {expanded ? (
                 <span className="ride-world-panel__drag-hint font-mono" aria-hidden>
                   ⋮⋮
                 </span>
               ) : null}
               <span className="ride-world-panel__title font-display">Heart rate</span>
-              {hrDeviceName ? (
-                <span className="workout-hr-panel__device font-sans">{hrDeviceName}</span>
+              {session.hrDeviceName ? (
+                <span className="workout-hr-panel__device font-sans">{session.hrDeviceName}</span>
               ) : null}
             </div>
             <div className="ride-world-panel__chrome-actions">
-              {connectActions}
+              <HrConnectActions session={session} />
               {expanded ? (
                 <button
                   type="button"
@@ -411,71 +252,14 @@ export const WorkoutHrPanel = forwardRef<WorkoutHrPanelHandle, Props>(
             </div>
           </div>
 
-          <HrZoneLadder hrZone={zone} hrBpm={hrBpm} />
-
-          <div className="ride-world-panel__stage workout-hr-panel__stage">
-            <div className="workout-hr-panel__stats">
-              <div>
-                <p className="workout-hr-panel__stat-label font-mono">Avg</p>
-                <p className="workout-hr-panel__stat-value font-mono">
-                  {sampleCount > 0 ? avgHr : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="workout-hr-panel__stat-label font-mono">Max</p>
-                <p className="workout-hr-panel__stat-value font-mono">
-                  {sampleCount > 0 ? maxHr : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="workout-hr-panel__stat-label font-mono">Samples</p>
-                <p className="workout-hr-panel__stat-value font-mono">{sampleCount}</p>
-              </div>
-            </div>
-            <svg
-              className="workout-hr-panel__spark"
-              viewBox="0 0 280 72"
-              preserveAspectRatio="none"
-              aria-hidden
-            >
-              {path ? (
-                <path
-                  d={path}
-                  fill="none"
-                  stroke="var(--zone-frame, var(--accent))"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              ) : (
-                <text
-                  x="140"
-                  y="40"
-                  textAnchor="middle"
-                  fill="var(--muted)"
-                  fontSize="11"
-                  fontFamily="inherit"
-                >
-                  Connect HR to track zones
-                </text>
-              )}
-            </svg>
-            <p className="workout-hr-panel__hint font-sans">
-              Amazfit: enable Heart Rate Push, then Connect HR. Avg/max save with the
-              workout.
+          <HrZoneLadder hrZone={zone} hrBpm={session.hrBpm} />
+          {!session.bleOk ? (
+            <p className="hr-live-strip__unsupported font-sans">
+              Bluetooth heart rate needs Chrome on Android or desktop Chrome. iPhone browsers
+              cannot pair from a website.
             </p>
-            <label className="workout-hr-panel__maxhr font-sans">
-              Max HR
-              <input
-                type="number"
-                min={100}
-                max={230}
-                value={maxHrSetting}
-                onChange={(e) => setMaxHrSetting(Number(e.target.value) || 184)}
-                className="ml-2 w-16 bg-bg3 border border-border text-text font-mono text-sm px-2 py-1 rounded-card"
-              />
-            </label>
-          </div>
+          ) : null}
+          <HrSessionDetails session={session} />
         </div>
       </>
     );

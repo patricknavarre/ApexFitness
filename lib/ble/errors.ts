@@ -16,7 +16,11 @@ export function formatWebBluetoothError(error: unknown): string {
   }
 
   if (/not supported|bluetooth is not available/i.test(raw)) {
-    return 'Web Bluetooth is not supported here. Use Chrome or Edge on desktop or Android.';
+    return 'Bluetooth heart rate needs Chrome on Android or desktop Chrome. iPhone browsers cannot pair from a website.';
+  }
+
+  if (/cancel|chooser/i.test(raw)) {
+    return 'Bluetooth pairing cancelled.';
   }
 
   return raw;

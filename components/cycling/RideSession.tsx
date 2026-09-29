@@ -257,6 +257,8 @@ export function RideSession() {
   const powerSeriesFullRef = useRef<{ t: number; w: number }[]>([]);
   const hrSeriesFullRef = useRef<{ t: number; bpm: number }[]>([]);
   const lastHrChartSecRef = useRef(-1);
+  /** Latest live HR for timer-based series sampling. */
+  const hrLiveRef = useRef<number | null>(null);
   const ftpRef = useRef(200);
   const maxHrSettingRef = useRef(184);
   const lastSentGradeRef = useRef<number | null>(null);
@@ -641,6 +643,7 @@ export function RideSession() {
     powerSeriesFullRef.current = [];
     hrSeriesFullRef.current = [];
     lastHrChartSecRef.current = -1;
+    hrLiveRef.current = null;
     setPaused(false);
     setElapsedSec(0);
     setDistanceM(0);
@@ -679,8 +682,16 @@ export function RideSession() {
     });
   }
 
+  function pushHrSeriesSample(elapsed: number, bpm: number) {
+    if (!(bpm > 0) || elapsed < 0) return;
+    if (elapsed === lastHrChartSecRef.current) return;
+    lastHrChartSecRef.current = elapsed;
+    hrSeriesFullRef.current.push({ t: elapsed, bpm: Math.round(bpm) });
+  }
+
   const onHr = useCallback((bpm: number) => {
     setHrBpm(bpm);
+    hrLiveRef.current = bpm > 0 ? bpm : null;
     setLive((prev) => ({ ...prev, heartRateBpm: bpm }));
     if (!ridingRef.current || pausedRef.current) return;
     hrSumRef.current += bpm;
@@ -689,13 +700,7 @@ export function RideSession() {
     lapHrSumRef.current += bpm;
     lapHrCountRef.current += 1;
 
-    if (bpm > 0) {
-      const elapsed = readRideElapsedSec();
-      if (elapsed !== lastHrChartSecRef.current) {
-        lastHrChartSecRef.current = elapsed;
-        hrSeriesFullRef.current.push({ t: elapsed, bpm: Math.round(bpm) });
-      }
-    }
+    pushHrSeriesSample(readRideElapsedSec(), bpm);
 
     const z = hrZone(bpm, maxHrSettingRef.current);
     if (lastZoneRef.current != null && z > lastZoneRef.current) {
@@ -918,6 +923,11 @@ export function RideSession() {
       setElapsedSec(e);
       recomputeLiveStats(e);
       syncSessionRef.current(e, distanceRef.current);
+      // Keep HR series filling even if BLE notifications bunch within one second.
+      const liveHr = hrLiveRef.current;
+      if (liveHr != null && liveHr > 0) {
+        pushHrSeriesSample(e, liveHr);
+      }
     }, 250);
     // Kick first target immediately + claim FTMS control early
     syncSessionRef.current(0, 0);
@@ -1152,11 +1162,15 @@ export function RideSession() {
       rideElapsedMsRef.current = durationSeconds * 1000;
       lastPerfTickRef.current = performance.now();
       timerRef.current = window.setInterval(() => {
-        if (!ridingRef.current) return;
+        if (!ridingRef.current || pausedRef.current) return;
         const e2 = readRideElapsedSec();
         setElapsedSec(e2);
         recomputeLiveStats(e2);
         syncSessionFromElapsed(e2, distanceRef.current);
+        const liveHr = hrLiveRef.current;
+        if (liveHr != null && liveHr > 0) {
+          pushHrSeriesSample(e2, liveHr);
+        }
       }, 250);
     }
   }

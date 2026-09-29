@@ -19,9 +19,12 @@ function parseHeartRate(data: DataView): number | null {
   return flags & 0x01 ? data.getUint16(1, true) : data.getUint8(1);
 }
 
+const HR_PUSH_HINT =
+  'No heart-rate service on this device. On Amazfit, enable Heart Rate Push, then connect again.';
+
 /**
  * Connect a standalone BLE heart-rate monitor (Amazfit Heart Rate Push, chest strap, etc.).
- * Enable Heart Rate Push / broadcast on the watch first so it advertises service 0x180D.
+ * One chooser lists nearby devices so the watch still appears when it is not advertising 0x180D.
  */
 export async function connectHeartRateMonitor(
   onHr: HrHandler,
@@ -36,22 +39,21 @@ export async function connectHeartRateMonitor(
   let device: BluetoothDevice;
   try {
     device = await bluetooth.requestDevice({
-      filters: [{ services: [HR_SERVICE] }],
+      acceptAllDevices: true,
       optionalServices: [HR_SERVICE],
     });
-  } catch (first) {
-    try {
-      device = await bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [HR_SERVICE],
-      });
-    } catch {
-      throw new Error(formatWebBluetoothError(first));
-    }
+  } catch (e) {
+    throw new Error(formatWebBluetoothError(e));
   }
 
   const server = await device.gatt!.connect();
-  const service = await server.getPrimaryService(HR_SERVICE);
+  let service: BluetoothRemoteGATTService;
+  try {
+    service = await server.getPrimaryService(HR_SERVICE);
+  } catch {
+    if (device.gatt?.connected) device.gatt.disconnect();
+    throw new Error(HR_PUSH_HINT);
+  }
   const characteristic = await service.getCharacteristic(HR_MEASUREMENT);
 
   const onValue = () => {

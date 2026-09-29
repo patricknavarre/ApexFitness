@@ -594,6 +594,7 @@ body::before {
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .ride-world-panel__drag-hint {
@@ -626,6 +627,7 @@ body::before {
   background: transparent;
   color: var(--text);
   cursor: pointer;
+  touch-action: manipulation;
   transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
 
@@ -825,6 +827,81 @@ body::before {
   color: var(--muted);
   display: flex;
   align-items: center;
+}
+
+.hr-live-strip {
+  border: 1px solid color-mix(in srgb, var(--zone-frame, var(--border)) 55%, var(--border));
+  border-radius: 12px;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.hr-live-strip__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 0.75rem;
+  padding: 0.55rem 0.7rem;
+}
+
+.hr-live-strip__bpm {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.hr-live-strip__value {
+  font-size: 1.65rem;
+  line-height: 1;
+  color: var(--text);
+}
+
+.hr-live-strip__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.hr-live-strip__zone {
+  color: color-mix(in srgb, var(--zone-frame) 85%, var(--text));
+}
+
+.hr-live-strip__device {
+  text-transform: none;
+  letter-spacing: 0;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hr-live-strip__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.hr-live-strip__unsupported {
+  margin: 0;
+  padding: 0 0.7rem 0.65rem;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .workout-hr-panel .ride-zone-chrome,
+  .workout-hr-panel .workout-hr-panel__stage {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
