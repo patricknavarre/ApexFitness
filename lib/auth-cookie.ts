@@ -6,10 +6,11 @@ export const SESSION_MAX_AGE = 90 * 24 * 60 * 60;
  * it or existing sessions stop decoding.
  */
 export function sessionCookieName(): string {
-  return `${useSecureAuthCookies() ? '__Secure-' : ''}authjs.session-token`;
+  return `${secureAuthCookiesEnabled() ? '__Secure-' : ''}authjs.session-token`;
 }
 
-export function useSecureAuthCookies(): boolean {
+/** Whether the Auth.js session cookie should use the Secure / SameSite=None path. */
+export function secureAuthCookiesEnabled(): boolean {
   const url = process.env.NEXTAUTH_URL || process.env.AUTH_URL || '';
   if (url.startsWith('https://')) return true;
   if (url.startsWith('http://')) return false;
@@ -17,7 +18,7 @@ export function useSecureAuthCookies(): boolean {
 }
 
 export function sessionCookieOptions() {
-  const secure = useSecureAuthCookies();
+  const secure = secureAuthCookiesEnabled();
   return {
     httpOnly: true,
     // Home-screen launches on iOS are treated as cross-site, so Lax is dropped.
