@@ -8,11 +8,13 @@ import {
   useState,
 } from 'react';
 import {
-  applySceneryPlaybackRate,
   createSceneryPlaybackState,
+  setSceneryFrozen,
+  setSceneryRate,
 } from '@/lib/cycling/scenery-playback';
 
 export type CyclingSceneHandle = {
+  setMoving: (moving: boolean) => void;
   setPlaybackRate: (rate: number) => void;
 };
 
@@ -24,8 +26,7 @@ type Props = {
 export const CyclingScene = forwardRef<CyclingSceneHandle, Props>(
   function CyclingScene({ onReady, onError }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
-    const smoothRef = useRef(0);
-    const playbackStateRef = useRef(createSceneryPlaybackState());
+    const stateRef = useRef(createSceneryPlaybackState());
     const onReadyRef = useRef(onReady);
     const onErrorRef = useRef(onError);
     const [svg, setSvg] = useState('');
@@ -66,46 +67,43 @@ export const CyclingScene = forwardRef<CyclingSceneHandle, Props>(
         svgEl.style.display = 'block';
       }
 
-      // Freeze immediately via CSS class; then pause WAAPI once animations exist.
-      playbackStateRef.current = createSceneryPlaybackState();
+      stateRef.current = createSceneryPlaybackState();
       el.classList.add('ride-world__scenery--frozen');
 
       let frames = 0;
       let raf = 0;
-      const tryPause = () => {
+      const warm = () => {
         const root = containerRef.current;
         if (!root) return;
         const list = root.getAnimations({ subtree: true });
-        playbackStateRef.current.animations = list;
+        stateRef.current.animations = list;
         if (list.length > 0) {
-          applySceneryPlaybackRate(root, 0, playbackStateRef.current);
+          list.forEach((a) => {
+            try {
+              a.pause();
+            } catch {
+              /* ignore */
+            }
+          });
           return;
         }
-        // Animations may not exist on the first frame after innerHTML inject.
         frames += 1;
-        if (frames < 10) raf = window.requestAnimationFrame(tryPause);
+        if (frames < 12) raf = window.requestAnimationFrame(warm);
       };
-      raf = window.requestAnimationFrame(tryPause);
+      raf = window.requestAnimationFrame(warm);
       return () => window.cancelAnimationFrame(raf);
     }, [svg]);
 
     useImperativeHandle(ref, () => ({
+      setMoving(moving: boolean) {
+        const el = containerRef.current;
+        if (!el || !svg) return;
+        setSceneryFrozen(el, !moving, stateRef.current);
+      },
       setPlaybackRate(rate: number) {
         const el = containerRef.current;
         if (!el || !svg) return;
-
-        if (rate <= 0) {
-          smoothRef.current = 0;
-          applySceneryPlaybackRate(el, 0, playbackStateRef.current);
-          return;
-        }
-
-        smoothRef.current = smoothRef.current * 0.7 + rate * 0.3;
-        applySceneryPlaybackRate(
-          el,
-          smoothRef.current,
-          playbackStateRef.current
-        );
+        setSceneryRate(el, rate, stateRef.current);
       },
     }));
 

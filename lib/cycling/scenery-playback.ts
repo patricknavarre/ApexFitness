@@ -1,82 +1,79 @@
-const PAUSE_BELOW = 0.04;
-const RESUME_ABOVE = 0.08;
-/** Ignore tiny speed jitter so we do not thrash Web Animations every frame. */
-const RATE_EPSILON = 0.03;
+/**
+ * Scenery playback: freeze via CSS, speed via updatePlaybackRate.
+ * Rate is driven from the same eased road velocity so layers stay locked.
+ * Only applies when the rate actually changes (avoids mid-ride flash).
+ */
+
+const RATE_EPSILON = 0.04;
 
 export type SceneryPlaybackState = {
-  lastRate: number;
-  paused: boolean;
+  frozen: boolean;
+  appliedRate: number;
   animations: Animation[] | null;
 };
 
 export function createSceneryPlaybackState(): SceneryPlaybackState {
-  // paused starts false so the first rate=0 call actually pauses CSS animations
-  // (they auto-run when the SVG mounts).
-  return { lastRate: -1, paused: false, animations: null };
+  return { frozen: true, appliedRate: 0, animations: null };
 }
 
-function collectAnimations(root: HTMLElement): Animation[] {
-  return root.getAnimations({ subtree: true });
+function ensureAnimations(
+  root: HTMLElement,
+  state: SceneryPlaybackState
+): Animation[] {
+  if (!state.animations || state.animations.length === 0) {
+    state.animations = root.getAnimations({ subtree: true });
+  }
+  return state.animations;
 }
 
-function pauseAll(animations: Animation[]): void {
+export function setSceneryFrozen(
+  root: HTMLElement,
+  frozen: boolean,
+  state: SceneryPlaybackState
+): void {
+  if (state.frozen === frozen) return;
+  state.frozen = frozen;
+  root.classList.toggle('ride-world__scenery--frozen', frozen);
+
+  const animations = ensureAnimations(root, state);
+  if (frozen) {
+    animations.forEach((a) => {
+      try {
+        a.pause();
+      } catch {
+        /* ignore */
+      }
+    });
+    state.appliedRate = 0;
+    return;
+  }
+
   animations.forEach((a) => {
     try {
-      a.pause();
+      if (a.playState === 'paused') a.play();
     } catch {
-      /* animation may have been GC'd */
+      /* ignore */
     }
   });
 }
 
-/**
- * Apply a playback rate to the scenery SVG. Safe to call often — no-ops unless
- * the rate actually changed. Pausing/playing uses hysteresis so BLE jitter near
- * zero does not flash the whole scene.
- */
-export function applySceneryPlaybackRate(
+/** While unfrozen, set playback rate from the shared road-velocity factor. */
+export function setSceneryRate(
   root: HTMLElement,
   rate: number,
   state: SceneryPlaybackState
 ): void {
-  const target = rate <= 0 ? 0 : rate;
+  if (state.frozen) return;
+  const next = Math.max(0, rate);
+  if (Math.abs(next - state.appliedRate) < RATE_EPSILON) return;
+  state.appliedRate = next;
 
-  if (
-    state.lastRate >= 0 &&
-    Math.abs(target - state.lastRate) < RATE_EPSILON &&
-    !(state.paused && target >= RESUME_ABOVE) &&
-    !(!state.paused && target < PAUSE_BELOW)
-  ) {
-    return;
-  }
-
-  if (!state.animations || state.animations.length === 0) {
-    state.animations = collectAnimations(root);
-  }
-
-  const animations = state.animations;
-  if (animations.length === 0) return;
-
-  const shouldPause = target < PAUSE_BELOW;
-  state.lastRate = target;
-
-  if (shouldPause) {
-    // Always pause — CSS animations start running on mount even if our flag
-    // already said "paused".
-    pauseAll(animations);
-    state.paused = true;
-    root.classList.add('ride-world__scenery--frozen');
-    return;
-  }
-
-  root.classList.remove('ride-world__scenery--frozen');
+  const animations = ensureAnimations(root, state);
   animations.forEach((a) => {
     try {
-      if (state.paused || a.playState === 'paused') a.play();
-      a.updatePlaybackRate(target);
+      a.updatePlaybackRate(Math.max(0.05, next));
     } catch {
-      /* animation may have been GC'd */
+      /* ignore */
     }
   });
-  state.paused = false;
 }

@@ -7,7 +7,7 @@ import {
 } from '@/components/cycling/CyclingScene';
 import {
   roadScrollTargetPxS,
-  sceneryPlaybackRate,
+  sceneryRateFromRoadVelocity,
 } from '@/lib/cycling/visual-motion';
 import {
   formatSpeed,
@@ -92,8 +92,7 @@ export function RideWorld({
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
-    let sceneryAcc = 0;
-    let lastSceneryRate = -1;
+    let sceneryMoving = false;
 
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
@@ -105,28 +104,26 @@ export function RideWorld({
         reducedMotionRef.current || shouldFreeze(isActive, spd, cad);
       const target = roadScrollTargetPxS(spd, freeze);
 
-      // Scenery: throttle updates (~8 Hz). Updating hundreds of CSS animations
-      // every frame causes the whole SVG to flash/glitch.
-      sceneryAcc += dt;
-      const nextRate = sceneryPlaybackRate(spd, freeze);
-      const rateDelta = Math.abs(nextRate - lastSceneryRate);
-      // Apply immediately when stopping; otherwise only on meaningful change.
-      if (
-        rateDelta >= 0.04 &&
-        (nextRate === 0 || lastSceneryRate < 0 || sceneryAcc >= 0.12)
-      ) {
-        sceneryAcc = 0;
-        lastSceneryRate = nextRate;
-        sceneryRef.current?.setPlaybackRate(nextRate);
-      } else if (sceneryAcc >= 0.12) {
-        sceneryAcc = 0;
-      }
-
       const ease = freeze ? EASE_OUT : EASE_IN;
       let vel = velocityRef.current;
       vel += (target - vel) * Math.min(1, ease * dt);
       if (Math.abs(vel) < 0.05) vel = 0;
       velocityRef.current = vel;
+
+      // Scenery locks to the same eased road velocity (one motion, two layers).
+      const sceneryRate = sceneryRateFromRoadVelocity(vel);
+      if (sceneryRate < 0.05) {
+        if (sceneryMoving) {
+          sceneryMoving = false;
+          sceneryRef.current?.setMoving(false);
+        }
+      } else {
+        if (!sceneryMoving) {
+          sceneryMoving = true;
+          sceneryRef.current?.setMoving(true);
+        }
+        sceneryRef.current?.setPlaybackRate(sceneryRate);
+      }
 
       offsetRef.current += vel * dt;
       const offset = offsetRef.current;
