@@ -9,6 +9,7 @@ import {
 } from 'react';
 import {
   createSceneryPlaybackState,
+  SCENERY_CRUISE_SPEED_VAR,
   setSceneryFrozen,
   setSceneryRate,
 } from '@/lib/cycling/scenery-playback';
@@ -65,33 +66,12 @@ export const CyclingScene = forwardRef<CyclingSceneHandle, Props>(
         svgEl.style.width = '100%';
         svgEl.style.height = '100%';
         svgEl.style.display = 'block';
+        // Prep cruise speed so the first unfreeze does not rewrite duration mid-play.
+        svgEl.style.setProperty('--speed', String(SCENERY_CRUISE_SPEED_VAR));
       }
 
       stateRef.current = createSceneryPlaybackState();
       el.classList.add('ride-world__scenery--frozen');
-
-      let frames = 0;
-      let raf = 0;
-      const warm = () => {
-        const root = containerRef.current;
-        if (!root) return;
-        const list = root.getAnimations({ subtree: true });
-        stateRef.current.animations = list;
-        if (list.length > 0) {
-          list.forEach((a) => {
-            try {
-              a.pause();
-            } catch {
-              /* ignore */
-            }
-          });
-          return;
-        }
-        frames += 1;
-        if (frames < 12) raf = window.requestAnimationFrame(warm);
-      };
-      raf = window.requestAnimationFrame(warm);
-      return () => window.cancelAnimationFrame(raf);
     }, [svg]);
 
     useImperativeHandle(ref, () => ({

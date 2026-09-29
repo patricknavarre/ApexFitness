@@ -1,35 +1,26 @@
 /**
- * Scenery playback: freeze via CSS, speed via updatePlaybackRate.
- * Rate is driven from the same eased road velocity so layers stay locked.
- * Pause/resume uses hysteresis; rate updates no-op unless meaningfully changed
- * (updating ~500 SVG animations every frame flashes the whole scene).
+ * Scenery playback without WAAPI rate thrashing.
+ *
+ * The SVG uses CSS animations (`animation-duration: calc(var(--speed) * …)`).
+ * Calling updatePlaybackRate() on hundreds of CSSAnimation objects every few
+ * frames flashes the whole scene (especially Safari). Instead:
+ *  - freeze/unfreeze via a CSS class only
+ *  - keep a stable --speed while riding (road layer carries variable speed feel)
  */
 
-/** Freeze when rate drops below this (must be below RESUME_ABOVE). */
-const PAUSE_BELOW = 0.04;
-/** Unfreeze only after rate rises above this (hysteresis vs BLE/ease jitter). */
-const RESUME_ABOVE = 0.08;
-/** Ignore tiny rate jitter so we do not thrash Web Animations. */
-const RATE_EPSILON = 0.05;
+/** --speed is inverted vs playback rate: lower = faster (see SVG comment). */
+export const SCENERY_CRUISE_SPEED_VAR = 0.75;
 
 export type SceneryPlaybackState = {
   frozen: boolean;
-  appliedRate: number;
-  animations: Animation[] | null;
 };
 
 export function createSceneryPlaybackState(): SceneryPlaybackState {
-  return { frozen: true, appliedRate: 0, animations: null };
+  return { frozen: true };
 }
 
-function ensureAnimations(
-  root: HTMLElement,
-  state: SceneryPlaybackState
-): Animation[] {
-  if (!state.animations || state.animations.length === 0) {
-    state.animations = root.getAnimations({ subtree: true });
-  }
-  return state.animations;
+function scenerySvg(root: HTMLElement): SVGElement | null {
+  return root.querySelector('svg');
 }
 
 export function setSceneryFrozen(
@@ -41,57 +32,26 @@ export function setSceneryFrozen(
   state.frozen = frozen;
   root.classList.toggle('ride-world__scenery--frozen', frozen);
 
-  const animations = ensureAnimations(root, state);
+  const svg = scenerySvg(root);
+  if (!svg) return;
+
   if (frozen) {
-    animations.forEach((a) => {
-      try {
-        a.pause();
-      } catch {
-        /* ignore */
-      }
-    });
-    state.appliedRate = 0;
+    // Leave --speed alone while frozen so resume continues the same timeline.
     return;
   }
 
-  animations.forEach((a) => {
-    try {
-      if (a.playState === 'paused') a.play();
-    } catch {
-      /* ignore */
-    }
-  });
+  // Stable cruise speed — do not retune mid-ride (retuning restarts animations).
+  svg.style.setProperty('--speed', String(SCENERY_CRUISE_SPEED_VAR));
 }
 
 /**
- * Desired scenery rate from road velocity (0 = stop).
- * Applies freeze hysteresis, then updatePlaybackRate only on real changes.
+ * Kept for RideWorld API compatibility. Variable trainer speed is expressed on
+ * the road layer; scenery stays at a constant cruise while unfrozen.
  */
 export function setSceneryRate(
-  root: HTMLElement,
-  rate: number,
-  state: SceneryPlaybackState
+  _root: HTMLElement,
+  _rate: number,
+  _state: SceneryPlaybackState
 ): void {
-  const next = Math.max(0, rate);
-
-  if (state.frozen) {
-    if (next < RESUME_ABOVE) return;
-    setSceneryFrozen(root, false, state);
-  } else if (next < PAUSE_BELOW) {
-    setSceneryFrozen(root, true, state);
-    return;
-  }
-
-  if (state.frozen) return;
-  if (Math.abs(next - state.appliedRate) < RATE_EPSILON) return;
-  state.appliedRate = next;
-
-  const animations = ensureAnimations(root, state);
-  animations.forEach((a) => {
-    try {
-      a.updatePlaybackRate(Math.max(PAUSE_BELOW, next));
-    } catch {
-      /* ignore */
-    }
-  });
+  /* no-op — WAAPI rate updates cause mid-ride flash */
 }

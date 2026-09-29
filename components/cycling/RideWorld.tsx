@@ -7,7 +7,6 @@ import {
 } from '@/components/cycling/CyclingScene';
 import {
   roadScrollTargetPxS,
-  sceneryRateFromRoadVelocity,
 } from '@/lib/cycling/visual-motion';
 import {
   formatSpeed,
@@ -39,18 +38,6 @@ const HILLS_NEAR_Y_RATIO = 0.045;
 /** Ease rate toward target scroll velocity (higher = snappier) */
 const EASE_IN = 10;
 const EASE_OUT = 7;
-
-function shouldFreeze(
-  active: boolean,
-  speedKmh: number,
-  cadenceRpm: number
-): boolean {
-  if (!active) return true;
-  // Require pedaling — trainer flywheel often keeps reporting speed after you stop.
-  if (cadenceRpm < STOP_CADENCE_RPM) return true;
-  if (speedKmh < STOP_SPEED_KMH) return true;
-  return false;
-}
 
 export function RideWorld({
   active,
@@ -92,8 +79,9 @@ export function RideWorld({
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
-    let sceneryAcc = 0;
-    let lastSceneryRate = -1;
+    let sceneryMoving = false;
+    /** Require sustained pedaling before unfreeze; brief cadence dropouts stay moving. */
+    let lowCadenceSec = 0;
 
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
@@ -101,8 +89,15 @@ export function RideWorld({
 
       const { active: isActive, speedKmh: spd, cadenceRpm: cad } =
         metricsRef.current;
-      const freeze =
-        reducedMotionRef.current || shouldFreeze(isActive, spd, cad);
+      const hardFreeze =
+        reducedMotionRef.current || !isActive || spd < STOP_SPEED_KMH;
+      if (hardFreeze || cad < STOP_CADENCE_RPM) {
+        lowCadenceSec += dt;
+      } else {
+        lowCadenceSec = 0;
+      }
+      // 0.45s grace so BLE cadence blips do not pause/unpause the SVG.
+      const freeze = hardFreeze || lowCadenceSec >= 0.45;
       const target = roadScrollTargetPxS(spd, freeze);
 
       const ease = freeze ? EASE_OUT : EASE_IN;
@@ -111,22 +106,12 @@ export function RideWorld({
       if (Math.abs(vel) < 0.05) vel = 0;
       velocityRef.current = vel;
 
-      // Scenery locks to eased road velocity — but throttle WAAPI updates (~8 Hz).
-      // Pushing ~500 SVG animation rates every frame flashes/glitches the scene.
-      sceneryAcc += dt;
-      const sceneryRate = sceneryRateFromRoadVelocity(vel);
-      const rateDelta = Math.abs(sceneryRate - lastSceneryRate);
-      const stopping = sceneryRate < 0.04;
-      if (
-        rateDelta >= 0.04 &&
-        (stopping || lastSceneryRate < 0 || sceneryAcc >= 0.12)
-      ) {
-        sceneryAcc = 0;
-        lastSceneryRate = sceneryRate;
-        // setPlaybackRate owns freeze hysteresis + rate; avoid setMoving thrash.
-        sceneryRef.current?.setPlaybackRate(sceneryRate);
-      } else if (sceneryAcc >= 0.12) {
-        sceneryAcc = 0;
+      // Scenery: start/stop only. Variable speed lives on the road layer —
+      // WAAPI updatePlaybackRate across ~500 CSS animations flashes the SVG.
+      const wantMoving = !freeze && vel >= 0.5;
+      if (wantMoving !== sceneryMoving) {
+        sceneryMoving = wantMoving;
+        sceneryRef.current?.setMoving(wantMoving);
       }
 
       offsetRef.current += vel * dt;

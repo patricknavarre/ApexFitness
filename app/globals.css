@@ -141,15 +141,11 @@ body::before {
   z-index: 0;
 }
 
-/* CSS animations auto-run on insert; keep them frozen until pedaling */
+/* CSS animations auto-run on insert; keep them frozen until pedaling.
+   Only toggle paused — do not force running (avoids full-tree style flash). */
 .ride-world__scenery--frozen .m,
 .ride-world__scenery--frozen .o {
   animation-play-state: paused !important;
-}
-
-.ride-world__scenery:not(.ride-world__scenery--frozen) .m,
-.ride-world__scenery:not(.ride-world__scenery--frozen) .o {
-  animation-play-state: running !important;
 }
 
 .ride-world__scenery svg {
