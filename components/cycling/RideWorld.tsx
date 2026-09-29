@@ -46,7 +46,10 @@ function shouldFreeze(
   cadenceRpm: number
 ): boolean {
   if (!active) return true;
-  return speedKmh < STOP_SPEED_KMH && cadenceRpm < STOP_CADENCE_RPM;
+  // Require pedaling — trainer flywheel often keeps reporting speed after you stop.
+  if (cadenceRpm < STOP_CADENCE_RPM) return true;
+  if (speedKmh < STOP_SPEED_KMH) return true;
+  return false;
 }
 
 export function RideWorld({

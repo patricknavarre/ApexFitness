@@ -141,6 +141,12 @@ body::before {
   z-index: 0;
 }
 
+/* CSS animations auto-run on insert; keep them frozen until trainer speed says go */
+.ride-world__scenery--frozen .m,
+.ride-world__scenery--frozen .o {
+  animation-play-state: paused !important;
+}
+
 .ride-world__scenery svg {
   display: block;
   width: 100%;

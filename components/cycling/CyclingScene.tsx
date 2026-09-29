@@ -66,18 +66,27 @@ export const CyclingScene = forwardRef<CyclingSceneHandle, Props>(
         svgEl.style.display = 'block';
       }
 
-      // Fresh animation list after mount; pause until the rider moves.
+      // Freeze immediately via CSS class; then pause WAAPI once animations exist.
       playbackStateRef.current = createSceneryPlaybackState();
-      // Defer so the browser has created CSSAnimation instances.
-      const id = window.requestAnimationFrame(() => {
+      el.classList.add('ride-world__scenery--frozen');
+
+      let frames = 0;
+      let raf = 0;
+      const tryPause = () => {
         const root = containerRef.current;
         if (!root) return;
-        playbackStateRef.current.animations = root.getAnimations({
-          subtree: true,
-        });
-        applySceneryPlaybackRate(root, 0, playbackStateRef.current);
-      });
-      return () => window.cancelAnimationFrame(id);
+        const list = root.getAnimations({ subtree: true });
+        playbackStateRef.current.animations = list;
+        if (list.length > 0) {
+          applySceneryPlaybackRate(root, 0, playbackStateRef.current);
+          return;
+        }
+        // Animations may not exist on the first frame after innerHTML inject.
+        frames += 1;
+        if (frames < 10) raf = window.requestAnimationFrame(tryPause);
+      };
+      raf = window.requestAnimationFrame(tryPause);
+      return () => window.cancelAnimationFrame(raf);
     }, [svg]);
 
     useImperativeHandle(ref, () => ({
@@ -105,7 +114,7 @@ export const CyclingScene = forwardRef<CyclingSceneHandle, Props>(
     return (
       <div
         ref={containerRef}
-        className="ride-world__scenery"
+        className="ride-world__scenery ride-world__scenery--frozen"
         aria-hidden
         dangerouslySetInnerHTML={{ __html: svg }}
       />

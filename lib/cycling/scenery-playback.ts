@@ -10,11 +10,23 @@ export type SceneryPlaybackState = {
 };
 
 export function createSceneryPlaybackState(): SceneryPlaybackState {
-  return { lastRate: -1, paused: true, animations: null };
+  // paused starts false so the first rate=0 call actually pauses CSS animations
+  // (they auto-run when the SVG mounts).
+  return { lastRate: -1, paused: false, animations: null };
 }
 
 function collectAnimations(root: HTMLElement): Animation[] {
   return root.getAnimations({ subtree: true });
+}
+
+function pauseAll(animations: Animation[]): void {
+  animations.forEach((a) => {
+    try {
+      a.pause();
+    } catch {
+      /* animation may have been GC'd */
+    }
+  });
 }
 
 /**
@@ -49,19 +61,15 @@ export function applySceneryPlaybackRate(
   state.lastRate = target;
 
   if (shouldPause) {
-    if (!state.paused) {
-      animations.forEach((a) => {
-        try {
-          a.pause();
-        } catch {
-          /* animation may have been GC'd */
-        }
-      });
-      state.paused = true;
-    }
+    // Always pause — CSS animations start running on mount even if our flag
+    // already said "paused".
+    pauseAll(animations);
+    state.paused = true;
+    root.classList.add('ride-world__scenery--frozen');
     return;
   }
 
+  root.classList.remove('ride-world__scenery--frozen');
   animations.forEach((a) => {
     try {
       if (state.paused || a.playState === 'paused') a.play();
