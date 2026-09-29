@@ -54,8 +54,12 @@ export const CyclingScene = forwardRef<CyclingSceneHandle, Props>(
       if (!el || !svg) return;
       const svgEl = el.querySelector('svg');
       if (svgEl) {
+        svgEl.removeAttribute('width');
+        svgEl.removeAttribute('height');
+        svgEl.setAttribute('preserveAspectRatio', 'xMidYMid slice');
         svgEl.style.width = '100%';
         svgEl.style.height = '100%';
+        svgEl.style.display = 'block';
       }
       applySceneryPlaybackRate(el, 0);
     }, [svg]);

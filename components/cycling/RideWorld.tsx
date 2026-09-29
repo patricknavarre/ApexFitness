@@ -7,7 +7,7 @@ import {
 } from '@/components/cycling/CyclingScene';
 import {
   roadScrollTargetPxS,
-  visualMotionFactor,
+  sceneryPlaybackRate,
 } from '@/lib/cycling/visual-motion';
 import {
   formatSpeed,
@@ -99,8 +99,7 @@ export function RideWorld({
       const freeze =
         reducedMotionRef.current || shouldFreeze(isActive, spd, cad);
       const target = roadScrollTargetPxS(spd, freeze);
-      const motionFactor = freeze ? 0 : visualMotionFactor(Math.max(0, spd));
-      sceneryRef.current?.setPlaybackRate(motionFactor);
+      sceneryRef.current?.setPlaybackRate(sceneryPlaybackRate(spd, freeze));
 
       const ease = freeze ? EASE_OUT : EASE_IN;
       let vel = velocityRef.current;
