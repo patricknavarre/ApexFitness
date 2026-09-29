@@ -17,8 +17,6 @@ import {
   type MoveModeId,
 } from '@/lib/geo';
 import { getCardioOption, getCardioLabel } from '@/lib/cardio';
-import { HrLiveStrip } from '@/components/hr/HrLiveStrip';
-import { useHrSession } from '@/components/hr/useHrSession';
 
 const MoveMap = dynamic(
   () => import('./MoveMap').then((m) => m.MoveMap),
@@ -37,7 +35,6 @@ type HistoryItem = {
   cardioDurationMinutes: number | null;
   caloriesBurned: number;
   distanceMiles: number | null;
-  avgHeartRateBpm?: number | null;
   route?: GeoPoint[];
 };
 
@@ -79,7 +76,6 @@ export function MoveTracker() {
 
   const gps = useLiveGps();
   const active = gps.status === 'watching' || gps.status === 'paused';
-  const hr = useHrSession(gps.status === 'watching');
 
   const calPerMin = getCardioOption(modeToCardio(mode))?.calPerMin ?? 4;
   const liveCalories =
@@ -144,7 +140,6 @@ export function MoveTracker() {
     setSaving(true);
     try {
       const route = downsampleRoute(points, 2000);
-      const hrStats = hr.getStats();
       const res = await fetch('/api/workout/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -153,13 +148,6 @@ export function MoveTracker() {
           cardioDurationMinutes: durationMinutes,
           distanceMiles: Math.round(distanceMiles * 1000) / 1000,
           route,
-          ...(hrStats.avgHeartRateBpm != null
-            ? { avgHeartRateBpm: hrStats.avgHeartRateBpm }
-            : {}),
-          ...(hrStats.maxHeartRateBpm != null
-            ? { maxHeartRateBpm: hrStats.maxHeartRateBpm }
-            : {}),
-          ...(hrStats.hrDeviceName ? { hrDeviceName: hrStats.hrDeviceName } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -186,7 +174,7 @@ export function MoveTracker() {
     } finally {
       setSaving(false);
     }
-  }, [gps, hr, liveCalories, loadHistory, mode]);
+  }, [gps, liveCalories, loadHistory, mode]);
 
   const discardSession = useCallback(() => {
     gps.reset();
@@ -255,8 +243,6 @@ export function MoveTracker() {
         })}
       </div>
 
-      <HrLiveStrip session={hr} />
-
       <MoveMap points={mapPoints} current={mapCurrent} height={280} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -311,7 +297,6 @@ export function MoveTracker() {
             disabled={saving}
             onClick={() => {
               setLastSaved(null);
-              hr.resetSamples();
               gps.start();
             }}
             className="od-cta flex-1 min-h-[48px] rounded-card bg-accent px-4 py-3 font-sans text-sm font-bold uppercase text-black hover:shadow-glow disabled:opacity-50"
@@ -407,9 +392,6 @@ export function MoveTracker() {
                       : '—'}
                     {item.cardioDurationMinutes != null
                       ? ` · ${item.cardioDurationMinutes} min`
-                      : ''}
-                    {item.avgHeartRateBpm != null && item.avgHeartRateBpm > 0
-                      ? ` · avg HR ${Math.round(item.avgHeartRateBpm)}`
                       : ''}
                     {typeof item.distanceMiles === 'number' &&
                     item.distanceMiles > 0 &&
