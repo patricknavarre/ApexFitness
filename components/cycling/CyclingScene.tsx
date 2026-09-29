@@ -7,7 +7,10 @@ import {
   useRef,
   useState,
 } from 'react';
-import { applySceneryPlaybackRate } from '@/lib/cycling/scenery-playback';
+import {
+  applySceneryPlaybackRate,
+  createSceneryPlaybackState,
+} from '@/lib/cycling/scenery-playback';
 
 export type CyclingSceneHandle = {
   setPlaybackRate: (rate: number) => void;
@@ -22,6 +25,7 @@ export const CyclingScene = forwardRef<CyclingSceneHandle, Props>(
   function CyclingScene({ onReady, onError }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const smoothRef = useRef(0);
+    const playbackStateRef = useRef(createSceneryPlaybackState());
     const onReadyRef = useRef(onReady);
     const onErrorRef = useRef(onError);
     const [svg, setSvg] = useState('');
@@ -61,7 +65,19 @@ export const CyclingScene = forwardRef<CyclingSceneHandle, Props>(
         svgEl.style.height = '100%';
         svgEl.style.display = 'block';
       }
-      applySceneryPlaybackRate(el, 0);
+
+      // Fresh animation list after mount; pause until the rider moves.
+      playbackStateRef.current = createSceneryPlaybackState();
+      // Defer so the browser has created CSSAnimation instances.
+      const id = window.requestAnimationFrame(() => {
+        const root = containerRef.current;
+        if (!root) return;
+        playbackStateRef.current.animations = root.getAnimations({
+          subtree: true,
+        });
+        applySceneryPlaybackRate(root, 0, playbackStateRef.current);
+      });
+      return () => window.cancelAnimationFrame(id);
     }, [svg]);
 
     useImperativeHandle(ref, () => ({
@@ -69,9 +85,18 @@ export const CyclingScene = forwardRef<CyclingSceneHandle, Props>(
         const el = containerRef.current;
         if (!el || !svg) return;
 
-        smoothRef.current = smoothRef.current * 0.5 + rate * 0.5;
-        const r = rate <= 0 ? 0 : smoothRef.current;
-        applySceneryPlaybackRate(el, r);
+        if (rate <= 0) {
+          smoothRef.current = 0;
+          applySceneryPlaybackRate(el, 0, playbackStateRef.current);
+          return;
+        }
+
+        smoothRef.current = smoothRef.current * 0.7 + rate * 0.3;
+        applySceneryPlaybackRate(
+          el,
+          smoothRef.current,
+          playbackStateRef.current
+        );
       },
     }));
 
