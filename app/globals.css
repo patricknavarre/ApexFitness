@@ -133,6 +133,19 @@ body::before {
 }
 
 /* —— Virtual ride FPV cockpit —— */
+.ride-world__scenery {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ride-world--scenery .ride-world__sky,
+.ride-world--scenery .ride-world__hills {
+  display: none;
+}
+
 .ride-world {
   height: 100%;
   min-height: 300px;

@@ -2,6 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
+  CyclingScene,
+  type CyclingSceneHandle,
+} from '@/components/cycling/CyclingScene';
+import {
+  roadScrollTargetPxS,
+  visualMotionFactor,
+} from '@/lib/cycling/visual-motion';
+import {
   formatSpeed,
   HR_ZONE_GLOW,
   HR_ZONE_TINT,
@@ -23,10 +31,6 @@ type Props = {
   onToggleSpeedUnit: () => void;
 };
 
-/** px of road texture advanced per km/h per second (toward viewer / top→bottom) */
-const ROAD_PX_PER_KMH = 22;
-/** Floor so a crawl still moves when above the stop gate */
-const SCROLL_FLOOR_KMH = 1.2;
 const STOP_SPEED_KMH = 2;
 const STOP_CADENCE_RPM = 25;
 /** Hills stay put sideways; tiny vertical drift sells approach, not a side-scroll */
@@ -59,11 +63,13 @@ export function RideWorld({
   onToggleSpeedUnit,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const sceneryRef = useRef<CyclingSceneHandle>(null);
   const offsetRef = useRef(0);
   const velocityRef = useRef(0);
   const metricsRef = useRef({ active, speedKmh, cadenceRpm });
   const reducedMotionRef = useRef(false);
   const [particles, setParticles] = useState<{ id: number; x: number }[]>([]);
+  const [sceneryReady, setSceneryReady] = useState(false);
 
   metricsRef.current = { active, speedKmh, cadenceRpm };
 
@@ -92,9 +98,9 @@ export function RideWorld({
         metricsRef.current;
       const freeze =
         reducedMotionRef.current || shouldFreeze(isActive, spd, cad);
-      const target = freeze
-        ? 0
-        : Math.max(SCROLL_FLOOR_KMH, Math.max(0, spd)) * ROAD_PX_PER_KMH;
+      const target = roadScrollTargetPxS(spd, freeze);
+      const motionFactor = freeze ? 0 : visualMotionFactor(Math.max(0, spd));
+      sceneryRef.current?.setPlaybackRate(motionFactor);
 
       const ease = freeze ? EASE_OUT : EASE_IN;
       let vel = velocityRef.current;
@@ -141,7 +147,9 @@ export function RideWorld({
       ref={rootRef}
       className={`ride-world relative overflow-hidden ${
         surge ? 'ride-world--surge' : ''
-      }${hrZone != null ? ` ride-world--z${hrZone}` : ''}`}
+      }${sceneryReady ? ' ride-world--scenery' : ''}${
+        hrZone != null ? ` ride-world--z${hrZone}` : ''
+      }`}
       style={{
         ['--ride-lean' as string]: `${lean}deg`,
         ['--zone-tint' as string]:
@@ -151,6 +159,10 @@ export function RideWorld({
       }}
       data-hr-bpm={hrBpm != null ? Math.round(hrBpm) : undefined}
     >
+      <CyclingScene
+        ref={sceneryRef}
+        onReady={() => setSceneryReady(true)}
+      />
       <div className="ride-world__sky" />
       <div className="ride-world__haze" />
       <div className="ride-world__hills ride-world__hills--far" />
