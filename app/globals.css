@@ -204,7 +204,7 @@ body::before {
   bottom: 40%;
   opacity: 0.55;
   background-repeat: repeat-x;
-  background-size: 240px 100%;
+  background-size: 320px 100%;
   pointer-events: none;
   transform: rotate(var(--ride-lean, 0deg));
   transform-origin: 50% 100%;
@@ -213,18 +213,19 @@ body::before {
 }
 
 .ride-world__hills--far {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 80' preserveAspectRatio='none'%3E%3Cpath d='M0 80 L0 50 L40 28 L80 48 L120 20 L160 44 L200 30 L240 52 L240 80 Z' fill='%234b532055'/%3E%3C/svg%3E");
-  /* Y only — sideways scroll reads as left→right, not FPV */
-  background-position: center calc(100% + var(--hills-far-offset, 0px));
-  opacity: 0.28;
+  /* Distant ridge + soft pines — scrolls slowly left/right with speed */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 100' preserveAspectRatio='none'%3E%3Cpath d='M0 100V68l28-18 32 16 36-22 40 14 34-16 38 18 36-12 40 16 36-10V100Z' fill='%234b53204d'/%3E%3Cg fill='%2338442e99'%3E%3Cpath d='M36 58l-10 22h20zm0-10l-8 16h16zm0-8l-6 12h12z'/%3E%3Crect x='34' y='80' width='4' height='10' fill='%232a3226'/%3E%3Cpath d='M92 52l-11 24h22zm0-11l-8 17h16zm0-8l-6 12h12z'/%3E%3Crect x='90' y='76' width='4' height='12' fill='%232a3226'/%3E%3Cpath d='M168 56l-9 20h18zm0-9l-7 15h14zm0-7l-5 11h10z'/%3E%3Crect x='166' y='76' width='4' height='10' fill='%232a3226'/%3E%3Cpath d='M248 50l-12 26h24zm0-12l-9 18h18zm0-9l-7 14h14z'/%3E%3Crect x='246' y='76' width='4' height='12' fill='%232a3226'/%3E%3Cpath d='M300 60l-8 18h16zm0-8l-6 14h12z'/%3E%3Crect x='298' y='78' width='4' height='10' fill='%232a3226'/%3E%3C/g%3E%3C/svg%3E");
+  background-position: calc(-1 * var(--hills-far-offset, 0px)) bottom;
+  opacity: 0.4;
 }
 
 .ride-world__hills--near {
   bottom: 36%;
   height: 34%;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 80' preserveAspectRatio='none'%3E%3Cpath d='M0 80 L0 55 L35 35 L70 55 L110 25 L150 50 L190 32 L240 58 L240 80 Z' fill='%234b532088'/%3E%3C/svg%3E");
-  background-position: center calc(100% + var(--hills-near-offset, 0px));
-  opacity: 0.5;
+  /* Nearer treeline — faster parallax for depth */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 100' preserveAspectRatio='none'%3E%3Cpath d='M0 100V72l24-14 28 12 30-18 34 12 32-14 36 16 30-10 38 14 34-8 34 12V100Z' fill='%2340583080'/%3E%3Cg fill='%232d3a28cc'%3E%3Cpath d='M24 48l-14 30h28zm0-14l-11 22h22zm0-12l-8 16h16z'/%3E%3Crect x='21' y='78' width='6' height='14' fill='%231f281c'/%3E%3Cpath d='M78 42l-16 34h32zm0-16l-12 24h24zm0-12l-9 18h18z'/%3E%3Crect x='75' y='76' width='6' height='16' fill='%231f281c'/%3E%3Cpath d='M148 50l-12 28h24zm0-12l-9 20h18zm0-10l-7 14h14z'/%3E%3Crect x='145' y='78' width='6' height='12' fill='%231f281c'/%3E%3Cpath d='M210 40l-15 36h30zm0-14l-11 24h22zm0-12l-8 16h16z'/%3E%3Crect x='207' y='76' width='6' height='16' fill='%231f281c'/%3E%3Cpath d='M278 46l-13 32h26zm0-13l-10 22h20zm0-11l-8 16h16z'/%3E%3Crect x='275' y='78' width='6' height='14' fill='%231f281c'/%3E%3C/g%3E%3C/svg%3E");
+  background-position: calc(-1 * var(--hills-near-offset, 0px)) bottom;
+  opacity: 0.62;
 }
 
 .ride-world__lean {

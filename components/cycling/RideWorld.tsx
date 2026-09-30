@@ -26,9 +26,9 @@ type Props = {
 
 const STOP_SPEED_KMH = 2;
 const STOP_CADENCE_RPM = 25;
-/** Hills stay put sideways; tiny vertical drift sells approach, not a side-scroll */
-const HILLS_FAR_Y_RATIO = 0.02;
-const HILLS_NEAR_Y_RATIO = 0.045;
+/** Parallax: far hills drift slower than near trees (fraction of road offset) */
+const HILLS_FAR_X_RATIO = 0.1;
+const HILLS_NEAR_X_RATIO = 0.22;
 /** Ease rate toward target scroll velocity (higher = snappier) */
 const EASE_IN = 10;
 const EASE_OUT = 7;
@@ -104,14 +104,14 @@ export function RideWorld({
       const el = rootRef.current;
       if (el) {
         el.style.setProperty('--road-offset', `${offset}px`);
-        // Vertical only — hills must not drift left/right (breaks FPV).
+        // Soft left/right parallax on tree/hill layers (classic FPV drift).
         el.style.setProperty(
           '--hills-far-offset',
-          `${offset * HILLS_FAR_Y_RATIO}px`
+          `${offset * HILLS_FAR_X_RATIO}px`
         );
         el.style.setProperty(
           '--hills-near-offset',
-          `${offset * HILLS_NEAR_Y_RATIO}px`
+          `${offset * HILLS_NEAR_X_RATIO}px`
         );
       }
 
