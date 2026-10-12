@@ -1616,7 +1616,17 @@ export function RideSession() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Metric label="Power" value={`${Math.round(power)}`} unit="W" large />
+          <Metric
+            label="Power"
+            value={`${Math.round(power)}`}
+            unit="W"
+            large
+            subLabel="Avg HR"
+            subValue={
+              liveStats.maxHr > 0 ? `${Math.round(liveStats.avgHr)}` : '—'
+            }
+            subUnit={liveStats.maxHr > 0 ? 'bpm' : ''}
+          />
           <Metric label="Cadence" value={`${Math.round(cadence)}`} unit="rpm" large />
           <Metric
             label="Speed"
@@ -1865,6 +1875,9 @@ function Metric({
   large,
   onClick,
   title,
+  subLabel,
+  subValue,
+  subUnit,
 }: {
   label: string;
   value: string;
@@ -1872,6 +1885,9 @@ function Metric({
   large?: boolean;
   onClick?: () => void;
   title?: string;
+  subLabel?: string;
+  subValue?: string;
+  subUnit?: string;
 }) {
   const interactive = typeof onClick === 'function';
   const className = `rounded-card bg-bg2 border border-border px-3 py-3 text-left w-full ${
@@ -1891,6 +1907,21 @@ function Metric({
           <span className="font-sans text-xs text-muted ml-1">{unit}</span>
         ) : null}
       </p>
+      {subLabel != null && subValue != null ? (
+        <p className="mt-2 flex items-baseline gap-1.5 border-t border-border/60 pt-2">
+          <span className="font-sans text-[10px] uppercase tracking-wider text-muted">
+            {subLabel}
+          </span>
+          <span className="font-mono text-sm text-text">
+            {subValue}
+            {subUnit ? (
+              <span className="font-sans text-[10px] text-muted ml-1">
+                {subUnit}
+              </span>
+            ) : null}
+          </span>
+        </p>
+      ) : null}
     </>
   );
 
