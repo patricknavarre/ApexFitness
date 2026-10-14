@@ -98,6 +98,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: {
     strategy: 'jwt',
     maxAge: SESSION_MAX_AGE,
+    // Refresh the cookie while the app is open so home-screen kills still
+    // leave a recent maxAge when possible.
+    updateAge: 24 * 60 * 60,
   },
   jwt: {
     maxAge: SESSION_MAX_AGE,

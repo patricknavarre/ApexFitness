@@ -13,8 +13,17 @@ export function sessionCookieName(): string {
 export function secureAuthCookiesEnabled(): boolean {
   const url = process.env.NEXTAUTH_URL || process.env.AUTH_URL || '';
   if (url.startsWith('https://')) return true;
-  if (url.startsWith('http://')) return false;
-  return process.env.NODE_ENV === 'production';
+  // Local only — keep non-Secure cookies for http://localhost.
+  if (
+    url.startsWith('http://localhost') ||
+    url.startsWith('http://127.0.0.1')
+  ) {
+    return false;
+  }
+  // Vercel / production is always HTTPS. A mis-set http:// NEXTAUTH_URL must
+  // not flip cookies back to SameSite=Lax (iOS home-screen drops those).
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') return true;
+  return false;
 }
 
 export function sessionCookieOptions() {

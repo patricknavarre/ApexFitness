@@ -5,7 +5,10 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'APEX Fitness',
     short_name: 'APEX',
     description: 'Your body. Your data. Your potential.',
-    start_url: '/dashboard',
+    // Public bootstrap restores the iOS home-screen cookie before /dashboard SSR.
+    start_url: '/pwa',
+    scope: '/',
+    id: '/',
     display: 'standalone',
     background_color: '#12140f',
     theme_color: '#12140f',

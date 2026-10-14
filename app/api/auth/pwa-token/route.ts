@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { decode } from 'next-auth/jwt';
+import { decode, encode } from 'next-auth/jwt';
 import { NextResponse } from 'next/server';
 import {
   SESSION_MAX_AGE,
@@ -24,27 +24,43 @@ function readSessionJwt(): string | null {
   return parts.length > 0 ? parts.join('') : null;
 }
 
-async function tokenIsValid(token: string): Promise<boolean> {
+type JwtPayload = Record<string, unknown> & {
+  exp?: number;
+  userId?: string;
+  sub?: string;
+  email?: string;
+};
+
+async function decodeSessionToken(token: string): Promise<JwtPayload | null> {
   const secret = authSecret();
-  if (!secret) return false;
-  try {
-    const decoded = await decode({
-      token,
-      secret,
-      salt: sessionCookieName(),
-    });
-    if (!decoded) return false;
-    if (typeof decoded.exp === 'number' && decoded.exp * 1000 < Date.now()) return false;
-    return Boolean(decoded.userId || decoded.sub || decoded.email);
-  } catch {
-    return false;
+  if (!secret) return null;
+  // Cookie name is the JWT salt — try both so backups survive Secure-name flips.
+  const salts = Array.from(
+    new Set([
+      sessionCookieName(),
+      'authjs.session-token',
+      '__Secure-authjs.session-token',
+    ])
+  );
+  for (const salt of salts) {
+    try {
+      const decoded = (await decode({ token, secret, salt })) as JwtPayload | null;
+      if (!decoded) continue;
+      if (typeof decoded.exp === 'number' && decoded.exp * 1000 < Date.now()) {
+        continue;
+      }
+      if (decoded.userId || decoded.sub || decoded.email) return decoded;
+    } catch {
+      /* try next salt */
+    }
   }
+  return null;
 }
 
 /** While signed in, hand the raw session JWT to the client for home-screen restore. */
 export async function GET() {
   const token = readSessionJwt();
-  if (!token || !(await tokenIsValid(token))) {
+  if (!token || !(await decodeSessionToken(token))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   return NextResponse.json({ token });
@@ -59,12 +75,26 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
-  if (!token || token.length > 12000 || !(await tokenIsValid(token))) {
+  if (!token || token.length > 12000) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const secret = authSecret();
+  const decoded = await decodeSessionToken(token);
+  if (!secret || !decoded) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Re-encode with the current cookie name as salt so Auth.js can read it.
+  const fresh = await encode({
+    token: decoded,
+    secret,
+    salt: sessionCookieName(),
+    maxAge: SESSION_MAX_AGE,
+  });
+
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(sessionCookieName(), token, {
+  res.cookies.set(sessionCookieName(), fresh, {
     ...sessionCookieOptions(),
     maxAge: SESSION_MAX_AGE,
   });

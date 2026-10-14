@@ -17,14 +17,39 @@ function LoginForm() {
   const [restoring, setRestoring] = useState(false);
 
   useEffect(() => {
-    try {
-      if (!window.localStorage.getItem(PWA_SESSION_STORAGE_KEY)) return;
-    } catch {
-      return;
+    let cancelled = false;
+    let timer = 0;
+
+    async function checkExisting() {
+      try {
+        const session = await getSession();
+        if (cancelled) return;
+        if (session?.user) {
+          window.location.replace('/dashboard');
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+
+      try {
+        if (!window.localStorage.getItem(PWA_SESSION_STORAGE_KEY)) return;
+      } catch {
+        return;
+      }
+      if (cancelled) return;
+      setRestoring(true);
+      // Keepalive should navigate to /dashboard on success; hide banner if not.
+      timer = window.setTimeout(() => {
+        if (!cancelled) setRestoring(false);
+      }, 6000);
     }
-    setRestoring(true);
-    const timer = window.setTimeout(() => setRestoring(false), 4000);
-    return () => window.clearTimeout(timer);
+
+    void checkExisting();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
