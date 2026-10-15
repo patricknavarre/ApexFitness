@@ -69,6 +69,20 @@
 :root {
   --dock-height: 4.5rem;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Craft floor (scroll-craft taste) — 4px spacing + motion */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --edge-light: inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent);
+  --shadow-card:
+    0 1px 2px color-mix(in srgb, var(--bg) 55%, transparent),
+    0 8px 20px -6px color-mix(in srgb, var(--bg) 70%, transparent);
 }
 
 html,
@@ -109,27 +123,65 @@ body::before {
 }
 
 .od-enter {
-  animation: od-fade-up 0.45s ease-out both;
+  animation: od-fade-up 0.4s var(--ease-out) both;
 }
 
 .od-enter-delay-1 {
-  animation-delay: 0.06s;
+  animation-delay: 0.05s;
 }
 
 .od-enter-delay-2 {
-  animation-delay: 0.12s;
+  animation-delay: 0.1s;
 }
 
 .od-enter-delay-3 {
-  animation-delay: 0.18s;
+  animation-delay: 0.15s;
 }
 
 .od-cta {
-  transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.2s ease;
+  transition:
+    transform 120ms var(--ease-out),
+    opacity 140ms var(--ease-out),
+    box-shadow 160ms var(--ease-out);
 }
 
 .od-cta:active:not(:disabled) {
   transform: scale(0.97);
+}
+
+.app-card {
+  box-shadow: var(--edge-light), var(--shadow-card);
+}
+
+.app-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+input,
+textarea,
+select {
+  caret-color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .od-enter,
+  .od-enter-delay-1,
+  .od-enter-delay-2,
+  .od-enter-delay-3 {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* —— Virtual ride FPV cockpit —— */

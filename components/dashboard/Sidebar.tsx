@@ -22,8 +22,10 @@ function NavItem({
   return (
     <Link
       href={href}
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-card transition-colors duration-200 ${
-        active ? 'bg-accent3 text-tan' : 'text-muted hover:text-tan hover:bg-bg2'
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-card transition-[background-color,color,box-shadow] duration-150 ${
+        active
+          ? 'bg-accent3 text-tan shadow-[inset_0_1px_0_color-mix(in_srgb,var(--tan)_18%,transparent)]'
+          : 'text-muted hover:text-tan hover:bg-bg2'
       }`}
     >
       <span className="flex-shrink-0">
@@ -40,13 +42,16 @@ export function Sidebar() {
     <>
       {/* Desktop sidebar */}
       <aside
-        className="hidden md:flex flex-col fixed left-0 top-0 h-full bg-card border-r border-border z-20 transition-[width] duration-200"
+        className="hidden md:flex flex-col fixed left-0 top-0 h-full bg-card border-r border-border z-20 transition-[width] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]"
         style={{ width: expanded ? 240 : 72 }}
         onMouseEnter={() => setExpanded(true)}
         onMouseLeave={() => setExpanded(false)}
       >
         <div className="p-3 flex items-center justify-center h-14 border-b border-border">
-          <Link href="/dashboard" className="font-display text-xl text-tan tracking-wide">
+          <Link
+            href="/dashboard"
+            className="font-display text-xl text-tan tracking-wide transition-colors duration-150 hover:text-accent"
+          >
             APEX
           </Link>
         </div>

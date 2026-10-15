@@ -49,7 +49,7 @@ export function MobileNav() {
         style={{ bottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
         aria-label="Primary"
       >
-        <div className="flex items-end gap-0.5 rounded-full border border-border/60 bg-card/90 px-2 py-1.5 shadow-glow backdrop-blur-xl">
+        <div className="flex items-end gap-0.5 rounded-full border border-border/60 bg-card/90 px-2 py-1.5 shadow-glow backdrop-blur-xl [box-shadow:inset_0_1px_0_color-mix(in_srgb,var(--text)_8%,transparent),0_0_24px_color-mix(in_srgb,var(--accent)_18%,transparent)]">
           {PRIMARY_MOBILE_NAV.map((item) => {
             const active = isNavActive(pathname, item.href);
             const isRide = item.href === '/cycling';
@@ -58,7 +58,7 @@ export function MobileNav() {
                 key={item.href}
                 type="button"
                 onClick={() => navigate(item.href)}
-                className={`relative flex flex-col items-center justify-center min-w-[3.25rem] px-2.5 py-1.5 rounded-full transition-all duration-200 ${
+                className={`relative flex flex-col items-center justify-center min-w-[3.25rem] px-2.5 py-1.5 rounded-full transition-[transform,background-color,color,box-shadow] duration-150 ${
                   active
                     ? isRide
                       ? 'text-black bg-accent shadow-glow scale-105'

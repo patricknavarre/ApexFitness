@@ -4,6 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
+import { AppCard } from '@/components/ui/AppCard';
+import { AppButton } from '@/components/ui/AppButton';
 
 const GOALS = [
   'lose weight',
@@ -80,7 +82,7 @@ export default function SignupPage() {
   return (
     <main className="min-h-screen flex items-center justify-center px-4 py-12 relative z-10">
       <div className="w-full max-w-md">
-        <div className="bg-card border border-border rounded-card p-8">
+        <AppCard padding="lg" className="p-8">
           <h1 className="font-display text-3xl text-accent uppercase tracking-wide text-center">
             Create account
           </h1>
@@ -183,33 +185,29 @@ export default function SignupPage() {
                 ))}
               </select>
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-accent text-black font-sans font-bold uppercase py-3 rounded-card hover:shadow-glow transition-shadow disabled:opacity-50"
-            >
+            <AppButton type="submit" disabled={loading} className="w-full py-3">
               {loading ? 'Creating account…' : 'Sign up'}
-            </button>
+            </AppButton>
           </form>
           <div className="mt-4 flex items-center gap-4">
             <span className="flex-1 h-px bg-border" />
             <span className="font-sans text-muted text-sm">or</span>
             <span className="flex-1 h-px bg-border" />
           </div>
-          <button
-            type="button"
+          <AppButton
+            variant="secondary"
+            className="w-full mt-4 py-3 font-medium normal-case tracking-normal"
             onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
-            className="w-full mt-4 bg-bg2 border border-border text-text font-sans font-medium py-3 rounded-card hover:border-muted transition-colors"
           >
             Continue with Google
-          </button>
+          </AppButton>
           <p className="font-sans text-muted text-sm text-center mt-6">
             Already have an account?{' '}
             <Link href="/auth/login" className="text-accent hover:underline">
               Sign in
             </Link>
           </p>
-        </div>
+        </AppCard>
       </div>
     </main>
   );

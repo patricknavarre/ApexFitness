@@ -5,6 +5,8 @@ import { signIn, getSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { PWA_SESSION_STORAGE_KEY } from '@/lib/pwa-session';
+import { AppCard } from '@/components/ui/AppCard';
+import { AppButton } from '@/components/ui/AppButton';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -112,7 +114,7 @@ function LoginForm() {
             </p>
           </div>
         )}
-        <div className="bg-card border border-border rounded-card p-8">
+        <AppCard padding="lg" className="p-8">
           <h1 className="font-display text-3xl text-accent uppercase tracking-wide text-center">
             Sign in
           </h1>
@@ -151,33 +153,29 @@ function LoginForm() {
                 className="w-full bg-bg2 border border-border rounded-card px-4 py-3 font-sans text-text focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-accent text-black font-sans font-bold uppercase py-3 rounded-card hover:shadow-glow transition-shadow disabled:opacity-50"
-            >
+            <AppButton type="submit" disabled={loading} className="w-full py-3">
               {loading ? 'Signing in…' : 'Sign in'}
-            </button>
+            </AppButton>
           </form>
           <div className="mt-4 flex items-center gap-4">
             <span className="flex-1 h-px bg-border" />
             <span className="font-sans text-muted text-sm">or</span>
             <span className="flex-1 h-px bg-border" />
           </div>
-          <button
-            type="button"
+          <AppButton
+            variant="secondary"
+            className="w-full mt-4 py-3 font-medium normal-case tracking-normal"
             onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
-            className="w-full mt-4 bg-bg2 border border-border text-text font-sans font-medium py-3 rounded-card hover:border-muted transition-colors"
           >
             Continue with Google
-          </button>
+          </AppButton>
           <p className="font-sans text-muted text-sm text-center mt-6">
             Don&apos;t have an account?{' '}
             <Link href="/auth/signup" className="text-accent hover:underline">
               Sign up
             </Link>
           </p>
-        </div>
+        </AppCard>
       </div>
     </main>
   );
