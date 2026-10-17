@@ -21,8 +21,20 @@ export function recommendPlanId(
   }
   if (split.includes('full body') || split.includes('full-body')) {
     if (level.includes('beginner') || days <= 2) return '2-day-beginner';
-    if (days <= 3) return '3-day-beginner';
+    if (days <= 3) {
+      if (split.includes('home') || split.includes('dumbbell') || split.includes('band')) {
+        return '3-day-home-full-body';
+      }
+      return '3-day-beginner';
+    }
     return '3-day-full-body';
+  }
+  if (
+    (split.includes('home') || split.includes('dumbbell') || split.includes('band')) &&
+    split.includes('push') &&
+    split.includes('pull')
+  ) {
+    return days >= 4 ? '4-day-home-hypertrophy' : '3-day-home-ppl';
   }
   if (split.includes('strength')) return '5-day-strength';
   if (split.includes('bro')) return '5-day-muscle';

@@ -86,6 +86,7 @@ const GUIDE_ENTRIES: GuideEntry[] = [
   {
     aliases: [
       'chest fly',
+      'band chest fly',
       'band chest flyes',
       'flat db fly',
       'cable fly',

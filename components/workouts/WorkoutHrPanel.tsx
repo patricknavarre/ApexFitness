@@ -21,11 +21,13 @@ export type WorkoutHrStats = HrSessionStats;
 
 export type WorkoutHrPanelHandle = {
   getStats: () => WorkoutHrStats;
+  getCurrentBpm: () => number | null;
   disconnect: () => void;
 };
 
 type Props = {
   onStatsChange?: (stats: WorkoutHrStats) => void;
+  onBpmChange?: (bpm: number | null) => void;
 };
 
 function clampPosition(x: number, y: number, width: number, height: number) {
@@ -66,13 +68,15 @@ function savePanelState(state: { mode: WorldPanelMode; x: number; y: number }) {
 }
 
 export const WorkoutHrPanel = forwardRef<WorkoutHrPanelHandle, Props>(
-  function WorkoutHrPanel({ onStatsChange }, ref) {
+  function WorkoutHrPanel({ onStatsChange, onBpmChange }, ref) {
     const isPhone = useIsPhone();
     const session = useHrSession(true);
     const [mode, setMode] = useState<WorldPanelMode>('docked');
     const [pos, setPos] = useState({ x: 24, y: 96 });
     const [hydrated, setHydrated] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
+    const hrBpmRef = useRef<number | null>(null);
+    hrBpmRef.current = session.hrBpm;
     const dragRef = useRef<{
       pointerId: number;
       startX: number;
@@ -85,6 +89,7 @@ export const WorkoutHrPanel = forwardRef<WorkoutHrPanelHandle, Props>(
       ref,
       () => ({
         getStats: session.getStats,
+        getCurrentBpm: () => hrBpmRef.current,
         disconnect: session.disconnect,
       }),
       [session.getStats, session.disconnect]
@@ -93,6 +98,10 @@ export const WorkoutHrPanel = forwardRef<WorkoutHrPanelHandle, Props>(
     useEffect(() => {
       onStatsChange?.(session.getStats());
     }, [onStatsChange, session.getStats, session.sampleCount, session.hrDeviceName, session.hrBpm]);
+
+    useEffect(() => {
+      onBpmChange?.(session.hrBpm);
+    }, [onBpmChange, session.hrBpm]);
 
     useEffect(() => {
       const saved = loadPanelState();

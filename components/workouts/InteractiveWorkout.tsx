@@ -5,7 +5,7 @@ import type { InteractiveWorkoutDay } from '@/lib/recoveryWorkoutData';
 import { EQUIP_COLORS } from '@/lib/recoveryWorkoutData';
 import { getPhaseColors } from '@/lib/interactive-workouts';
 import { todayLocal } from '@/lib/local-date';
-import { RestTimer } from './RestTimer';
+import { RestTimer, type RestHrRecovery } from './RestTimer';
 import { ExerciseGuide } from './ExerciseGuide';
 import { WorkoutPrModal, type WorkoutPr } from './WorkoutPrModal';
 import {
@@ -107,6 +107,9 @@ export function InteractiveWorkout({
   const [showEquip, setShowEquip] = useState(false);
   const [timerVisible, setTimerVisible] = useState(false);
   const [restDuration, setRestDuration] = useState(90);
+  const [liveHrBpm, setLiveHrBpm] = useState<number | null>(null);
+  const [exerciseHrBpm, setExerciseHrBpm] = useState<number | null>(null);
+  const [lastHrRecovery, setLastHrRecovery] = useState<RestHrRecovery | null>(null);
   const [setRows, setSetRows] = useState<Record<string, SetRow[]>>({});
   const [lastHints, setLastHints] = useState<Record<string, LastHint>>({});
   const [finishing, setFinishing] = useState(false);
@@ -118,6 +121,8 @@ export function InteractiveWorkout({
   setRowsRef.current = setRows;
   const sessionMaxesRef = useRef<Record<string, { weight: number; reps: number }>>({});
   const hrPanelRef = useRef<WorkoutHrPanelHandle>(null);
+  const liveHrBpmRef = useRef<number | null>(null);
+  liveHrBpmRef.current = liveHrBpm;
 
   function hrPayloadFromStats(stats: WorkoutHrStats | null | undefined): WorkoutHrPayload | undefined {
     if (!stats || stats.sampleCount <= 0) return undefined;
@@ -241,7 +246,31 @@ export function InteractiveWorkout({
     };
   }, [planId, workout]);
 
-  const closeTimer = useCallback(() => setTimerVisible(false), []);
+  const closeTimer = useCallback(() => {
+    setTimerVisible(false);
+    setExerciseHrBpm(null);
+  }, []);
+
+  const startRest = useCallback(() => {
+    const bpm = hrPanelRef.current?.getCurrentBpm() ?? liveHrBpmRef.current;
+    setExerciseHrBpm(bpm != null && bpm > 0 ? Math.round(bpm) : null);
+    setTimerVisible(true);
+  }, []);
+
+  const onRestComplete = useCallback((recovery: RestHrRecovery | null) => {
+    if (!recovery) return;
+    setLastHrRecovery(recovery);
+    const dropped = recovery.deltaBpm >= 0;
+    toast.message(
+      dropped
+        ? `HR recovery: ↓ ${recovery.deltaBpm} bpm (${recovery.exerciseBpm} → ${recovery.restBpm})`
+        : `HR rose ${Math.abs(recovery.deltaBpm)} bpm during rest (${recovery.exerciseBpm} → ${recovery.restBpm})`
+    );
+  }, []);
+
+  const onHrBpmChange = useCallback((bpm: number | null) => {
+    setLiveHrBpm(bpm);
+  }, []);
 
   const finishWorkout = useCallback(async () => {
     if (finishingRef.current || !onMarkDone) return;
@@ -399,13 +428,26 @@ export function InteractiveWorkout({
           <span className="font-mono text-xs text-muted shrink-0">{pct}%</span>
           <button
             type="button"
-            onClick={() => setTimerVisible(true)}
+            onClick={startRest}
             disabled={finishing}
             className="shrink-0 min-h-[44px] rounded-card border border-border px-3 py-2 font-sans text-xs font-semibold text-muted hover:border-accent hover:text-accent disabled:opacity-40"
           >
             Rest
           </button>
         </div>
+        {lastHrRecovery && !timerVisible ? (
+          <p className="font-mono text-[10px] text-muted mb-1">
+            Last rest HR:{' '}
+            <span className="text-accent">{lastHrRecovery.exerciseBpm}</span>
+            {' → '}
+            <span className="text-green-400">{lastHrRecovery.restBpm}</span>
+            {' · '}
+            <span className={lastHrRecovery.deltaBpm >= 0 ? 'text-green-400' : 'text-accent2'}>
+              {lastHrRecovery.deltaBpm >= 0 ? '↓' : '↑'}
+              {Math.abs(lastHrRecovery.deltaBpm)} bpm
+            </span>
+          </p>
+        ) : null}
 
         {workout.warmup && (
           <p className="font-sans text-xs text-muted mb-1">
@@ -440,7 +482,7 @@ export function InteractiveWorkout({
       </header>
 
       <div className="shrink-0 px-4 pt-3">
-        <WorkoutHrPanel ref={hrPanelRef} />
+        <WorkoutHrPanel ref={hrPanelRef} onBpmChange={onHrBpmChange} />
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
@@ -565,7 +607,10 @@ export function InteractiveWorkout({
         visible={timerVisible && !finishing}
         duration={restDuration}
         accentColor={colors.accent}
+        exerciseHrBpm={exerciseHrBpm}
+        liveHrBpm={liveHrBpm}
         onClose={closeTimer}
+        onComplete={onRestComplete}
         onDurationChange={setRestDuration}
       />
 
