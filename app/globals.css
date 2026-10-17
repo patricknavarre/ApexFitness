@@ -1079,6 +1079,116 @@ select {
     height: 44px;
   }
 }
+
+.ride-hr-overlay {
+  position: absolute;
+  left: 0.65rem;
+  right: 0.65rem;
+  top: 0.55rem;
+  z-index: 9;
+  pointer-events: none;
+  padding: 0.35rem 0.55rem 0.35rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent2) 40%, var(--border));
+  background: color-mix(in srgb, var(--card) 82%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.ride-hr-overlay--below-elev {
+  top: 6.35rem;
+}
+
+@media (max-width: 640px) {
+  .ride-hr-overlay--below-elev {
+    top: 5.85rem;
+  }
+}
+
+.ride-hr-overlay--collapsed {
+  padding-bottom: 0.3rem;
+}
+
+.ride-hr-overlay__toggle {
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.65rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+}
+
+.ride-hr-overlay__toggle:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.ride-hr-overlay__title {
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent2);
+}
+
+.ride-hr-overlay__stats {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tan);
+}
+
+.ride-hr-overlay__sep {
+  margin: 0 0.25rem;
+  opacity: 0.5;
+}
+
+.ride-hr-overlay__chevron {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.ride-hr-overlay__chart {
+  display: block;
+  width: 100%;
+  height: 52px;
+  margin-top: 0.25rem;
+  pointer-events: none;
+}
+
+.ride-hr-overlay__footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.15rem;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.ride-hr-overlay__empty {
+  margin: 0.35rem 0 0.1rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .ride-hr-overlay__chart {
+    height: 44px;
+  }
+}
+
 .ride-moment-layer {
   position: absolute;
   inset: 0;

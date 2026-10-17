@@ -55,6 +55,7 @@ import { CoursePicker } from '@/components/cycling/CoursePicker';
 import { WorkoutPicker } from '@/components/cycling/WorkoutPicker';
 import { CourseClimbHud, WorkoutIntervalHud } from '@/components/cycling/SessionHuds';
 import { ElevationProfileOverlay } from '@/components/cycling/ElevationProfileOverlay';
+import { HrProfileOverlay } from '@/components/cycling/HrProfileOverlay';
 
 type Phase = 'idle' | 'connected' | 'riding' | 'saving';
 type ControlMode = 'free' | 'erg' | 'sim' | 'course' | 'workout';
@@ -157,6 +158,7 @@ export function RideSession() {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [distanceM, setDistanceM] = useState(0);
   const [powerSeries, setPowerSeries] = useState<{ t: number; w: number }[]>([]);
+  const [hrSeries, setHrSeries] = useState<{ t: number; bpm: number }[]>([]);
   const [laps, setLaps] = useState<LapRecord[]>([]);
   const [liveStats, setLiveStats] = useState({
     avgPower: 0,
@@ -648,6 +650,7 @@ export function RideSession() {
     setElapsedSec(0);
     setDistanceM(0);
     setPowerSeries([]);
+    setHrSeries([]);
     setLaps([]);
     setSurge(false);
     setRideMoment(null);
@@ -686,7 +689,12 @@ export function RideSession() {
     if (!(bpm > 0) || elapsed < 0) return;
     if (elapsed === lastHrChartSecRef.current) return;
     lastHrChartSecRef.current = elapsed;
-    hrSeriesFullRef.current.push({ t: elapsed, bpm: Math.round(bpm) });
+    const point = { t: elapsed, bpm: Math.round(bpm) };
+    hrSeriesFullRef.current.push(point);
+    setHrSeries((prev) => {
+      const next = [...prev, point];
+      return next.length > 240 ? next.slice(-240) : next;
+    });
   }
 
   const onHr = useCallback((bpm: number) => {
@@ -1528,6 +1536,17 @@ export function RideSession() {
                 gradePct={courseGrade}
                 elevationGainM={elevationGainM}
                 trainerLinked={trainerGradeLive && canControl}
+              />
+            ) : null}
+            {phase === 'riding' ? (
+              <HrProfileOverlay
+                samples={hrSeries}
+                avgHr={liveStats.avgHr}
+                hrBpm={displayHr}
+                maxHr={liveStats.maxHr}
+                belowElevation={Boolean(
+                  courseId && getRideCourse(courseId) && !workoutId
+                )}
               />
             ) : null}
           </RideWorldPanel>
